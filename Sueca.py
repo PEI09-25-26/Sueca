@@ -118,7 +118,7 @@ def main():
     game = Game(["Pedro","Tiago","Lucas","Gonçalo"])
     print(game._show_deck())
     print(game._show_players())
-    game._shuffle_deck()              # People can spectate the game, having access to all of the hands and plays record list, like each round's vector
+    game._shuffle_deck()              # People can spectate the game, having access to all of the hands and plays record list, like each round's vector etc
     game._distribute_cards()
     for player in game.players:
         player._view_hand()           # Each player plays on their own terminal maybe? I don't know how to do that ):. And they can do stuff like view_cards, peek aside and cheat :)(with a very low chance of working) whenever they wish to
