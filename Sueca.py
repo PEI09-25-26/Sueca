@@ -122,5 +122,5 @@ def main():
     game._distribute_cards()
     for player in game.players:
         player._view_hand()           # Each player plays on their own terminal maybe? I don't know how to do that ):. And they can do stuff like view_cards, peek aside and cheat :)(with a very low chance of working) whenever they wish to
-
+    
 main()
