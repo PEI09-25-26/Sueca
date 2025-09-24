@@ -97,14 +97,16 @@ class Game:
         print(self.get_deck())
 
         while True:
-            index = int(input("Cut from what index:").strip())
-            if 0 < index <= 40:
-                top = self.deck.pile[:index]
-                bottom = self.deck.pile[index:]
-                break
-            print(f"Invalid cut index, pick in a range of (1,40)")
+            try:
+                index = int(input("Cut from what index:").strip())
+                if 0 < index <= 40:
+                    top = self.deck.pile[:index]
+                    bottom = self.deck.pile[index:]
+                    break
+                print(f"Invalid cut index, pick in a range of (1,40)")
+            except ValueError:
+                raise ValueError("Input Text is not permitted.")
         self.deck.pile = bottom + top
-
         print("Deck after the cut:")
         print(self.get_deck())
 
