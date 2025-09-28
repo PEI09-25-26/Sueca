@@ -48,9 +48,9 @@ class Game:
 
     def __init__(self,player_names):
         self.deck = Deck()
-        self._cut_deck()
         print(f"Shuffling deck...")
         self._shuffle_deck()
+        self._cut_deck()
         print(f"Deck has been shuffled.")
         self.trump_card = self._get_trump_card()
         self.trump_suit = self.trump_card.suit
@@ -112,10 +112,7 @@ class Game:
 
     def _distribute_cards(self):     # Can only be done after shuffling needs to be 10 to right etc
         for player in self.players:
-            set_cards=[]    
-            for i in range(10):
-                card = self.deck.pile.pop(0)  
-                set_cards.append(card)
+            set_cards=[self.deck.pile.pop(0) for i in range(10)]    
             player.receive_cards(set_cards)
 
     def assure_it_can_be_played(self, card, player):
@@ -170,11 +167,11 @@ class Game:
             
             if trump_was_played:
                 trump_cards = [card for card in round_vector if card.suit == self.trump_suit]
-                winner = max(trump_cards,key=lambda card: ranks_map[card.rank])
+                winner = max(trump_cards,key=lambda card:ranks_map[card.rank])
                 winner_index = round_vector.index(winner)
                 return winner,winner_index
             
-            winner = max(round_vector,key=lambda card: ranks_map[card.rank])
+            winner = max(round_vector,key=lambda card:ranks_map[card.rank])
             winner_index = round_vector.index(winner)
             return winner,winner_index
 
@@ -283,8 +280,8 @@ class Player:
 def main():
     game = Game(["Pedro","Tiago","Lucas","Gonçalo"])
     i = 0
-    print(f"This game's trump is {game.get_trump_card()}")
     while i<10:
+        print(f"This game's trump is {game.get_trump_card()}")
         game._round()
         i+=1      
     game._show_final_scores_and_print_winner()
