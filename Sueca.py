@@ -1,57 +1,16 @@
 import random
+from card import *
+from deck import *
+from constants import *
+from player import *
 
-ranks_map = {
-        "A":11,
-        "7":10,
-        "K":4,
-        "J":3,
-        "Q":2,
-        "2":0,
-        "3":0,
-        "4":0,
-        "5":0,
-        "6":0
-    }
 
-# # suits = ["H","D","C","S"] - save for later if needed
-# """suits = {
-#     "Spades": "♠️",
-#     "Hearts": "♥️",        - Can also use this save for later
-#     "Diamonds": "♦️",
-#     "Clubs": "♣️"
-# }"""
-
-suits = ["♥️","♦️","♣️","♠️"]
-
-# MAX_CARDS = 40      # Probably not needed
-
-class Card:
-    def __init__(self,rank,suit):
-        self.rank = rank
-        self.suit = suit
-
-    def __str__(self):
-        return f"{self.rank}|{self.suit}"
-    
-class Deck:
-    def __init__(self):
-        self.pile = [Card(rank,suit) for suit in suits for rank in ranks_map]
-
-    def __str__(self):
-        deck_str = ''
-        for i in range(0, len(self.pile), 10):
-            deck_str += '  '.join(str(card) for card in self.pile[i:i+10]) + '\n'
-        
-        return deck_str
-    
 class Game:
 
     def __init__(self,player_names):
         self.deck = Deck()
-        print(f"Shuffling deck...")
-        self._shuffle_deck()
-        self._cut_deck()
-        print(f"Deck has been shuffled.")
+        self.deck.shuffle_deck()
+        self.deck.cut_deck()
         self.trump_card = self._get_trump_card()
         self.trump_suit = self.trump_card.suit
         self.players = [Player(name, i + 1) for i, name in enumerate(player_names)]
@@ -66,14 +25,8 @@ class Game:
         self.last_round_winner = self.players[0]
         self.round_suit = ''
         self.current_player = self.last_round_winner
-    # def __str__(self):
-    #     players_str = ''
-    #     for i in range(0,len(self.players),2):
-    #         players_str += ' '.join(str(player) for player in self.players[i:i+2]) + "\n" - Might not need
-    #     return (
-    #         f"Deck =>\n{self.deck}\n"
-    #         f"Players =>\n{players_str}\n"
-    #     )
+
+
     def _get_trump_card(self):
         while True:
             answer = input("Take trump_card from top or bottom?: ").strip().lower()
@@ -88,29 +41,10 @@ class Game:
         self.trump_card = trump_card
         return trump_card
 
-    def _shuffle_deck(self):
-        """Shuffles the deck do later by beep bop man but for now there be random skeleton """
-        random.shuffle(self.deck.pile)
 
-    def _cut_deck(self):
-        print("Deck before the cut:")
-        print(self.get_deck())
+   
 
-        while True:
-            try:
-                index = int(input("Cut from what index:").strip())
-                if 0 < index <= 40:
-                    top = self.deck.pile[:index]
-                    bottom = self.deck.pile[index:]
-                    break
-                print(f"Invalid cut index, pick in a range of (1,40)")
-            except ValueError:
-                raise ValueError("Input Text is not permitted.")
-        self.deck.pile = bottom + top
-        print("Deck after the cut:")
-        print(self.get_deck())
-
-    def _distribute_cards(self):     # Can only be done after shuffling needs to be 10 to right etc
+    def _distribute_cards(self):   
         for player in self.players:
             set_cards=[self.deck.pile.pop(0) for i in range(10)]    
             player.receive_cards(set_cards)
@@ -245,37 +179,6 @@ class Game:
             print("Team 1 is victorious 🏆!")
         elif team2_score > team1_score:
             print("Team 2 is victorious 🏆!")
-
-class Player:
-    def __init__(self,name,player_id):
-        self.name = name
-        self.hand = []
-        self.player_id = player_id
-
-    def receive_cards(self,set_of_cards):
-        self.hand = set_of_cards
-
-    def play_card(self):
-        while True:
-            try:
-                print(f"Select a card by its number (1 to {len(self.hand)}):")
-                choice = int(input("Choice? ").strip()) - 1  
-                if 0 <= choice < len(self.hand):
-                    card = self.hand.pop(choice)
-                    return card
-                else:
-                    print("Invalid choice, try again.")
-            except ValueError:
-                print("Please enter a valid number.")
-
-
-    def __repr__(self):
-        return f"Player {self.player_id} == {self.name}"
-    
-    def _view_hand(self):
-        print(f"Hand of Player {self.player_id} ({self.name})=>")
-        hand_str = '    '.join(str(card) for card in self.hand)  
-        return hand_str
 
 def main():
     game = Game(["Pedro","Tiago","Lucas","Gonçalo"])
