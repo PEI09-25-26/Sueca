@@ -1,3 +1,5 @@
+from socket import *
+
 ranks_map = {
         "A":11,
         "7":10,
@@ -13,3 +15,9 @@ ranks_map = {
 
 suits = ["♥️","♦️","♣️","♠️"]
 
+
+BYTESIZE = 1024
+ENCODER = 'utf-8'
+PORT = 12345
+ID = gethostbyname(gethostname())
+CONNECT_INFO = (ID,PORT)
