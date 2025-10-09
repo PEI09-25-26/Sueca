@@ -13,6 +13,7 @@ class Player:
         self.player_socket.send(response.encode(ENCODER))
 
     def disconnect_player_socket(self):
+        self.running = False
         self.player_socket.close()
         print(f"[DISCONNECTED] [{self.player_name}] ")
 
@@ -46,6 +47,14 @@ class Player:
                 self.view_hand()
                 continue
 
+            if message == f"[CHOICE] It's your turn, choose a number between 1 and 10 ":
+                card_index = int(input(""))
+                card = self.hand.pop(card_index)
+                card_string = json.dumps(card)
+                self.send_response(card_string)
+
+    def __repr__(self):
+        return f"[PLAYER-INFO] [{self.player_name}] "
 
     def receive_cards(self,set_of_cards):
         self.hand = set_of_cards
@@ -54,6 +63,7 @@ class Player:
         print(f"[VIEW-HAND] Your hand ")
         hand_str = '    '.join(str(card) for card in self.hand)  
         print(hand_str)
+
 
 def main():
     name = input("[REGISTER] Enter your player name: ")

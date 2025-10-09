@@ -12,3 +12,7 @@ class Card:
             "suit":self.suit
         }
     
+    @classmethod
+    def from_string(cls, card_str):
+        rank, suit = card_str.split('|')
+        return cls(rank, suit)

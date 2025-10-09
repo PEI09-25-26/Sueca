@@ -29,7 +29,7 @@ class Deck:
             try:
                 index = int(input("Cut from what index:").strip())
                 if 0 < index <= 40:
-                    top = self.pile[:index]
+                    top = self.pile[:inde   x]
                     bottom = self.pile[index:]
                     break
                 print(f"Invalid cut index, pick in a range of (1,40)")
