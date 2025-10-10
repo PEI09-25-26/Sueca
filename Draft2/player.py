@@ -15,54 +15,80 @@ class Player:
     def disconnect_player_socket(self):
         self.running = False
         self.player_socket.close()
-        print(f"[DISCONNECTED] [{self.player_name}] ")
+        print(f"[DISCONNECTED] [{self.player_name}] \n",flush=True)
 
     def connect_player_socket(self):
         self.player_socket.connect(CONNECT_INFO)
-        print(f"[CONNECTED] [NAME:{self.player_name}] ")
+        print(f"[CONNECTED] [NAME:{self.player_name}] \n",flush=True)
 
     def __repr__(self):
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] "
     
     def listen(self):
+        sock_file = self.player_socket.makefile('r') 
         while self.running:
-            message = self.player_socket.recv(BYTESIZE).decode(ENCODER)
+            message = sock_file.readline()
             if not message:
                 break
-            print(message)
 
-            if message=="[CHOICE] Cut from what index ":
-                cut_index = input("")
+            message = message.strip()
+            print(f"{message}\n", flush=True)
+
+            # --- handle commands ---
+            if message == "[CHOICE] Cut from what index":
+                cut_index = input("Enter cut index: ")
                 self.send_response(cut_index)
 
-            if message=="[CHOICE] Top or Bottom ":
-                choice = input("")
+            elif message == "[CHOICE] Top or Bottom":
+                choice = input("Choose top or bottom: ")
                 self.send_response(choice)
 
-            if message.startswith("[HAND]"):
-                data = message[len("[HAND]"):] 
+            elif message.startswith("[HAND]"):
+                data = message[len("[HAND]"):]
                 card_strings = json.loads(data)
                 self.hand = card_strings
-                print("[HAND-RECEIVED] Hand received ")
+                print("[HAND-RECEIVED] Hand received")
                 self.view_hand()
                 continue
 
-            if message == f"[CHOICE] It's your turn, choose a number between 1 and 10 ":
-                card_index = int(input(""))
-                card = self.hand.pop(card_index)
-                card_string = json.dumps(card)
-                self.send_response(card_string)
+            elif message.startswith("[CHOICE] It's your turn"):
+                while True:
+                    self.view_hand()
+
+                    card_index = int(input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ")) - 1
+                    card = self.hand[card_index]
+                    card_string = json.dumps(card)
+                    self.send_response(card_string)
+
+                    server_response = sock_file.readline().strip()
+                    print(server_response)
+
+                    if server_response.startswith("[INVALID]"):
+                        print("Invalid card. Try again.")
+                        self.hand.append(card)
+                        continue  
+                    else:
+                        self.hand.pop(card_index)
+                        break
+
+
+            elif message == "[ROUND-START] Round has started \n":
+                self.view_hand()
+
+
+            
+
 
     def __repr__(self):
-        return f"[PLAYER-INFO] [{self.player_name}] "
+        return f"[PLAYER-INFO] [{self.player_name}] \n"
 
     def receive_cards(self,set_of_cards):
         self.hand = set_of_cards
 
     def view_hand(self):
-        print(f"[VIEW-HAND] Your hand ")
-        hand_str = '    '.join(str(card) for card in self.hand)  
-        print(hand_str)
+        print(f"[VIEW-HAND] Your hand \n",flush=True)
+        hand_str = '    '.join(str(card) for card in self.hand) + "\n"
+        print(hand_str,flush=True)
 
 
 def main():

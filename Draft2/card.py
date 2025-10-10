@@ -16,3 +16,4 @@ class Card:
     def from_string(cls, card_str):
         rank, suit = card_str.split('|')
         return cls(rank, suit)
+    
