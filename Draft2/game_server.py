@@ -220,17 +220,19 @@ class GameServer:
         message = f"[END] Game has ended \n"
         print(message,flush=True)
         self.broadcast_message(message)
+        for player in self.players:
+            player.disconnect_player_socket()
         self.disconnect_server_socket()
 
 
     def show_final_scores_and_print_winner(self):
-        team1_score = sum(self.scores[player] for player in self.teams[0])
-        team2_score = sum(self.players_and_scores[player] for player in self.teams[1])
+        team1_score = sum(self.scores[player.player_name] for player in self.teams[0])
+        team2_score = sum(self.scores[player.player_name] for player in self.teams[1])
 
-        print(f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0].name} & {self.teams[0][1].name}] scored [{team1_score}] \n",flush=True)
-        self.broadcast_message(f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0].name} & {self.teams[0][1].name}] scored [{team1_score}]")
-        print(f"[ANNOUNCEMENT] Team 2 [Players {self.teams[1][0].name} & {self.teams[1][1].name}] scored [{team2_score}] \n",flush=True)
-        self.broadcast_message(f"[ANNOUNCEMENT] Team 2 [Players {self.teams[1][0].name} & {self.teams[1][1].name}] scored [{team2_score}]")
+        print(f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0]} & {self.teams[0][1]}] scored [{team1_score}] \n",flush=True)
+        self.broadcast_message(f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0]} & {self.teams[0][1]}] scored [{team1_score}]")
+        print(f"[ANNOUNCEMENT] Team 2 [Players {self.teams[1][0]} & {self.teams[1][1]}] scored [{team2_score}] \n",flush=True)
+        self.broadcast_message(f"[ANNOUNCEMENT] Team 2 [Players {self.teams[1][0]} & {self.teams[1][1]}] scored [{team2_score}]")
 
         if team1_score > team2_score:
             print("[ANNOUNCEMENT] Team 1 is victorious 🏆 \n",flush=True)
