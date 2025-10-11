@@ -65,7 +65,6 @@ class Player:
 
                     if server_response.startswith("[INVALID]"):
                         print("Invalid card. Try again.")
-                        self.hand.append(card)
                         continue  
                     else:
                         self.hand.pop(card_index)

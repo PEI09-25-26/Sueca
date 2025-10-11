@@ -68,6 +68,7 @@ class GameServer:
     def distribute_cards(self):
         for player in self.players:
             set_of_cards = [self.deck.pile.pop(0) for _ in range(10)]
+            player.hand = set_of_cards
             player_socket = self.player_sockets[player.player_name]
             card_strings = [str(card) for card in set_of_cards]
             data = json.dumps(card_strings)

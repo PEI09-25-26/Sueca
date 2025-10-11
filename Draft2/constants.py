@@ -13,7 +13,7 @@ ranks_map = {
         "6":0
     }
 
-suits = ["H", "D", "C", "S"]
+suits = ["♡", "♢", "♣", "♠"]
 
 
 BYTESIZE = 1024
