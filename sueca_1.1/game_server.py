@@ -39,7 +39,7 @@ class GameServer:
     def broadcast_message(self, message):
         for player_socket in self.player_sockets.values():
             player_socket.sendall((message + "\n").encode(ENCODER))
-            time.sleep(0.05)
+            time.sleep(0.01)
 
 
     

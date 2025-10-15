@@ -1,0 +1,142 @@
+from socket import *
+from constants import *
+import json
+import time
+from threading import Thread,Lock
+
+class Player:
+    def __init__(self,player_name):
+        self.player_name = player_name
+        self.player_socket = socket(AF_INET,SOCK_STREAM)
+        self.running = True
+        self.hand = []
+        self.print_mutex = Lock()
+        self.turn_mutex = Lock()
+
+    def send_response(self,response):
+        self.player_socket.send(response.encode(ENCODER))
+
+    def disconnect_player_socket(self):
+        self.running = False
+        self.player_socket.close()
+        print(f"[DISCONNECTED] [{self.player_name}] \n",flush=True)
+
+    def connect_player_socket(self):
+        self.player_socket.connect(CONNECT_INFO)
+        print(f"[CONNECTED] [NAME:{self.player_name}] \n",flush=True)
+
+    def __repr__(self):
+        return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] "
+    
+
+    def handle_cut_deck_request(self):
+        self.print_mutex.acquire()
+        cut_index = input("Enter cut index: ")
+        self.send_response(cut_index)
+        self.print_mutex.release()
+
+
+    def handle_trump_card_request(self):
+        self.print_mutex.acquire()
+        choice = input("Choose top or bottom: ")
+        self.send_response(choice)
+        self.print_mutex.release()
+
+
+    def receive_cards(self,message):
+        data = message[len("[HAND]"):]
+        card_strings = json.loads(data)
+        self.hand = card_strings
+        print("[HAND-RECEIVED] Hand received")
+
+
+    def handle_turn(self,sock_file):
+        while True:
+            self.turn_mutex.acquire()
+            self.print_mutex.acquire()
+            card_index = int(input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ")) - 1
+            self.view_hand_statically()
+            self.print_mutex.release()
+            card = self.hand[card_index]
+            card_string = json.dumps(card)
+            self.send_response(card_string)
+            server_response = sock_file.readline().strip()
+            self.print_mutex.acquire()
+            print(server_response)
+            self.print_mutex.release()
+            self.turn_mutex.release()
+            if server_response.startswith("[INVALID]"):
+                continue  
+            else:
+                self.hand.pop(card_index)
+                break
+
+
+    def __repr__(self):
+        return f"[PLAYER-INFO] [{self.player_name}]"
+
+
+    def listen(self):
+        sock_file = self.player_socket.makefile('r') 
+        while self.running:
+            message = sock_file.readline()
+            if not message:
+                break
+            message = message.strip()
+            self.print_mutex.acquire()
+            print(f"{message}\n", flush=True)
+            self.print_mutex.release()
+            if message == "[CHOICE] Cut from what index":
+                self.handle_cut_deck_request()
+
+            elif message == "[CHOICE] Top or Bottom":
+                self.handle_trump_card_request()
+
+            elif message.startswith("[HAND]"):
+               self.receive_cards(message)
+
+            elif message.startswith("[CHOICE] It's your turn"):
+                self.handle_turn(sock_file)
+    
+
+    def view_hand_continuously(self):
+        while self.running:
+            if len(self.hand)==0:
+                self.print_mutex.acquire()
+                print(f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed ")
+                self.print_mutex.release()
+            else:
+                self.print_mutex.acquire()
+                print(f"[VIEW-HAND] Your hand \n")
+                hand_str = '    '.join(str(card) for card in self.hand) + "\n"
+                print(hand_str)
+                self.print_mutex.release()
+            time.sleep(8)
+
+    def view_hand_statically(self):
+        if len(self.hand)==0:
+            print(f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed ")
+        else:
+            print(f"[VIEW-HAND] Your hand \n")
+            hand_str = '    '.join(str(card) for card in self.hand) + "\n"
+            print(hand_str)
+
+    @staticmethod
+    def initialize_player():
+        name = input("[REGISTER] Enter your player name: ")
+        player = Player(name)
+        player.connect_player_socket()
+        player.send_response(name)
+        return player
+
+def main():
+    player = Player.initialize_player()
+    listen_thread = Thread(target=player.listen,daemon=True)
+    view_hand_continuously_thread = Thread(target=player.view_hand_continuously,daemon=True)
+    listen_thread.start()
+    view_hand_continuously_thread.start()
+    listen_thread.join()
+    view_hand_continuously_thread.join()
+
+if __name__ == "__main__":
+    main()
