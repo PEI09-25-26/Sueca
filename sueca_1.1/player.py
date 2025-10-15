@@ -19,11 +19,11 @@ class Player:
     def disconnect_player_socket(self):
         self.running = False
         self.player_socket.close()
-        print(f"[DISCONNECTED] [{self.player_name}] \n",flush=True)
+        print(f"[DISCONNECTED] [{self.player_name}]")
 
     def connect_player_socket(self):
         self.player_socket.connect(CONNECT_INFO)
-        print(f"[CONNECTED] [NAME:{self.player_name}] \n",flush=True)
+        print(f"[CONNECTED] [NAME:{self.player_name}]")
 
     def __repr__(self):
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] "
@@ -54,8 +54,8 @@ class Player:
         while True:
             self.turn_mutex.acquire()
             self.print_mutex.acquire()
-            card_index = int(input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ")) - 1
             self.view_hand_statically()
+            card_index = int(input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ")) - 1
             self.print_mutex.release()
             card = self.hand[card_index]
             card_string = json.dumps(card)
@@ -83,9 +83,6 @@ class Player:
             if not message:
                 break
             message = message.strip()
-            self.print_mutex.acquire()
-            print(f"{message}\n", flush=True)
-            self.print_mutex.release()
             if message == "[CHOICE] Cut from what index":
                 self.handle_cut_deck_request()
 
@@ -97,6 +94,10 @@ class Player:
 
             elif message.startswith("[CHOICE] It's your turn"):
                 self.handle_turn(sock_file)
+            else:
+                self.print_mutex.acquire()
+                print(f"{message}\n")
+                self.print_mutex.release()
     
 
     def view_hand_continuously(self):
@@ -108,7 +109,7 @@ class Player:
             else:
                 self.print_mutex.acquire()
                 print(f"[VIEW-HAND] Your hand \n")
-                hand_str = '    '.join(str(card) for card in self.hand) + "\n"
+                hand_str = '    '.join(str(card) for card in self.hand)
                 print(hand_str)
                 self.print_mutex.release()
             time.sleep(8)
@@ -118,7 +119,7 @@ class Player:
             print(f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed ")
         else:
             print(f"[VIEW-HAND] Your hand \n")
-            hand_str = '    '.join(str(card) for card in self.hand) + "\n"
+            hand_str = '    '.join(str(card) for card in self.hand)
             print(hand_str)
 
     @staticmethod
