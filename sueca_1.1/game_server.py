@@ -90,7 +90,7 @@ class GameServer:
                 self.teams[1].append(player)
 
 
-    def distribute_cards(self):
+    def deal_cards(self):
         for player in self.players:
             set_of_cards = [self.deck.pile.pop(0) for _ in range(10)]
             player.hand = set_of_cards
@@ -142,7 +142,7 @@ class GameServer:
         self.pick_trump_card(choice)
         self.broadcast_message(f"[TRUMP-CARD] This game's trump card is [{self.trump_card}] ")
         print(f"[TRUMP-CARD] This game's trump card is {self.trump_card}")
-        self.distribute_cards()
+        self.deal_cards()
         self.last_round_winner=self.players[0]
 
 
