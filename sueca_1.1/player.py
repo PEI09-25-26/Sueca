@@ -12,6 +12,7 @@ class Player:
         self.hand = []
         self.print_mutex = Lock()
         self.turn_mutex = Lock()
+        self.position = None
 
     def send_response(self,response):
         self.player_socket.send(response.encode(ENCODER))
@@ -26,7 +27,7 @@ class Player:
         print(f"[CONNECTED] [NAME:{self.player_name}]")
 
     def __repr__(self):
-        return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] "
+        return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
     
 
     def handle_cut_deck_request(self):

@@ -4,6 +4,8 @@ from player import *
 from deck import *
 import json
 import time
+from positions import Positions
+from random import shuffle
 
 class GameServer:
 
@@ -24,7 +26,16 @@ class GameServer:
         self.scores = {
 
         }
-        self.teams = []
+        self.teams = [[],[]]
+        self.positions = [Positions.NORTH,
+                          Positions.EAST,
+                          Positions.SOUTH,
+                          Positions.WEST]
+
+
+
+    def shuffle_positions(self):
+        shuffle(self.positions)
 
     def connect_server_socket(self):
         self.server_socket.bind(CONNECT_INFO)
@@ -41,7 +52,6 @@ class GameServer:
             player_socket.sendall((message + "\n").encode(ENCODER))
             time.sleep(0.01)
 
-
     
     def send_direct_message(self, message, player_socket):
         player_socket.sendall((message + "\n").encode(ENCODER))
@@ -51,18 +61,33 @@ class GameServer:
         while len(self.players)<self.max_players:
             player_socket, player_address = self.server_socket.accept()
             player_name = player_socket.recv(BYTESIZE).decode(ENCODER)
-
             broadcast_message = f"[CONNECTED] Player [{len(self.players)+1}] [{player_name}] has joined the game from {player_address}"
             print(broadcast_message)
-
             self.broadcast_message(broadcast_message)
-            
             self.player_sockets[player_name] = player_socket
-            self.players.append(Player(player_name))
-            self.scores[player_name] = 0
-        
-        self.teams.append([self.players[0],self.players[2]])
-        self.teams.append([self.players[1],self.players[3]])
+            self.assign_player(player_name)
+
+
+    def assign_player(self,player_name):
+        player = Player(player_name)
+        player.position=self.positions[len(self.players)]
+        self.players.append(player)
+        self.scores[player_name] = 0
+        print(f"[ANNOUNCEMENT] {player_name} was assigned position [{player.position}] ")
+        self.broadcast_message(f"[ANNOUNCEMENT] {player_name} was assigned position [{player.position}] ")
+
+
+    def assign_teams(self):
+        for player in self.players:
+            print(f"[ANNOUNCEMENT Player {player.player_name} is to the {player.position} ")
+            if player.position in (Positions.NORTH,Positions.SOUTH):
+                self.teams[0].append(player)
+                print(f"[ANNOUNCEMENT] {player.player_name} was assigned to the first team ")
+                self.broadcast_message(f"[ANNOUNCEMENT] {player.player_name} was assigned to the first team ")
+            else:
+                print(f"[ANNOUNCEMENT] {player.player_name} was assigned to the second team ")
+                self.broadcast_message(f"[ANNOUNCEMENT] {player.player_name} was assigned to the second team ")
+                self.teams[1].append(player)
 
 
     def distribute_cards(self):
@@ -74,6 +99,7 @@ class GameServer:
             data = json.dumps(card_strings)
             payload = "[HAND]" + data + "\n"
             player_socket.sendall(payload.encode(ENCODER))
+
 
     def pick_trump_card(self,choice):
         if choice == "top":
@@ -95,6 +121,8 @@ class GameServer:
         self.broadcast_message("[SHUFFLED] Deck has been shuffled ")
         self.broadcast_message("[CUTTING] Cutting deck ")
         print("[CUTTING] Cutting deck")
+        self.shuffle_positions()
+        self.assign_teams()
         first_player_socket = list(self.player_sockets.values())[0]
         self.broadcast_message(f"[ANNOUNCEMENT] Player [1] [{self.players[0].player_name}] gets to cut the deck ")
         print(f"[ANNOUNCEMENT] Player [1] [{self.players[0].player_name}] gets to cut the deck")
@@ -117,8 +145,6 @@ class GameServer:
         self.distribute_cards()
         self.last_round_winner=self.players[0]
 
-
-   
 
     def assure_card_can_be_played(self, card, player):    
         has_round_suit = any(c.suit == self.round_suit for c in player.hand)
