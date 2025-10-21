@@ -14,7 +14,7 @@ Jerónimo's daily work life is simple, he has his morning routine, then goes to 
 He is looking for a way to play "Sueca" with his friends remotely while keeping the same spirit and vibe of playing it with physical cards.
 
 ## Pain Points & Challenges    
-All of the currently available apps use a completely virtual approaches and online only play, not supporting the way of playing that he and his friends most enjoy.
+Most existing apps offer purely virtual gameplay that doesn’t capture the feeling of playing with real cards and friends around the table. The social aspect and physical cues that make the game fun are missing. 
 
 ## Motivation  
-He wants to keep regular contact with his friends and keep the games of "Sueca" going with the rest of the group while maitaining the same enviroment it usually brought.
+Jerónimo wants to stay in touch with his friends and keep their Sueca games alive, maintaining the same friendly atmosphere they had when playing together in person.
