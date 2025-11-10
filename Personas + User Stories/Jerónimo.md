@@ -1,4 +1,4 @@
-# ![Jerónimo](Jerónimo.jpg)  
+# ![Jerónimo](Jeronimo.jpg)  
 **Name:** Jerónimo Jesus 
 **Age:** 41  
 **Occupation:** Office worker  
