@@ -4,31 +4,47 @@
 
 # General
 
-### As a user, I want to be able to create and log into an account
+### Match History
+    Priority: Medium
+    Estimate: 5 Story Points
+    As a user,
+    I want to be able to see the statistics related to the matches I have played in the past in my profile.
 
-### As a user, I want to be able ot have other users as friends
+    Given that I have played at least more than one game using the app, I should be able to see the statistics related to
+    the number of wins, win rate, highest score and the total number of games I have played while using the app while checking my profile.
 
-### As a user, I want to be able to costumize the app to my liking
+### Changing Profile information
+    Priority: Medium
+    Estimate: 2 Story Points
+    As a user,
+    I want to be able to change the username and the profile picture.
 
-### As a user, I want to be able to see the history of matches played
-
-### As a user, I want the option of being notified about "Sueca" tournaments being held near me
+    Given that I have the profile menu open, I should be able to change my username and profile picture.
 
 # AI Related
 
-### As a user, I want to be able to use the app's AI players in a physical "Sueca" game
+### Use AI Players in a Physical Sueca Game
+    Priority: High
+    Estimate: 18 Story Points
+    As a user,
+    I want to integrate AI players into a real, physical Sueca match,
+    so that I can enjoy a full game even when there aren’t enough human players and maintain fair play through AI arbitration.
+
+    Given that I’m setting up a physical Sueca game with real cards,
+    When I choose to activate AI players in the app and show their dealt cards using a camera or manual input,
+    Then the AI players should be able to make decisions and play according to the standard Sueca rules.
 
 ### As a user, I want to be able to use the app's AI players in a online game
+    Priority:
+    Estimate:
+    As a user,
+    I want to 
 
-### As a user, I want to be able to use the app's AI functions as a referee in a physical "Sueca" game
-
-### As a user, I want to be able to costumize the AI player's skill level
+    Given that,
 
 ## Online-play Related
 
 ### As a user, I want to be able to play remotely with my friends while they are playing with cards physically
-
-### As a user, I want to be able to play a fully online match of "Sueca" with users from my friend's list
 
 ### As a user, I want to be able to play a fully online match of "Sueca" with random users
 

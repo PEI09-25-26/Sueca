@@ -4,6 +4,8 @@
 **Occupation:** Card Game Tournament & Event Organizer
 **Location:** London, United Kingdom 
 
+TODO: ADAPTAR A UMA SITUAÇÃO DE UM LAR DE IDOSOS
+
 ## Background  
 Deolinda is a Portuguese woman living and working in London, drawn by the city's thriving tabletop and card gaming scene. Passionate about strategy and competition, she turned her hobby into a career by hosting and organizing events for various card games across the UK. Her experience ranges from small local meetups to large regional tournaments.
 
