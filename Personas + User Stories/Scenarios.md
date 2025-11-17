@@ -77,7 +77,7 @@ Alternative Flow:
 
 Outcome: Maria e as amigas conseguem jogar e divertir-se mesmo sem grupo completo, com um bot equilibrado e regras bem aplicadas.
 
-Scenario 4 — Jerónimo (Árbitro Contra Amigo Aldrabão)
+## Scenario 4 — Jerónimo (Árbitro Contra Amigo Aldrabão)
 
 Goal: Garantir que o jogo físico com amigos decorre sem batotas.
 
