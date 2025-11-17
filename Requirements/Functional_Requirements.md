@@ -49,6 +49,9 @@ O sistema deve sincronizar o estado do jogo físico em tempo real com utilizador
 RF3.3 – Participar Remotamente em Mesa Física
 O sistema deve permitir que um utilizador remoto jogue numa mesa física, vendo o estado da mesa e escolhendo cartas.
 
+RF3.4 - Comunicar com os Jogadores a partir de Áudio
+O sistema deve de comunicar com filas de áudio quando algumas situações acontecem (ex.: batota, jogar cartas, etc.)
+
 ⸻
 
 4. Integração com IA em Jogos
