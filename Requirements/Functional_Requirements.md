@@ -47,15 +47,6 @@
 - **Descrição:** Deve permitir a configuração personalizada das regras e modos de jogo, para acomodar variantes regionais da Sueca ou preferências dos jogadores.
 - **Como é cumprido:** Interface de configuração acessível que permite selecionar opções e variantes compatíveis.
 - **Suposições:** O utilizador compreende as opções disponíveis e escolhe regras suportadas pelo sistema.
-  
-## 9. Feedback Visual e Auditivo Intuitivo
-
-- **Descrição:** Deve assegurar que todas as interações do sistema com o utilizador sejam intuitivas, fornecendo feedback visual e auditivo durante o jogo para informar sobre o estado atual, jogadas possíveis e ações necessárias.
-- **Como é cumprido:** Utilização de alertas, feedback sonoro, destaques visuais e mensagens claras na interface.
-- **Suposições:** O utilizador está atento aos avisos apresentados pela aplicação.
-- **Descrição:** Deve permitir a configuração personalizada das regras e modos de jogo, para acomodar variantes regionais da Sueca ou preferências dos jogadores.
-- **Como é cumprido:** Interface de configuração acessível que permite selecionar opções e variantes compatíveis.
-- **Suposições:** O utilizador compreende as opções disponíveis e escolhe regras suportadas pelo sistema.
 
 ## 9. Feedback Visual e Auditivo Intuitivo
 
