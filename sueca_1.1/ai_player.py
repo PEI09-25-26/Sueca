@@ -21,10 +21,19 @@ class Player:
         self.running = False
         self.player_socket.close()
         print(f"[DISCONNECTED] [{self.player_name}]")
+    def connect_player_socket(self, server_ip=None):
+        """Connect to the game server.
 
-    def connect_player_socket(self):
-        self.player_socket.connect(CONNECT_INFO)
-        print(f"[CONNECTED] [NAME:{self.player_name}]")
+        If `server_ip` is provided it will connect to (server_ip, PORT).
+        Otherwise it will use the default `CONNECT_INFO` from `constants.py`.
+        """
+        target = CONNECT_INFO if server_ip is None else (server_ip, PORT)
+        try:
+            self.player_socket.connect(target)
+            print(f"[CONNECTED] [NAME:{self.player_name}] [TO:{target[0]}:{target[1]}]")
+        except Exception as e:
+            print(f"[ERROR] Could not connect to {target}: {e}")
+            raise
 
     def __repr__(self):
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
@@ -140,7 +149,8 @@ class Player:
     def initialize_player():
         name = input("[REGISTER] Enter your player name: ")
         player = Player("AI PLAYER: " + name)
-        player.connect_player_socket()
+        server_ip = input("[CONNECT] Enter server IP (leave blank for default): ").strip()
+        player.connect_player_socket(server_ip if server_ip != "" else None)
         player.send_response(name)
         return player
 

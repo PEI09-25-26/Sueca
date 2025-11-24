@@ -32,13 +32,11 @@ class GameServer:
                           Positions.SOUTH,
                           Positions.WEST]
 
-
-
     def shuffle_positions(self):
         shuffle(self.positions)
 
     def connect_server_socket(self):
-        self.server_socket.bind(CONNECT_INFO)
+        self.server_socket.bind(SERVER_BIND)
         self.server_socket.listen(4)
         print(f"[CONNECTED] Game Server is online")
 
@@ -46,16 +44,13 @@ class GameServer:
         self.server_socket.close()
         print(f"[DISCONNECTED] Game Server is offline")
 
-
     def broadcast_message(self, message):
         for player_socket in self.player_sockets.values():
             player_socket.sendall((message + "\n").encode(ENCODER))
             time.sleep(0.01)
 
-    
     def send_direct_message(self, message, player_socket):
         player_socket.sendall((message + "\n").encode(ENCODER))
-
 
     def accept_player_sockets(self):
         while len(self.players)<self.max_players:
@@ -67,7 +62,6 @@ class GameServer:
             self.player_sockets[player_name] = player_socket
             self.assign_player(player_name)
 
-
     def assign_player(self,player_name):
         player = Player(player_name)
         player.position=self.positions[len(self.players)]
@@ -75,7 +69,6 @@ class GameServer:
         self.scores[player_name] = 0
         print(f"[ANNOUNCEMENT] {player_name} was assigned position [{player.position}] ")
         self.broadcast_message(f"[ANNOUNCEMENT] {player_name} was assigned position [{player.position}] ")
-
 
     def assign_teams(self):
         for player in self.players:
@@ -89,7 +82,6 @@ class GameServer:
                 self.broadcast_message(f"[ANNOUNCEMENT] {player.player_name} was assigned to the second team ")
                 self.teams[1].append(player)
 
-
     def deal_cards(self):
         for player in self.players:
             set_of_cards = [self.deck.pile.pop(0) for _ in range(10)]
@@ -100,7 +92,6 @@ class GameServer:
             payload = "[HAND]" + data + "\n"
             player_socket.sendall(payload.encode(ENCODER))
 
-
     def pick_trump_card(self,choice):
         if choice == "top":
             trump_card = self.deck.pile[0]
@@ -108,7 +99,6 @@ class GameServer:
             trump_card = self.deck.pile[-1]
         self.trump_card=trump_card
         self.trump_card_suit=self.trump_card.suit
-
 
     def start_game(self):
         message = f"[START] Game has started "

@@ -1,4 +1,5 @@
 from socket import *
+import os
 
 ranks_map = {
         "A":11,
@@ -18,6 +19,7 @@ suits = ["♡", "♢", "♣", "♠"]
 
 BYTESIZE = 1024
 ENCODER = 'utf-8'
-PORT = 12345
-ID = gethostbyname(gethostname())
-CONNECT_INFO = (ID,PORT)
+PORT = int(os.getenv('SUECA_PORT', '12345'))
+SERVER_BIND = (os.getenv('SUECA_BIND', '0.0.0.0'), PORT)
+DEFAULT_SERVER_IP = os.getenv('SUECA_SERVER_IP', gethostbyname(gethostname()))
+CONNECT_INFO = (DEFAULT_SERVER_IP, PORT)
