@@ -184,6 +184,13 @@ class GameServer:
                 first_card_str = json.loads(first_card_json)
                 first_card = Card.from_string(first_card_str)
                 self.broadcast_message(f"[PLAY] Player [{player.player_name}] played [{first_card}]")
+                for i, c in enumerate(player.hand):
+                    if c.rank == first_card.rank and c.suit == first_card.suit:
+                        player.hand.pop(i)
+                        removed = True
+                        break
+                if not removed:
+                        print(f"[WARNING] Played card not found in server-side hand: {card}")
                 round_vector.append(first_card)
                 self.round_suit = round_vector[0].suit
                 print(f"[ANNOUNCEMENT] This round's suit is {self.round_suit}. You're forced to play a card of suit {self.round_suit} if you have one in hand! You can play a card with the trump suit {self.trump_card.suit}  alternatively")
@@ -197,13 +204,21 @@ class GameServer:
                     card = Card.from_string(card_str)
                     print(card)
                     if self.assure_card_can_be_played(card,player):
+                        removed = False
+                        for i, c in enumerate(player.hand):
+                            if c.rank == card.rank and c.suit == card.suit:
+                                player.hand.pop(i)
+                                removed = True
+                                break
+                        if not removed:
+                            print(f"[WARNING] Played card not found in server-side hand: {card}")
+
                         self.broadcast_message(f"[PLAY] Player [{player.player_name}] played [{card}]")
                         round_vector.append(card)
                         break
                     else:
                         self.send_direct_message(f"[INVALID] You must follow suit [{self.round_suit}]. Try again ", player_socket)
                         print(f"[INVALID]You must follow suit [{self.round_suit}] \n")
-                        player.hand.append(card)
 
         
         print("[ANNOUNCEMENT Cards played this round ")

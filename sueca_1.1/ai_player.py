@@ -68,7 +68,7 @@ class Player:
                 self.hand.pop(0)
                 self.turn_mutex.release()
                 return
-            for card_index, card in enumerate(self.hand):
+            for card_index, card in enumerate(self.hand[1:], start=1):
                 card_string = json.dumps(card)
                 self.send_response(card_string)
                 server_response = sock_file.readline().strip()
