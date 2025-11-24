@@ -1,6 +1,5 @@
 from socket import *
 from constants import *
-import json
 import time
 from threading import Thread,Lock
 
@@ -56,8 +55,8 @@ class Player:
 
     def receive_cards(self,message):
         data = message[len("[HAND]"):]
-        card_strings = json.loads(data)
-        self.hand = card_strings
+        data_split = data.split(" ")
+        self.hand = [card for card in data_split]
         print("[HAND-RECEIVED] Hand received")
 
 
@@ -69,8 +68,8 @@ class Player:
             card_index = int(input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ")) - 1
             self.print_mutex.release()
             card = self.hand[card_index]
-            card_string = json.dumps(card)
-            self.send_response(card_string)
+            print(f"THIS IS THE CARD!{card}")
+            self.send_response(card)
             server_response = sock_file.readline().strip()
             self.print_mutex.acquire()
             print(server_response)
@@ -81,7 +80,6 @@ class Player:
             else:
                 self.hand.pop(card_index)
                 break
-
 
     def __repr__(self):
         return f"[PLAYER-INFO] [{self.player_name}]"

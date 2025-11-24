@@ -2,7 +2,6 @@ from constants import *
 from socket import *
 from player import *
 from deck import *
-import json
 import time
 from positions import Positions
 from random import shuffle
@@ -31,6 +30,8 @@ class GameServer:
                           Positions.EAST,
                           Positions.SOUTH,
                           Positions.WEST]
+        
+        self.deck_backup = None
 
     def shuffle_positions(self):
         shuffle(self.positions)
@@ -87,9 +88,9 @@ class GameServer:
             set_of_cards = [self.deck.pile.pop(0) for _ in range(10)]
             player.hand = set_of_cards
             player_socket = self.player_sockets[player.player_name]
-            card_strings = [str(card) for card in set_of_cards]
-            data = json.dumps(card_strings)
-            payload = "[HAND]" + data + "\n"
+            data = " ".join(str(card) for card in set_of_cards)
+            payload = f"[HAND]{data}\n"
+            print(f"Sending this: {payload}")
             player_socket.sendall(payload.encode(ENCODER))
 
     def pick_trump_card(self,choice):
@@ -98,7 +99,7 @@ class GameServer:
         elif choice == "bottom":
             trump_card = self.deck.pile[-1]
         self.trump_card=trump_card
-        self.trump_card_suit=self.trump_card.suit
+        self.trump_card_suit=self.trump_card[0]
 
     def start_game(self):
         message = f"[START] Game has started "
@@ -118,12 +119,12 @@ class GameServer:
         print(f"[ANNOUNCEMENT] Player [1] [{self.players[0].player_name}] gets to cut the deck")
         self.send_direct_message("[CHOICE] Cut from what index ",first_player_socket)
         cut_index = int(first_player_socket.recv(BYTESIZE).decode(ENCODER))
-        print(f"[CUT-RECEIVED] Player cut the deck at index [{cut_index}]",flush=True)
+        print(f"[CUT-RECEIVED] Player cut the deck at index [{cut_index}]")
         self.broadcast_message(f"[CUT-RECEIVED] Player cut the deck at index [{cut_index}]")
         print("Deck before the cut")
         print(str(self.deck))
         self.deck.cut_deck(cut_index)
-        print("Deck after the cut ",flush=True)
+        print("Deck after the cut ")
         print(str(self.deck))
         self.broadcast_message(f"[ANNOUNCEMENT] Player [1] [{self.players[0].player_name}] gets to pick trump card from the top or the bottom of the deck")
         print(f"[ANNOUNCEMENT] Player [1] [{self.players[0].player_name}] gets to pick the trump card from the top or the bottom of the deck")
@@ -132,31 +133,29 @@ class GameServer:
         self.pick_trump_card(choice)
         self.broadcast_message(f"[TRUMP-CARD] This game's trump card is [{self.trump_card}] ")
         print(f"[TRUMP-CARD] This game's trump card is {self.trump_card}")
+        self.deck_backup = self.deck.pile.copy()
         self.deal_cards()
         self.last_round_winner=self.players[0]
 
 
     def assure_card_can_be_played(self, card, player):    
-        has_round_suit = any(c.suit == self.round_suit for c in player.hand)
+        has_round_suit = any(card[0] == self.round_suit for card in player.hand)
         print(f"Player {player} has_round_suit={has_round_suit}")
-        print(list(c.suit == self.round_suit for c in player.hand))
-        print(f"Player {player.player_name} hand length: {len(player.hand)}")
-        print(f"Cards in hand: {[c.suit + c.rank for c in player.hand]}")
-        if card.suit == self.round_suit:
+        if card[0] == self.round_suit:
             return True
-        if card.suit == self.trump_card.suit:
+        if card[0] == self.trump_card_suit:
             return True
-        if has_round_suit and card.suit !=self.trump_card.suit and card.suit!=self.round_suit:
+        if has_round_suit and card[0] !=self.trump_card_suit and card[0]!=self.round_suit:
             return False
         return True
 
 
     def play_round(self):
         message1 = f"[ROUND-START] Round has started"
-        print(message1,flush=True)
+        print(message1)
         self.broadcast_message(message1)
         message2 = f"[ROUND-COUNTER] Round number {self.round_counter}"
-        print(message2,flush=True)
+        print(message2)
         self.broadcast_message(message2)
         round_vector = []
         current_player = self.last_round_winner
@@ -170,33 +169,30 @@ class GameServer:
                 self.broadcast_message(f"[PLAYER-ORDER] Player {player.player_name} takes the lead this round, as they played the strongest last round, or distributed the deck")
                 first_player_socket = self.player_sockets[player.player_name]
                 self.send_direct_message(f"[CHOICE] It's your turn, choose a number between 1 and {len(player.hand)} ",first_player_socket)
-                first_card_json = first_player_socket.recv(BYTESIZE).decode(ENCODER)
-                first_card_str = json.loads(first_card_json)
-                first_card = Card.from_string(first_card_str)
+                first_card = first_player_socket.recv(BYTESIZE).decode(ENCODER)
+                print(f"THIS IS THE IRST CARD {first_card}")
                 self.broadcast_message(f"[PLAY] Player [{player.player_name}] played [{first_card}]")
                 for i, c in enumerate(player.hand):
-                    if c.rank == first_card.rank and c.suit == first_card.suit:
+                    if c[2] == first_card[2] and c[0] == first_card[0]:
                         player.hand.pop(i)
                         removed = True
                         break
                 if not removed:
                         print(f"[WARNING] Played card not found in server-side hand: {card}")
                 round_vector.append(first_card)
-                self.round_suit = round_vector[0].suit
-                print(f"[ANNOUNCEMENT] This round's suit is {self.round_suit}. You're forced to play a card of suit {self.round_suit} if you have one in hand! You can play a card with the trump suit {self.trump_card.suit}  alternatively")
-                self.broadcast_message(f"[ANNOUNCEMENT] This round's suit is {self.round_suit}. You're forced to play a card of suit {self.round_suit} if you have one in hand! You can play a card with the trump suit {self.trump_card.suit}  alternatively ")
+                self.round_suit = round_vector[0][0]
+                print(f"[ANNOUNCEMENT] This round's suit is {self.round_suit}. You're forced to play a card of suit {self.round_suit} if you have one in hand! You can play a card with the trump suit {self.trump_card[0]}  alternatively")
+                self.broadcast_message(f"[ANNOUNCEMENT] This round's suit is {self.round_suit}. You're forced to play a card of suit {self.round_suit} if you have one in hand! You can play a card with the trump suit {self.trump_card[0]}  alternatively ")
             else:
                 player_socket = self.player_sockets[player.player_name]
                 self.send_direct_message("[CHOICE] It's your turn, choose a number between 1 and 10",player_socket)
                 while True:
-                    card_json = player_socket.recv(BYTESIZE).decode(ENCODER)
-                    card_str = json.loads(card_json)
-                    card = Card.from_string(card_str)
-                    print(card)
+                    card = player_socket.recv(BYTESIZE).decode(ENCODER)
+                    print("RECEIVED THIS!!!",card)
                     if self.assure_card_can_be_played(card,player):
                         removed = False
                         for i, c in enumerate(player.hand):
-                            if c.rank == card.rank and c.suit == card.suit:
+                            if c[2] == card[2] and c[0] == card[0]:
                                 player.hand.pop(i)
                                 removed = True
                                 break
@@ -216,34 +212,38 @@ class GameServer:
             print(f"[ANNOUNCEMENT] Player [{self.players[i-1].player_name}] played  [{card}]")
             self.broadcast_message(f"[ANNOUNCEMENT] Player [{self.players[i-1].player_name}] played  [{card}]")
         
-        def determine_round_winner():
-            trump_was_played = any(card.suit == self.trump_card_suit for card in round_vector)
+        def _determine_round_winner():
+            trump_was_played = any(card[0] == self.trump_card_suit for card in round_vector)
 
-            
+            print("LE PILE",self.deck.pile)
+            print("LE BACKUP PILE",self.deck_backup)
             if trump_was_played:
-                trump_cards = [card for card in round_vector if card.suit == self.trump_card_suit]
-                winner = max(trump_cards,key=lambda card:ranks_map[card.rank])
+                trump_cards = [card for card in round_vector if card[0] == self.trump_card_suit]
+                winner = max(trump_cards,key=lambda card:self.deck.points[self.deck_backup.index(card)])
+                print("WINNER IS YIIIIPEEEEierieriieriierieirirE",winner)
                 winner_index = round_vector.index(winner)
                 return winner,winner_index
             
-            winner = max(round_vector,key=lambda card:ranks_map[card.rank])
+
+            winner = max(round_vector,key=lambda card:self.deck.points[self.deck_backup.index(card)])
+            print("WINNER IS YIIIIPEEEEE",winner)
             winner_index = round_vector.index(winner)
             return winner,winner_index
         
 
-        round_winner,winner_index = determine_round_winner()
+        round_winner,winner_index = _determine_round_winner()
         winner_player = self.players[winner_index]
         self.last_round_winner = winner_player
 
-        def get_round_sum():
+        def _get_round_sum():
             round_sum = 0
             for card in round_vector:
-                round_sum+=ranks_map[card.rank]
+                round_sum+=ranks_map[card[2]]
             return round_sum
         
-        print(f"[ANNOUNCEMENT] Round winner was [{round_winner}],  Player [{winner_player.player_name}] wins [{get_round_sum()}] points")
-        self.broadcast_message(f"[ANNOUNCEMENT] Round winner was [{round_winner}],  Player [{winner_player.player_name}] wins [{get_round_sum()}] points.")
-        self.scores[winner_player.player_name] += get_round_sum()
+        print(f"[ANNOUNCEMENT] Round winner was [{round_winner}],  Player [{winner_player.player_name}] wins [{_get_round_sum()}] points")
+        self.broadcast_message(f"[ANNOUNCEMENT] Round winner was [{round_winner}],  Player [{winner_player.player_name}] wins [{_get_round_sum()}] points.")
+        self.scores[winner_player.player_name] += _get_round_sum()
         self.round_counter+=1
 
 
@@ -258,7 +258,7 @@ class GameServer:
 
     def show_final_scores_and_print_winner(self):
         team1_score = sum(self.scores[player.player_name] for player in self.teams[0])
-        team2_score = sum(self.scores[player.player_name] for player in self.teams[1])
+        team2_score = 120-team1_score
 
         print(f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0]} & {self.teams[0][1]}] scored [{team1_score}]")
         self.broadcast_message(f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0]} & {self.teams[0][1]}] scored [{team1_score}]")
