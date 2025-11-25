@@ -2,14 +2,13 @@ from deck import *
 def main():
     d = Deck()
     print(d)
-    print("\n")
-    print(d.__repr__())
+    print("Shuffling")
     d.shuffle_deck()
-    print("\n")
-    print(d.__repr__())
     print(d)
-    d.cut_deck(5)
-    print("\n")
-    print(d.__repr__())
+
+    print("Cutting")
+    d.cut_deck(2)
     print(d)
+
+    
 main()

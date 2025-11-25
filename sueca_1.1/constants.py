@@ -16,7 +16,6 @@ ranks_map = {
 
 suits = ["♡", "♢", "♣", "♠"]
 
-
 BYTESIZE = 1024
 ENCODER = 'utf-8'
 PORT = int(os.getenv('SUECA_PORT', '12345'))
