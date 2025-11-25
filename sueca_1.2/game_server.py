@@ -5,6 +5,8 @@ from deck import *
 import time
 from positions import Positions
 from random import shuffle,choice
+from round_manager import RoundManager
+from logger import GameLogger
 
 
 class GameServer:
@@ -30,6 +32,7 @@ class GameServer:
             Positions.WEST,
         ]
         self.deck_backup = None
+        self.game_logger = GameLogger()
 
     def shuffle_positions(self):
         shuffle(self.positions)
@@ -38,11 +41,11 @@ class GameServer:
         self.server_socket.bind(SERVER_BIND)
         self.server_socket.listen(4)
         self.server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        print(f"[CONNECTED] Game Server is online")
+        self.game_logger.info(f"[CONNECTED] Game Server is online")
 
     def disconnect_server_socket(self):
         self.server_socket.close()
-        print(f"[DISCONNECTED] Game Server is offline")
+        self.game_logger.info(f"[DISCONNECTED] Game Server is offline")
 
     def broadcast_message(self, message):
         for player_socket in self.player_sockets.values():
@@ -57,7 +60,7 @@ class GameServer:
             player_socket, player_address = self.server_socket.accept()
             player_name = player_socket.recv(BYTESIZE).decode(ENCODER)
             broadcast_message = f"[CONNECTED] Player [{len(self.players)+1}] [{player_name}] has joined the game from {player_address}"
-            print(broadcast_message)
+            self.game_logger.info(f"[CONNECTED] Player [{len(self.players)+1}] [{player_name}] has joined the game from {player_address}")
             self.broadcast_message(broadcast_message)
             self.player_sockets[player_name] = player_socket
             self.assign_player(player_name)
@@ -166,8 +169,8 @@ class GameServer:
         choice = west_socket.recv(BYTESIZE).decode(ENCODER)
         self.pick_trump_card(choice)
 
-        self.broadcast_message(f"[TRUMP-CARD] This game's trump card is [{self.trump_card}]")
-        print(f"[TRUMP-CARD] This game's trump card is {self.trump_card}")
+        self.broadcast_message(f"[TRUMP-CARD] This game's trump card is [{CardMapper.get_card(self.trump_card)}]")
+        print(f"[TRUMP-CARD] This game's trump card is {CardMapper.get_card(self.trump_card)}")
 
         # Deal cards
         self.deck_backup = self.deck.cards.copy()
@@ -177,147 +180,13 @@ class GameServer:
         self.last_round_winner = south_player
 
 
-    def assure_card_can_be_played(self, card_number, player):
-        has_round_suit = any(
-            CardMapper.get_card_suit(card) == self.round_suit for card in player.hand
-        )
-        print(f"Player {player} has_round_suit={has_round_suit}")
-        if CardMapper.get_card_suit(card_number) == self.round_suit:
-            return True
-        elif (
-            CardMapper.get_card_suit(card_number) != self.round_suit
-            and not has_round_suit
-        ):
-            return True
-        else:
-            return False
-
-    def play_round(self):
-        message1 = f"[ROUND-START] Round has started"
-        print(message1)
-        self.broadcast_message(message1)
-        message2 = f"[ROUND-COUNTER] Round number {self.round_counter}"
-        print(message2)
-        self.broadcast_message(message2)
-        round_vector = []
-        current_player = self.last_round_winner
-        start_index = self.players.index(self.last_round_winner)
-        turn_order = self.players[start_index:] + self.players[:start_index]
-        for player in turn_order:
-            print(f"[PLAYER-ORDER] It's Player [{player.player_name}]'s turn")
-            self.broadcast_message(
-                f"[PLAYER-ORDER] It's Player's [{player.player_name}]'s turn "
-            )
-            if player == self.last_round_winner:
-                print(
-                    f"[PLAYER-ORDER] Player [{player.player_name}] takes the lead this round, as they played the strongest last round, or distributed the deck"
-                )
-                self.broadcast_message(
-                    f"[PLAYER-ORDER] Player {player.player_name} takes the lead this round, as they played the strongest last round, or distributed the deck"
-                )
-                south_player_socket = self.player_sockets[player.player_name]
-                self.send_direct_message(
-                    f"[CHOICE] It's your turn, choose a number between 1 and {len(player.hand)} ",
-                    south_player_socket,
-                )
-                first_card_number = south_player_socket.recv(BYTESIZE).decode(ENCODER)
-                print(f"THIS IS THE IRST CARD {first_card_number}")
-                self.broadcast_message(
-                    f"[PLAY] Player [{player.player_name}] played [{CardMapper.get_card(first_card_number)}]"
-                )
-                for i, c in enumerate(player.hand):
-                    if CardMapper.get_card_rank(c) == CardMapper.get_card_rank(
-                        first_card_number
-                    ) and CardMapper.get_card_suit(c) == CardMapper.get_card_suit(
-                        first_card_number
-                    ):
-                        player.hand.pop(i)
-                        removed = True
-                        break
-                if not removed:
-                    print(
-                        f"[WARNING] Played card not found in server-side hand: {card_number}"
-                    )
-                round_vector.append(first_card_number)
-                self.round_suit = round_vector[0][0]
-                print(
-                    f"[ANNOUNCEMENT] This round's suit is {self.round_suit}. You're forced to play a card of suit {self.round_suit} if you have one in hand! You can play a card with the trump suit {CardMapper.get_card_suit(self.trump_card)} alternatively"
-                )
-                self.broadcast_message(
-                    f"[ANNOUNCEMENT] This round's suit is {self.round_suit}. You're forced to play a card of suit {self.round_suit} if you have one in hand! You can play a card with the trump suit {CardMapper.get_card_suit(self.trump_card)} alternatively "
-                )
-            else:
-                player_socket = self.player_sockets[player.player_name]
-                self.send_direct_message(
-                    "[CHOICE] It's your turn, choose a number between 1 and 10",
-                    player_socket,
-                )
-                while True:
-                    card_number = player_socket.recv(BYTESIZE).decode(ENCODER)
-                    if self.assure_card_can_be_played(card_number, player):
-                        removed = False
-                        for i, c in enumerate(player.hand):
-                            if CardMapper.get_card_rank(c) == CardMapper.get_card_rank(
-                                card_number
-                            ) and CardMapper.get_card_suit(
-                                c
-                            ) == CardMapper.get_card_suit(
-                                card_number
-                            ):
-                                player.hand.pop(i)
-                                removed = True
-                                break
-                        if not removed:
-                            print(
-                                f"[WARNING] Played card not found in server-side hand: {CardMapper.get_card(card_number)}"
-                            )
-
-                        self.broadcast_message(
-                            f"[PLAY] Player [{player.player_name}] played [{CardMapper.get_card(card_number)}]"
-                        )
-                        round_vector.append(card_number)
-                        break
-                    else:
-                        self.send_direct_message(
-                            f"[INVALID] You must follow suit [{self.round_suit}]. Try again ",
-                            player_socket,
-                        )
-                        print(f"[INVALID]You must follow suit [{self.round_suit}] \n")
-
-        print("[ANNOUNCEMENT Cards played this round ")
-        for i, card in enumerate(round_vector, start=1):
-            print(
-                f"[ANNOUNCEMENT] Player [{self.players[i-1].player_name}] played  [{CardMapper.get_card(card_number)}]"
-            )
-            self.broadcast_message(
-                f"[ANNOUNCEMENT] Player [{self.players[i-1].player_name}] played  [{CardMapper.get_card(card_number)}]"
-            )
-
-        def _determine_round_winner():
-            trump_was_played = any(
-                card[0] == self.trump_card_suit for card in round_vector
-            )
-
-            if trump_was_played:
-                trump_cards = [
-                    card for card in round_vector if card[0] == self.trump_card_suit
-                ]
-                winner = max(trump_cards)
-                winner_index = round_vector.index(winner)
-                return winner, winner_index
-
-            winner = max(round_vector)
-            print("WINNER IS YIIIIPEEEEE", winner)
-            winner_index = round_vector.index(winner)
-            return winner, winner_index
-
-        round_winner, winner_index = _determine_round_winner()
+    def compute_round(self):
+        round_manager = RoundManager(self,self.players,self.player_sockets,self.last_round_winner,CardMapper(),self.trump_card_suit,self.trump_card)
+        round_manager.play_round()
+        round_winner, winner_index = round_manager.determine_round_winner()
         winner_player = self.players[winner_index]
         self.last_round_winner = winner_player
-
-        round_sum = sum(
-            (CardMapper.get_card_points(card_number)) for card_number in round_vector
-        )
+        round_sum =  round_manager.get_round_sum()
         print(
             f"[ANNOUNCEMENT] Round winner was [{CardMapper.get_card(round_winner)}],  Player [{winner_player.player_name}] wins [{round_sum}] points"
         )
@@ -371,7 +240,7 @@ def main():
     server = GameServer.initialize_server()
     server.start_game()
     for i in range(10):
-        server.play_round()
+        server.compute_round()
     server.show_final_scores_and_print_winner()
     server.end_game()
 
