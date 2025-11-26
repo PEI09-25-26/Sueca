@@ -2,27 +2,27 @@ from constants import *
 import random
 from card_mapper import CardMapper
 
+
 class Deck:
     def __init__(self):
         self.NUM_SUITS = 4
         self.SUITSIZE = 10
         self.cards = list(range(self.DECKSIZE))
-    
+
     @property
     def DECKSIZE(self):
-        return self.NUM_SUITS*self.SUITSIZE
-
+        return self.NUM_SUITS * self.SUITSIZE
 
     def __str__(self):
-        deck_str = ''        
+        deck_str = ""
         for i in range(0, len(self.cards), 10):
-            line_of_cards = []            
-            for card_id in self.cards[i:i+10]:                
-                rank = CardMapper.get_card_rank(card_id)             
-                suit = CardMapper.get_card_suit(card_id)                
-                card_representation = f'{rank}{suit}'
-                line_of_cards.append(card_representation)            
-            deck_str += '     '.join(line_of_cards) + '\n'
+            line_of_cards = []
+            for card_id in self.cards[i : i + 10]:
+                rank = CardMapper.get_card_rank(card_id)
+                suit = CardMapper.get_card_suit(card_id)
+                card_representation = f"{rank}{suit}"
+                line_of_cards.append(card_representation)
+            deck_str += "     ".join(line_of_cards) + "\n"
         return deck_str.strip()
 
     def shuffle_deck(self, intensity="Normal"):
@@ -36,14 +36,14 @@ class Deck:
         while times_shuffle != 0:
             random.shuffle(self.cards)
             times_shuffle -= 1
-        
-    def cut_deck(self,index):
+
+    def cut_deck(self, index):
         if 35 > index > 5:
             random_variable = random.randint(-5, 5)
-        elif 40 >= index >= 35 :
-            random_variable = random.randint(-5, 40-index)
+        elif 40 >= index >= 35:
+            random_variable = random.randint(-5, 40 - index)
         elif 0 < index <= 5:
-            random_variable = random.randint(1-index, 5)
+            random_variable = random.randint(1 - index, 5)
         index += random_variable
         if 0 < index <= 40:
             top = self.cards[:index]

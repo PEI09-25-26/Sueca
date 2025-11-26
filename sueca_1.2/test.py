@@ -1,14 +1,14 @@
-from deck import *
+from game_logger import GameLogger
 def main():
-    d = Deck()
-    print(d)
-    print("Shuffling")
-    d.shuffle_deck()
-    print(d)
 
-    print("Cutting")
-    d.cut_deck(2)
-    print(d)
+    def do_this():
+        logger = GameLogger()
+        logger.log_debug("Boogie woogie")
+        logger.log_error("WATCH OUT!!")
+        logger.log_warning("THIS IS A WARNING!")
+
+
+    do_this()
 
     
 main()

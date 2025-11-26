@@ -1,1 +1,32 @@
-2025-11-25 22:30:14,649 - INFO - [CONNECTED] Game Server is online
+2025-11-26 17:56:43,757 |   44 | INFO     | connect_server_socket          | [CONNECTED] Game Server is online
+2025-11-26 17:56:47,469 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [1] [Ana] has joined the game from ('127.0.0.1', 42742)
+2025-11-26 17:56:47,469 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Ana was assigned position [Positions.NORTH] 
+2025-11-26 17:56:50,476 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [2] [Miguek] has joined the game from ('127.0.0.1', 42748)
+2025-11-26 17:56:50,487 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Miguek was assigned position [Positions.EAST] 
+2025-11-26 17:56:53,863 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [3] [Jose] has joined the game from ('127.0.0.1', 49544)
+2025-11-26 17:56:53,884 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Jose was assigned position [Positions.SOUTH] 
+2025-11-26 17:56:57,896 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [4] [Tiaguinho] has joined the game from ('127.0.0.1', 49550)
+2025-11-26 17:56:57,927 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Tiaguinho was assigned position [Positions.WEST] 
+2025-11-26 17:56:57,969 |  120 | INFO     | start_game                     | [START] Game has started
+2025-11-26 17:56:58,092 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Ana is to the Positions.NORTH 
+2025-11-26 17:56:58,093 |   87 | INFO     | assign_teams                   | [ANNOUNCEMENT] Ana was assigned to the first team 
+2025-11-26 17:56:58,134 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Miguek is to the Positions.EAST 
+2025-11-26 17:56:58,134 |   94 | INFO     | assign_teams                   | [ANNOUNCEMENT] Miguek was assigned to the second team 
+2025-11-26 17:56:58,176 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Jose is to the Positions.SOUTH 
+2025-11-26 17:56:58,176 |   87 | INFO     | assign_teams                   | [ANNOUNCEMENT] Jose was assigned to the first team 
+2025-11-26 17:56:58,217 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Tiaguinho is to the Positions.WEST 
+2025-11-26 17:56:58,217 |   94 | INFO     | assign_teams                   | [ANNOUNCEMENT] Tiaguinho was assigned to the second team 
+2025-11-26 17:57:00,034 |  146 | INFO     | start_game                     | [CUT-RECEIVED] Player Ana cut at index [9]
+2025-11-26 17:57:00,117 |  159 | INFO     | start_game                     | [ANNOUNCEMENT] Player [Tiaguinho] (WEST) will pick the trump card
+2025-11-26 17:57:02,628 |  169 | INFO     | start_game                     | [TRUMP-CARD] This game's trump card is 5♠
+2025-11-26 17:57:02,629 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Jose]'s turn
+2025-11-26 17:57:02,670 |   55 | INFO     | play_round                     | [PLAYER-ORDER] Player [Jose] takes the lead this round, as they played the strongest last round, or distributed the deck
+2025-11-26 17:57:04,146 |   85 | INFO     | play_round                     | [ANNOUNCEMENT] This round's suit is 2. You're forced to play a card of suit 2 if you have one in hand! You can play a card with the trump suit ♠ alternatively
+2025-11-26 17:57:04,188 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Tiaguinho]'s turn
+2025-11-26 17:57:05,463 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Ana]'s turn
+2025-11-26 17:57:06,737 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Miguek]'s turn
+2025-11-26 17:57:08,086 |  195 | INFO     | compute_round                  | [ANNOUNCEMENT] Round winner was [6♣],  Player [Miguek] wins [4] points
+2025-11-26 17:57:08,128 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Miguek]'s turn
+2025-11-26 17:57:08,169 |   55 | INFO     | play_round                     | [PLAYER-ORDER] Player [Miguek] takes the lead this round, as they played the strongest last round, or distributed the deck
+2025-11-26 17:57:09,361 |   85 | INFO     | play_round                     | [ANNOUNCEMENT] This round's suit is 1. You're forced to play a card of suit 1 if you have one in hand! You can play a card with the trump suit ♠ alternatively
+2025-11-26 17:57:09,402 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Jose]'s turn

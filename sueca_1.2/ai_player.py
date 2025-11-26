@@ -2,25 +2,27 @@ from socket import *
 from constants import *
 import json
 import time
-from threading import Thread,Lock
+from threading import Thread, Lock
+
 
 class Player:
-    def __init__(self,player_name):
+    def __init__(self, player_name):
         self.player_name = player_name
-        self.player_socket = socket(AF_INET,SOCK_STREAM)
+        self.player_socket = socket(AF_INET, SOCK_STREAM)
         self.running = True
         self.hand = []
         self.print_mutex = Lock()
         self.turn_mutex = Lock()
         self.position = None
 
-    def send_response(self,response):
+    def send_response(self, response):
         self.player_socket.send(response.encode(ENCODER))
 
     def disconnect_player_socket(self):
         self.running = False
         self.player_socket.close()
         print(f"[DISCONNECTED] [{self.player_name}]")
+
     def connect_player_socket(self, server_ip=None):
         """Connect to the game server.
 
@@ -37,28 +39,24 @@ class Player:
 
     def __repr__(self):
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
-    
 
     def handle_cut_deck_request(self):
         self.print_mutex.acquire()
         self.send_response("10")
         self.print_mutex.release()
 
-
     def handle_trump_card_request(self):
         self.print_mutex.acquire()
         self.send_response("top")
         self.print_mutex.release()
 
-
-    def receive_cards(self,message):
-        data = message[len("[HAND]"):]
+    def receive_cards(self, message):
+        data = message[len("[HAND]") :]
         card_strings = json.loads(data)
         self.hand = card_strings
         print("[HAND-RECEIVED] Hand received")
 
-
-    def handle_turn(self,sock_file):
+    def handle_turn(self, sock_file):
         while True:
             self.turn_mutex.acquire()
             self.print_mutex.acquire()
@@ -92,15 +90,12 @@ class Player:
                 return
             print("[AI ERROR] No valid card found!")
             self.turn_mutex.release()
-            
-
 
     def __repr__(self):
         return f"[PLAYER-INFO] [{self.player_name}]"
 
-
     def listen(self):
-        sock_file = self.player_socket.makefile('r') 
+        sock_file = self.player_socket.makefile("r")
         while self.running:
             message = sock_file.readline()
             if not message:
@@ -113,7 +108,7 @@ class Player:
                 self.handle_trump_card_request()
 
             elif message.startswith("[HAND]"):
-               self.receive_cards(message)
+                self.receive_cards(message)
 
             elif message.startswith("[CHOICE] It's your turn"):
                 self.handle_turn(sock_file)
@@ -121,47 +116,56 @@ class Player:
                 self.print_mutex.acquire()
                 print(f"{message}\n")
                 self.print_mutex.release()
-    
 
     def view_hand_continuously(self):
         while self.running:
-            if len(self.hand)==0:
+            if len(self.hand) == 0:
                 self.print_mutex.acquire()
-                print(f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed ")
+                print(
+                    f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
+                )
                 self.print_mutex.release()
             else:
                 self.print_mutex.acquire()
                 print(f"[VIEW-HAND] Your hand \n")
-                hand_str = '    '.join(str(card) for card in self.hand)
+                hand_str = "    ".join(str(card) for card in self.hand)
                 print(hand_str)
                 self.print_mutex.release()
             time.sleep(8)
 
     def view_hand_statically(self):
-        if len(self.hand)==0:
-            print(f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed ")
+        if len(self.hand) == 0:
+            print(
+                f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
+            )
         else:
             print(f"[VIEW-HAND] Your hand \n")
-            hand_str = '    '.join(str(card) for card in self.hand)
+            hand_str = "    ".join(str(card) for card in self.hand)
             print(hand_str)
 
     @staticmethod
     def initialize_player():
         name = input("[REGISTER] Enter your player name: ")
         player = Player("AI PLAYER: " + name)
-        server_ip = input("[CONNECT] Enter server IP (leave blank for default): ").strip()
+        server_ip = input(
+            "[CONNECT] Enter server IP (leave blank for default): "
+        ).strip()
         player.connect_player_socket(server_ip if server_ip != "" else None)
         player.send_response(name)
         return player
 
+
 def main():
     player = Player.initialize_player()
-    listen_thread = Thread(target=player.listen,daemon=True)
-    view_hand_continuously_thread = Thread(target=player.view_hand_continuously,daemon=True)
+    listen_thread = Thread(target=player.listen, daemon=True)
+    view_hand_continuously_thread = Thread(
+        target=player.view_hand_continuously, daemon=True
+    )
     listen_thread.start()
     view_hand_continuously_thread.start()
     listen_thread.join()
     view_hand_continuously_thread.join()
+
 
 if __name__ == "__main__":
     main()

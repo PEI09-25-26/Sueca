@@ -4,9 +4,9 @@ from player import *
 from deck import *
 import time
 from positions import Positions
-from random import shuffle,choice
+from random import shuffle, choice
 from round_manager import RoundManager
-from logger import GameLogger
+from game_logger import GameLogger
 
 
 class GameServer:
@@ -41,11 +41,11 @@ class GameServer:
         self.server_socket.bind(SERVER_BIND)
         self.server_socket.listen(4)
         self.server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        self.game_logger.info(f"[CONNECTED] Game Server is online")
+        self.game_logger.log_info(f"[CONNECTED] Game Server is online")
 
     def disconnect_server_socket(self):
         self.server_socket.close()
-        self.game_logger.info(f"[DISCONNECTED] Game Server is offline")
+        self.game_logger.log_info(f"[DISCONNECTED] Game Server is offline")
 
     def broadcast_message(self, message):
         for player_socket in self.player_sockets.values():
@@ -59,9 +59,10 @@ class GameServer:
         while len(self.players) < self.max_players:
             player_socket, player_address = self.server_socket.accept()
             player_name = player_socket.recv(BYTESIZE).decode(ENCODER)
-            broadcast_message = f"[CONNECTED] Player [{len(self.players)+1}] [{player_name}] has joined the game from {player_address}"
-            self.game_logger.info(f"[CONNECTED] Player [{len(self.players)+1}] [{player_name}] has joined the game from {player_address}")
-            self.broadcast_message(broadcast_message)
+            self.game_logger.log_info(
+                f"[CONNECTED] Player [{len(self.players)+1}] [{player_name}] has joined the game from {player_address}"
+            )
+            self.broadcast_message(f"[CONNECTED] Player [{len(self.players)+1}] [{player_name}] has joined the game from {player_address}")
             self.player_sockets[player_name] = player_socket
             self.assign_player(player_name)
 
@@ -70,28 +71,27 @@ class GameServer:
         player.position = self.positions[len(self.players)]
         self.players.append(player)
         self.scores[player_name] = 0
-        print(
-            f"[ANNOUNCEMENT] {player_name} was assigned position [{player.position}] "
-        )
+        
+        self.game_logger.log_info(f"[ANNOUNCEMENT] {player_name} was assigned position [{player.position}] ")
+        
         self.broadcast_message(
             f"[ANNOUNCEMENT] {player_name} was assigned position [{player.position}] "
         )
 
     def assign_teams(self):
         for player in self.players:
-            print(
-                f"[ANNOUNCEMENT Player {player.player_name} is to the {player.position} "
-            )
+            self.game_logger.log_info(f"[ANNOUNCEMENT Player {player.player_name} is to the {player.position} ")
+            
             if player.position in (Positions.NORTH, Positions.SOUTH):
                 self.teams[0].append(player)
-                print(
+                self.game_logger.log_info(
                     f"[ANNOUNCEMENT] {player.player_name} was assigned to the first team "
                 )
                 self.broadcast_message(
                     f"[ANNOUNCEMENT] {player.player_name} was assigned to the first team "
                 )
             else:
-                print(
+                self.game_logger.log_info(
                     f"[ANNOUNCEMENT] {player.player_name} was assigned to the second team "
                 )
                 self.broadcast_message(
@@ -117,14 +117,12 @@ class GameServer:
         self.trump_card_suit = CardMapper.get_card_suit(self.trump_card)
 
     def start_game(self):
-        message = "[START] Game has started"
-        print(message)
-        self.broadcast_message(message)
+        self.game_logger.log_info("[START] Game has started")
+        self.broadcast_message("[START] Game has started")
 
         # Shuffle deck
         self.broadcast_message("[SHUFFLING] Shuffling deck")
         self.deck.shuffle_deck()
-        print(str(self.deck))
         self.broadcast_message("[SHUFFLED] Deck has been shuffled")
 
         # Shuffle positions & assign teams
@@ -140,37 +138,37 @@ class GameServer:
         west_socket = self.player_sockets[west_player.player_name]
 
         # NORTH cuts the deck
-        self.broadcast_message(
-            f"[ANNOUNCEMENT] Player [{north_player.player_name}] (NORTH) will cut the deck"
-        )
-        print(f"[ANNOUNCEMENT] Player [{north_player.player_name}] (NORTH) will cut the deck")
 
         self.send_direct_message("[CHOICE] Cut from what index ", north_socket)
         cut_index = int(north_socket.recv(BYTESIZE).decode(ENCODER))
 
-        print(f"[CUT-RECEIVED] Player {north_player.player_name} cut at index [{cut_index}]")
+        
+        self.game_logger.log_info(f"[CUT-RECEIVED] Player {north_player.player_name} cut at index [{cut_index}]")
+        
         self.broadcast_message(
             f"[CUT-RECEIVED] Player [{north_player.player_name}] cut the deck at index [{cut_index}]"
         )
 
-        print("Deck before cut:")
-        print(str(self.deck))
         self.deck.cut_deck(cut_index)
-        print("Deck after cut:")
-        print(str(self.deck))
 
         # WEST picks trump
         self.broadcast_message(
             f"[ANNOUNCEMENT] Player [{west_player.player_name}] (WEST) will pick the trump card"
         )
-        print(f"[ANNOUNCEMENT] Player [{west_player.player_name}] (WEST) will pick the trump card")
+        
+        self.game_logger.log_info(f"[ANNOUNCEMENT] Player [{west_player.player_name}] (WEST) will pick the trump card")
+        
 
         self.send_direct_message("[CHOICE] Top or Bottom ", west_socket)
         choice = west_socket.recv(BYTESIZE).decode(ENCODER)
         self.pick_trump_card(choice)
 
-        self.broadcast_message(f"[TRUMP-CARD] This game's trump card is [{CardMapper.get_card(self.trump_card)}]")
-        print(f"[TRUMP-CARD] This game's trump card is {CardMapper.get_card(self.trump_card)}")
+        self.broadcast_message(
+            f"[TRUMP-CARD] This game's trump card is [{CardMapper.get_card(self.trump_card)}]"
+        )
+        self.game_logger.log_info(
+            f"[TRUMP-CARD] This game's trump card is {CardMapper.get_card(self.trump_card)}"
+        )
 
         # Deal cards
         self.deck_backup = self.deck.cards.copy()
@@ -179,15 +177,22 @@ class GameServer:
         # SOUTH starts the game (default Sueca rule)
         self.last_round_winner = south_player
 
-
     def compute_round(self):
-        round_manager = RoundManager(self,self.players,self.player_sockets,self.last_round_winner,CardMapper(),self.trump_card_suit,self.trump_card)
+        round_manager = RoundManager(
+            self,
+            self.players,
+            self.player_sockets,
+            self.last_round_winner,
+            CardMapper(),
+            self.trump_card_suit,
+            self.trump_card,
+        )
         round_manager.play_round()
         round_winner, winner_index = round_manager.determine_round_winner()
         winner_player = self.players[winner_index]
         self.last_round_winner = winner_player
-        round_sum =  round_manager.get_round_sum()
-        print(
+        round_sum = round_manager.get_round_sum()
+        self.game_logger.log_info(
             f"[ANNOUNCEMENT] Round winner was [{CardMapper.get_card(round_winner)}],  Player [{winner_player.player_name}] wins [{round_sum}] points"
         )
         self.broadcast_message(
@@ -197,9 +202,8 @@ class GameServer:
         self.round_counter += 1
 
     def end_game(self):
-        message = f"[END] Game has ended"
-        print(message)
-        self.broadcast_message(message)
+        self.game_logger.log_info(f"[END] Game has ended")
+        self.broadcast_message(f"[END] Game has ended")
         for player in self.players:
             player.disconnect_player_socket()
         self.disconnect_server_socket()
@@ -208,13 +212,13 @@ class GameServer:
         team1_score = sum(self.scores[player.player_name] for player in self.teams[0])
         team2_score = 120 - team1_score
 
-        print(
+        self.game_logger.log_info(
             f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0]} & {self.teams[0][1]}] scored [{team1_score}]"
         )
         self.broadcast_message(
             f"[ANNOUNCEMENT] Team 1 [Players {self.teams[0][0]} & {self.teams[0][1]}] scored [{team1_score}]"
         )
-        print(
+        self.game_logger.log_info(
             f"[ANNOUNCEMENT] Team 2 [Players {self.teams[1][0]} & {self.teams[1][1]}] scored [{team2_score}]"
         )
         self.broadcast_message(
@@ -222,10 +226,10 @@ class GameServer:
         )
 
         if team1_score > team2_score:
-            print("[ANNOUNCEMENT] Team 1 is victorious 🏆")
+            self.game_logger.log_info("[ANNOUNCEMENT] Team 1 is victorious 🏆")
             self.broadcast_message("[ANNOUNCEMENT] Team 1 is victorious 🏆")
         elif team2_score > team1_score:
-            print("[ANNOUNCEMENT] Team 2 is victorious 🏆")
+            self.game_logger.log_info("[ANNOUNCEMENT] Team 2 is victorious 🏆")
             self.broadcast_message("[ANNOUNCEMENT] Team 2 is victorious 🏆!")
 
     @staticmethod
