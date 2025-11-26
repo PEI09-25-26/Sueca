@@ -102,7 +102,7 @@ class GameServer:
     def deal_cards(self):
         for player in self.players:
             set_of_cards = [self.deck.cards.pop(0) for _ in range(10)]
-            player.hand = set_of_cards
+            player.hand = sorted(set_of_cards)
             player_socket = self.player_sockets[player.player_name]
             data = " ".join(str(card) for card in set_of_cards)
             payload = f"[HAND]{data}\n"

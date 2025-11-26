@@ -64,14 +64,16 @@ class Player:
 
     def handle_turn(self, sock_file):
         while True:
+            sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
             self.turn_mutex.acquire()
             self.print_mutex.acquire()
             self.view_hand_statically()
             card_index = (
                 int(input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ")) - 1
             )
+            print(f"THE INDEX IS {card_index}")
             self.print_mutex.release()
-            card = self.hand[card_index]
+            card = sorted_hand[card_index]
             print(f"THIS IS THE CARD!{card}")
             self.send_card(card)
             server_response = sock_file.readline().strip()
