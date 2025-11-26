@@ -44,16 +44,33 @@ class Player:
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
 
     def handle_cut_deck_request(self):
-        self.print_mutex.acquire()
-        cut_index = input("Enter cut index: ")
-        self.send_response(cut_index)
-        self.print_mutex.release()
+        with self.print_mutex:
+            while True:
+                try:
+                    raw = input("Enter cut index (1–40): ").strip()
+                    cut_index = int(raw)
+                    
+                    if 1 <= cut_index <= 40:
+                        self.send_response(str(cut_index))
+                        break
+                    else:
+                        print("[INVALID] Cut index must be between 1 and 40.")
+                
+                except ValueError:
+                    print("[ERROR] Please enter a valid number.")
+
 
     def handle_trump_card_request(self):
-        self.print_mutex.acquire()
-        choice = input("Choose top or bottom: ")
-        self.send_response(choice)
-        self.print_mutex.release()
+        with self.print_mutex:
+            while True:
+                choice = input("[CHOICE] Choose 'top' or 'bottom': ").strip().lower()
+
+                if choice in ("top", "bottom"):
+                    self.send_response(choice)
+                    break
+                else:
+                    print("[INVALID] Choice must be 'top' or 'bottom'.")
+
 
     def receive_cards(self, message):
         data = message[len("[HAND]") :]
@@ -68,9 +85,20 @@ class Player:
             self.turn_mutex.acquire()
             self.print_mutex.acquire()
             self.view_hand_statically()
-            card_index = (
-                int(input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ")) - 1
-            )
+            while True:
+                attempt_str = input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ") 
+                if not attempt_str:
+                    print("[ERROR] Please enter a card index.")
+                    continue
+                if not attempt_str.isdigit():
+                    print("[ERROR] Input must be a number. Please try again.")
+                    continue
+                card_number = int(attempt_str) 
+                if card_number not in range(1, len(self.hand) + 1): 
+                    print(f"[ERROR] Card index needs to be between 1 and {len(self.hand)}. Please try again.")
+                    continue
+                card_index = card_number - 1 
+                break
             print(f"THE INDEX IS {card_index}")
             self.print_mutex.release()
             card = sorted_hand[card_index]
@@ -145,14 +173,18 @@ class Player:
 
     @staticmethod
     def initialize_player():
-        name = input("[REGISTER] Enter your player name: ")
-        player = Player(name)
-        server_ip = input(
-            "[CONNECT] Enter server IP (leave blank for default): "
-        ).strip()
-        player.connect_player_socket(server_ip if server_ip != "" else None)
-        player.send_response(name)
-        return player
+        while True:
+            name = input("[REGISTER] Enter your player name: ")
+            if not name:
+                print("[ERROR] Empty names are not permitted, try again.")
+                continue
+            player = Player(name)
+            server_ip = input(
+                "[CONNECT] Enter server IP (leave blank for default): "
+            ).strip()
+            player.connect_player_socket(server_ip if server_ip != "" else None)
+            player.send_response(name)
+            return player
 
 
 def main():
