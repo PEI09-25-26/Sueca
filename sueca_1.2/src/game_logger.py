@@ -1,5 +1,5 @@
 import logging
-from color_formatter import ColorFormatter
+from src.color_formatter import ColorFormatter
 
 
 class GameLogger:

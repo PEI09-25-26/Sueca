@@ -1,12 +1,12 @@
-from constants import *
+from src.constants import *
 from socket import socket, SOL_SOCKET, SO_REUSEADDR
-from player import *
-from deck import *
+from src.player import *
+from src.deck import *
 import time
-from positions import Positions
+from src.positions import Positions
 from random import shuffle, choice
-from round_manager import RoundManager
-from game_logger import GameLogger
+from src.round_manager import RoundManager
+from src.game_logger import GameLogger
 
 
 class GameServer:

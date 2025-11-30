@@ -1,30 +1,82 @@
-2025-11-26 22:12:55,245 |   44 | INFO     | connect_server_socket          | [CONNECTED] Game Server is online
-2025-11-26 22:13:01,040 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [1] [Ana] has joined the game from ('127.0.0.1', 56836)
-2025-11-26 22:13:01,041 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Ana was assigned position [Positions.NORTH] 
-2025-11-26 22:13:03,479 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [2] [Jose] has joined the game from ('127.0.0.1', 56842)
-2025-11-26 22:13:03,490 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Jose was assigned position [Positions.EAST] 
-2025-11-26 22:13:06,998 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [3] [Miguel] has joined the game from ('127.0.0.1', 56856)
-2025-11-26 22:13:07,019 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Miguel was assigned position [Positions.SOUTH] 
-2025-11-26 22:13:10,488 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [4] [Josefina] has joined the game from ('127.0.0.1', 49080)
-2025-11-26 22:13:10,519 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Josefina was assigned position [Positions.WEST] 
-2025-11-26 22:13:10,560 |  120 | INFO     | start_game                     | [START] Game has started
-2025-11-26 22:13:10,684 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Ana is to the Positions.NORTH 
-2025-11-26 22:13:10,684 |   87 | INFO     | assign_teams                   | [ANNOUNCEMENT] Ana was assigned to the first team 
-2025-11-26 22:13:10,725 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Jose is to the Positions.EAST 
-2025-11-26 22:13:10,726 |   94 | INFO     | assign_teams                   | [ANNOUNCEMENT] Jose was assigned to the second team 
-2025-11-26 22:13:10,767 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Miguel is to the Positions.SOUTH 
-2025-11-26 22:13:10,767 |   87 | INFO     | assign_teams                   | [ANNOUNCEMENT] Miguel was assigned to the first team 
-2025-11-26 22:13:10,808 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Josefina is to the Positions.WEST 
-2025-11-26 22:13:10,808 |   94 | INFO     | assign_teams                   | [ANNOUNCEMENT] Josefina was assigned to the second team 
-2025-11-26 22:13:12,292 |  146 | INFO     | start_game                     | [CUT-RECEIVED] Player Ana cut at index [2]
-2025-11-26 22:13:12,374 |  159 | INFO     | start_game                     | [ANNOUNCEMENT] Player [Josefina] (WEST) will pick the trump card
-2025-11-26 22:13:14,330 |  169 | INFO     | start_game                     | [TRUMP-CARD] This game's trump card is 6♣
-2025-11-26 22:13:14,331 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Miguel]'s turn
-2025-11-26 22:13:14,372 |   55 | INFO     | play_round                     | [PLAYER-ORDER] Player [Miguel] takes the lead this round, as they played the strongest last round, or distributed the deck
-2025-11-26 22:13:15,624 |   87 | INFO     | play_round                     | TRUMP CARD IS 4
-2025-11-26 22:13:15,624 |   88 | INFO     | play_round                     | [ANNOUNCEMENT] This round's suit is ♥. You're forced to play a card of suit ♥ if you have one in hand! You can play a card with the trump suit ♣ alternatively
-2025-11-26 22:13:15,666 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Josefina]'s turn
-2025-11-26 22:13:23,540 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 23 | ALSO 5♥
-2025-11-26 22:13:23,581 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Ana]'s turn
-2025-11-26 22:13:25,647 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 20 | ALSO 2♥
-2025-11-26 22:13:25,688 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Jose]'s turn
+2025-11-30 22:06:36,214 |   44 | INFO     | connect_server_socket          | [CONNECTED] Game Server is online
+2025-11-30 22:06:58,915 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [1] [Dnaiel] has joined the game from ('127.0.0.1', 34344)
+2025-11-30 22:06:58,915 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Dnaiel was assigned position [Positions.NORTH] 
+2025-11-30 22:07:05,848 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [2] [Ana] has joined the game from ('127.0.0.1', 35026)
+2025-11-30 22:07:05,859 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Ana was assigned position [Positions.EAST] 
+2025-11-30 22:07:15,739 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [3] [Anastacia] has joined the game from ('127.0.0.1', 33890)
+2025-11-30 22:07:15,760 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Anastacia was assigned position [Positions.SOUTH] 
+2025-11-30 22:07:23,509 |   62 | INFO     | accept_player_sockets          | [CONNECTED] Player [4] [Josefina] has joined the game from ('127.0.0.1', 39162)
+2025-11-30 22:07:23,540 |   75 | INFO     | assign_player                  | [ANNOUNCEMENT] Josefina was assigned position [Positions.WEST] 
+2025-11-30 22:07:23,581 |  120 | INFO     | start_game                     | [START] Game has started
+2025-11-30 22:07:23,705 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Dnaiel is to the Positions.NORTH 
+2025-11-30 22:07:23,705 |   87 | INFO     | assign_teams                   | [ANNOUNCEMENT] Dnaiel was assigned to the first team 
+2025-11-30 22:07:23,746 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Ana is to the Positions.EAST 
+2025-11-30 22:07:23,746 |   94 | INFO     | assign_teams                   | [ANNOUNCEMENT] Ana was assigned to the second team 
+2025-11-30 22:07:23,787 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Anastacia is to the Positions.SOUTH 
+2025-11-30 22:07:23,788 |   87 | INFO     | assign_teams                   | [ANNOUNCEMENT] Anastacia was assigned to the first team 
+2025-11-30 22:07:23,829 |   83 | INFO     | assign_teams                   | [ANNOUNCEMENT Player Josefina is to the Positions.WEST 
+2025-11-30 22:07:23,829 |   94 | INFO     | assign_teams                   | [ANNOUNCEMENT] Josefina was assigned to the second team 
+2025-11-30 22:07:25,010 |  146 | INFO     | start_game                     | [CUT-RECEIVED] Player Dnaiel cut at index [5]
+2025-11-30 22:07:25,093 |  159 | INFO     | start_game                     | [ANNOUNCEMENT] Player [Josefina] (WEST) will pick the trump card
+2025-11-30 22:07:26,654 |  169 | INFO     | start_game                     | [TRUMP-CARD] This game's trump card is 4♣
+2025-11-30 22:07:26,655 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Anastacia]'s turn
+2025-11-30 22:07:26,696 |   55 | INFO     | play_round                     | [PLAYER-ORDER] Player [Anastacia] takes the lead this round, as they played the strongest last round, or distributed the deck
+2025-11-30 22:07:28,061 |   87 | INFO     | play_round                     | TRUMP CARD IS 2
+2025-11-30 22:07:28,062 |   88 | INFO     | play_round                     | [ANNOUNCEMENT] This round's suit is ♥. You're forced to play a card of suit ♥ if you have one in hand! You can play a card with the trump suit ♣ alternatively
+2025-11-30 22:07:28,103 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Josefina]'s turn
+2025-11-30 22:07:29,376 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 12 | ALSO 4♦
+2025-11-30 22:07:29,376 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:31,406 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 0 | ALSO 2♣
+2025-11-30 22:07:31,407 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:34,756 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 32 | ALSO 4♠
+2025-11-30 22:07:34,757 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:35,328 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 33 | ALSO 5♠
+2025-11-30 22:07:35,329 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:35,725 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 34 | ALSO 6♠
+2025-11-30 22:07:35,726 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:36,154 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 15 | ALSO Q♦
+2025-11-30 22:07:36,154 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:37,164 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 17 | ALSO K♦
+2025-11-30 22:07:37,165 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:37,619 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 18 | ALSO 7♦
+2025-11-30 22:07:37,619 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:39,987 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 0 | ALSO 2♣
+2025-11-30 22:07:39,988 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:41,697 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 39 | ALSO A♠
+2025-11-30 22:07:41,697 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:43,188 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 22 | ALSO 4♥
+2025-11-30 22:07:43,229 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Dnaiel]'s turn
+2025-11-30 22:07:45,294 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 21 | ALSO 3♥
+2025-11-30 22:07:45,335 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Ana]'s turn
+2025-11-30 22:07:46,479 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 4 | ALSO 6♣
+2025-11-30 22:07:46,479 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:47,052 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 1 | ALSO 3♣
+2025-11-30 22:07:47,052 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:47,734 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 10 | ALSO 2♦
+2025-11-30 22:07:47,735 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:49,060 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 4 | ALSO 6♣
+2025-11-30 22:07:49,060 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:49,613 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 13 | ALSO 5♦
+2025-11-30 22:07:49,614 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:50,105 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 14 | ALSO 6♦
+2025-11-30 22:07:50,106 |  133 | INFO     | play_round                     | [INVALID]You must follow suit [♥] 
+
+2025-11-30 22:07:50,494 |  102 | INFO     | play_round                     | THIS IS THE CARD AND ITS NUMBER IS 23 | ALSO 5♥
+2025-11-30 22:07:50,535 |  195 | INFO     | compute_round                  | [ANNOUNCEMENT] Round winner was [6♥],  Player [Dnaiel] wins [0] points
+2025-11-30 22:07:50,577 |   50 | INFO     | play_round                     | [PLAYER-ORDER] It's Player [Dnaiel]'s turn
+2025-11-30 22:07:50,618 |   55 | INFO     | play_round                     | [PLAYER-ORDER] Player [Dnaiel] takes the lead this round, as they played the strongest last round, or distributed the deck

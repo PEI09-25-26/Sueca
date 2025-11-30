@@ -1,6 +1,6 @@
-from constants import *
+from src.constants import *
 import random
-from card_mapper import CardMapper
+from src.card_mapper import CardMapper
 
 
 class Deck:

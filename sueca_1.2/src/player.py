@@ -1,8 +1,9 @@
 from socket import *
-from constants import *
+from src.constants import *
 import time
 from threading import Thread, Lock
-from card_mapper import CardMapper
+from src.card_mapper import CardMapper
+
 
 
 class Player:
@@ -99,10 +100,8 @@ class Player:
                     continue
                 card_index = card_number - 1 
                 break
-            print(f"THE INDEX IS {card_index}")
             self.print_mutex.release()
             card = sorted_hand[card_index]
-            print(f"THIS IS THE CARD!{card}")
             self.send_card(card)
             server_response = sock_file.readline().strip()
             self.print_mutex.acquire()

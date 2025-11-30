@@ -1,5 +1,5 @@
-from constants import *
-from card_mapper import *
+from src.constants import *
+from src.card_mapper import *
 
 
 class RoundManager:
