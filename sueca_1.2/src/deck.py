@@ -4,6 +4,7 @@ from src.card_mapper import CardMapper
 
 
 class Deck:
+    """This class represents a deck, which holds 40 cards from 4 different suits, each card is a number between 0-39. """
     def __init__(self):
         self.NUM_SUITS = 4
         self.SUITSIZE = 10
@@ -26,6 +27,7 @@ class Deck:
         return deck_str.strip()
 
     def shuffle_deck(self, intensity="Normal"):
+        """Shuffles deck given an intensity which can be small,normal or high. """
         random_variable = random.randint(0, 2)
         if intensity == "Small":
             times_shuffle = 1 + random_variable
@@ -38,6 +40,7 @@ class Deck:
             times_shuffle -= 1
 
     def cut_deck(self, index):
+        """Cuts the deck at a given index, prone to small intentional deviations. """
         if 35 > index > 5:
             random_variable = random.randint(-5, 5)
         elif 40 >= index >= 35:

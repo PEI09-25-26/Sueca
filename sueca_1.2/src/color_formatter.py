@@ -1,6 +1,7 @@
 
 import logging
 class ColorFormatter(logging.Formatter):
+    """This class is responsible for decorating the formatter class with colouring features. """
     COLORS = {
         'DEBUG': "\033[37m",
         'INFO': "\033[36m",

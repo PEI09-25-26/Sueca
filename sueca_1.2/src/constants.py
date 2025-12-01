@@ -1,6 +1,8 @@
 from socket import *
 import os
 
+"""Important constants shared among the other remaining classes. """
+
 ranks_map = {
     "A": 11,
     "7": 10,

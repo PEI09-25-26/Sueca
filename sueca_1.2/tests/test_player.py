@@ -9,7 +9,6 @@ class TestPlayer(unittest.TestCase):
         self.player = Player("test_player")
         if hasattr(self.player, "player_socket") and self.player.player_socket:
             self.player.player_socket.close()
-        self.player.player_socket = Mock()
 
 
 
@@ -64,7 +63,7 @@ class TestPlayer(unittest.TestCase):
 
 
     @patch("builtins.print")    
-    @patch("builtins.input", side_effect=["top"])
+    @patch("builtins.input", side_effect=["top"," "])
     @patch("src.player.Player.send_response")
     def test_handle_trump_card_request_top(self, mock_send_response, mock_input, mock_print):
         self.player.handle_trump_card_request()
@@ -74,7 +73,7 @@ class TestPlayer(unittest.TestCase):
 
 
     @patch("builtins.print")    
-    @patch("builtins.input", side_effect=["bottom"])
+    @patch("builtins.input", side_effect=["bottom",None])
     @patch("src.player.Player.send_response")
     def test_handle_trump_card_request_bottom(self, mock_send_response, mock_input, mock_print):
         self.player.handle_trump_card_request()

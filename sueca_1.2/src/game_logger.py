@@ -3,6 +3,7 @@ from src.color_formatter import ColorFormatter
 
 
 class GameLogger:
+    """This class is responsible for logging the game's flow into stdout and an appropriate file. """
     def __init__(self):
         self.logger = logging.getLogger(name="game_logger")
         self.fmt = (
@@ -32,13 +33,17 @@ class GameLogger:
         self.logger.addHandler(self.stream_handler)
 
     def log_debug(self, message):
+        """Logs a debug message. """
         self.logger.debug(message, stacklevel=2)
 
     def log_info(self, message):
+        """Logs an info message. """
         self.logger.info(message, stacklevel=2)
 
     def log_warning(self, message):
+        """Logs a warning message. """
         self.logger.warning(message, stacklevel=2)
 
     def log_error(self, message):
+        """Logs an error message. """
         self.logger.error(message, stacklevel=2)

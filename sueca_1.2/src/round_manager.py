@@ -3,6 +3,7 @@ from src.card_mapper import *
 
 
 class RoundManager:
+    """This class is responsible for managing a round"""
     def __init__(
         self,
         game_ref,
@@ -27,6 +28,7 @@ class RoundManager:
         self.turn_order = []
 
     def assure_card_can_be_played(self, card_number, player):
+        """Assures card can be player, given the player's hand state. """
         has_round_suit_number = any(
             CardMapper.get_card_suit(card) == self.round_suit_number for card in player.hand
         )
@@ -41,10 +43,22 @@ class RoundManager:
             return False
 
     def determine_turn_order(self):
+        """Responsible to determining the turn order. """
         start_index = self.players.index(self.last_round_winner)
         self.turn_order = self.players[start_index:] + self.players[:start_index]
 
     def play_round(self):
+        """Responsible for playing a round. 
+
+        Differenciates the first player from the rest. 
+        
+        First player gets to pick the round's suit.
+        
+        Following players need to respect the round's suit.
+        
+        Assures the cards prompted by the user can be played, given their hand's state. """
+
+
         self.determine_turn_order()
         for player in self.turn_order:
             self.game_ref.game_logger.log_info(f"[PLAYER-ORDER] It's Player [{player.player_name}]'s turn")
@@ -133,6 +147,9 @@ class RoundManager:
                         self.game_ref.game_logger.log_info(f"[INVALID]You must follow suit [{self.round_suit_number}] \n")
 
     def determine_round_winner(self):
+        """Determines round winner. 
+
+        """
         trump_was_played = any(
             card[0] == self.trump_card_suit for card in self.round_vector
         )
@@ -149,6 +166,7 @@ class RoundManager:
         return winner, winner_index
 
     def get_round_sum(self):
+        """Returns the sum of the cards that were played this round. """
         round_sum = sum(
             (self.card_mapper.get_card_points(card_number))
             for card_number in self.round_vector

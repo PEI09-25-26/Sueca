@@ -7,6 +7,7 @@ from src.card_mapper import CardMapper
 
 
 class Player:
+    """This class represents a player """
     def __init__(self, player_name):
         self.player_name = player_name
         self.player_socket = socket(AF_INET, SOCK_STREAM)
@@ -17,22 +18,21 @@ class Player:
         self.position = None
 
     def send_response(self, response):
+        """Sends a given message via socket. """
         self.player_socket.send(response.encode(ENCODER))
 
     def send_card(self, card):
+        """Sends a given card via socket. """
         self.player_socket.send(str(card).encode(ENCODER))
 
     def disconnect_player_socket(self):
+        """Disconnects the player socket. """
         self.running = False
         self.player_socket.close()
         print(f"[DISCONNECTED] [{self.player_name}]")
 
     def connect_player_socket(self, server_ip=None):
-        """Connect to the game server.
-
-        If `server_ip` is provided it will connect to (server_ip, PORT).
-        Otherwise it will use the default `CONNECT_INFO` from `constants.py`.
-        """
+        """Connects the player socket to the game server. """
         target = CONNECT_INFO if server_ip is None else (server_ip, PORT)
         try:
             self.player_socket.connect(target)
@@ -45,6 +45,12 @@ class Player:
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
 
     def handle_cut_deck_request(self):
+        """Handles cut deck request.
+
+        Asks the user for a number between 1 and 40.
+
+        Sends the response via socket, given it's validation. 
+        """
         with self.print_mutex:
             while True:
                 try:
@@ -62,6 +68,11 @@ class Player:
 
 
     def handle_trump_card_request(self):
+        """Handles trump card request.
+
+        Prompts choice to the user. 
+
+        Sends it via socket, given it's validation. """
         with self.print_mutex:
             while True:
                 choice = input("[CHOICE] Choose 'top' or 'bottom': ").strip().lower()
@@ -74,6 +85,7 @@ class Player:
 
 
     def receive_cards(self, message):
+        """Receives a set of cards. """
         data = message[len("[HAND]") :]
         data_split = data.split(" ")
         self.hand = [int(card) for card in data_split if card]
@@ -81,6 +93,14 @@ class Player:
         print("[HAND-RECEIVED] Hand received")
 
     def handle_turn(self, sock_file):
+        """Handles the player's turn.
+
+        Asks the user to index the card they wish to play. 
+
+        Sends it via socket.
+
+        Pops it of the player's hand. 
+        """
         while True:
             sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
             self.turn_mutex.acquire()
@@ -118,6 +138,10 @@ class Player:
         return f"[PLAYER-INFO] [{self.player_name}]"
 
     def listen(self):
+        """Listens for server feedback.
+
+        Responsible for handing requests and server-related interactions. 
+        """
         sock_file = self.player_socket.makefile("r")
         while self.running:
             message = sock_file.readline()
@@ -141,6 +165,7 @@ class Player:
                 self.print_mutex.release()
 
     def view_hand_continuously(self):
+        """Prints the players hand every 8 seconds. """
         while self.running:
             if len(self.hand) == 0:
                 with self.print_mutex:
@@ -158,6 +183,7 @@ class Player:
             time.sleep(8)
 
     def view_hand_statically(self):
+        """Prints the players hand once. """
         if len(self.hand) == 0:
             print(
                 f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
@@ -172,6 +198,13 @@ class Player:
 
     @staticmethod
     def initialize_player():
+        """Factory method.
+
+        Responsible for initializing a player object.
+
+        Prompts the user for name.
+        
+        Connects the player socket to the server. """
         while True:
             name = input("[REGISTER] Enter your player name: ")
             if not name:
