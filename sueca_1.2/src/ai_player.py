@@ -1,11 +1,13 @@
 from socket import *
-from constants import *
-import json
+from src.constants import *
 import time
 from threading import Thread, Lock
+from src.card_mapper import CardMapper
 
 
 class Player:
+    """AI Player implementation based on the logic of the new Player class."""
+
     def __init__(self, player_name):
         self.player_name = player_name
         self.player_socket = socket(AF_INET, SOCK_STREAM)
@@ -16,19 +18,21 @@ class Player:
         self.position = None
 
     def send_response(self, response):
+        """Sends a given message via socket."""
         self.player_socket.send(response.encode(ENCODER))
 
+    def send_card(self, card):
+        """Sends a given card via socket."""
+        self.player_socket.send(str(card).encode(ENCODER))
+
     def disconnect_player_socket(self):
+        """Disconnects the player socket."""
         self.running = False
         self.player_socket.close()
         print(f"[DISCONNECTED] [{self.player_name}]")
 
     def connect_player_socket(self, server_ip=None):
-        """Connect to the game server.
-
-        If `server_ip` is provided it will connect to (server_ip, PORT).
-        Otherwise it will use the default `CONNECT_INFO` from `constants.py`.
-        """
+        """Connects the player socket to the game server."""
         target = CONNECT_INFO if server_ip is None else (server_ip, PORT)
         try:
             self.player_socket.connect(target)
@@ -41,66 +45,65 @@ class Player:
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
 
     def handle_cut_deck_request(self):
-        self.print_mutex.acquire()
+        """AI automatically chooses a cut index."""
+        with self.print_mutex:
+            print("[AI] Handling cut request → sending '10'")
         self.send_response("10")
-        self.print_mutex.release()
 
     def handle_trump_card_request(self):
-        self.print_mutex.acquire()
+        """AI automatically chooses 'top'."""
+        with self.print_mutex:
+            print("[AI] Handling trump request → sending 'top'")
         self.send_response("top")
-        self.print_mutex.release()
 
     def receive_cards(self, message):
-        data = message[len("[HAND]") :]
-        card_strings = json.loads(data)
-        self.hand = card_strings
+        """Receives a space-separated list of integers."""
+        data = message[len("[HAND]"):]
+        split_cards = data.split(" ")
+        self.hand = [int(card) for card in split_cards if card]
+        self.hand.sort()
         print("[HAND-RECEIVED] Hand received")
 
     def handle_turn(self, sock_file):
+        """AI chooses cards automatically based on validity."""
         while True:
+            sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
+
             self.turn_mutex.acquire()
+
             self.print_mutex.acquire()
             print("[AI] It's my turn. Current hand:")
             self.view_hand_statically()
             self.print_mutex.release()
-            card = self.hand[0]
-            card_string = json.dumps(card)
-            self.send_response(card_string)
-            server_response = sock_file.readline().strip()
-            self.print_mutex.acquire()
-            print(f"[AI] Server response to first choice: {server_response}")
-            self.print_mutex.release()
-            if not server_response.startswith("[INVALID]"):
-                print(f"[AI] Played card: {card}")
-                self.hand.pop(0)
-                self.turn_mutex.release()
-                return
-            for card_index, card in enumerate(self.hand[1:], start=1):
-                card_string = json.dumps(card)
-                self.send_response(card_string)
+
+            for card_index, card in enumerate(sorted_hand):
+                self.send_card(card)
                 server_response = sock_file.readline().strip()
                 self.print_mutex.acquire()
-                print(f"[AI] Trying card {card} → Server: {server_response}")
+                print(f"[AI] Trying card {CardMapper.get_card(card)} → Server: {server_response}")
                 self.print_mutex.release()
-                if server_response.startswith("[INVALID]"):
-                    continue
-                print(f"[AI] Played card: {card}")
-                self.hand.pop(card_index)
-                self.turn_mutex.release()
-                return
-            print("[AI ERROR] No valid card found!")
-            self.turn_mutex.release()
+                if not server_response.startswith("[INVALID]"):
+                    print(f"[AI] Played card: {CardMapper.get_card(card)}")
+                    self.hand.remove(card)
+                    self.turn_mutex.release()
+                    return
 
-    def __repr__(self):
-        return f"[PLAYER-INFO] [{self.player_name}]"
+            self.print_mutex.acquire()
+            print("[AI ERROR] No valid card found!")
+            self.print_mutex.release()
+            self.turn_mutex.release()
+            return
 
     def listen(self):
+        """Listens for server feedback."""
         sock_file = self.player_socket.makefile("r")
         while self.running:
             message = sock_file.readline()
             if not message:
                 break
+
             message = message.strip()
+
             if message == "[CHOICE] Cut from what index":
                 self.handle_cut_deck_request()
 
@@ -112,45 +115,43 @@ class Player:
 
             elif message.startswith("[CHOICE] It's your turn"):
                 self.handle_turn(sock_file)
+
             else:
-                self.print_mutex.acquire()
-                print(f"{message}\n")
-                self.print_mutex.release()
+                with self.print_mutex:
+                    print(f"{message}\n")
 
     def view_hand_continuously(self):
+        """Prints the players hand every 8 seconds."""
         while self.running:
-            if len(self.hand) == 0:
-                self.print_mutex.acquire()
-                print(
-                    f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
-                )
-                self.print_mutex.release()
-            else:
-                self.print_mutex.acquire()
-                print(f"[VIEW-HAND] Your hand \n")
-                hand_str = "    ".join(str(card) for card in self.hand)
-                print(hand_str)
-                self.print_mutex.release()
+            with self.print_mutex:
+                if len(self.hand) == 0:
+                    print("[EMPTY-HAND] Waiting for cards...")
+                else:
+                    print("[VIEW-HAND] Your hand\n")
+                    sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
+                    hand_str = "    ".join(CardMapper.get_card(card) for card in sorted_hand)
+                    print(hand_str)
             time.sleep(8)
 
     def view_hand_statically(self):
+        """Prints the player's hand once."""
         if len(self.hand) == 0:
-            print(
-                f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
-            )
+            print("[EMPTY-HAND] Waiting for cards...")
         else:
-            print(f"[VIEW-HAND] Your hand \n")
-            hand_str = "    ".join(str(card) for card in self.hand)
+            print("[VIEW-HAND] Your hand\n")
+            sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
+            hand_str = "    ".join(CardMapper.get_card(card) for card in sorted_hand)
             print(hand_str)
 
     @staticmethod
     def initialize_player():
+        """Initialize player + auto-connect."""
         name = input("[REGISTER] Enter your player name: ")
         player = Player("AI PLAYER: " + name)
-        server_ip = input(
-            "[CONNECT] Enter server IP (leave blank for default): "
-        ).strip()
-        player.connect_player_socket(server_ip if server_ip != "" else None)
+
+        server_ip = input("[CONNECT] Enter server IP (leave blank for default): ").strip()
+        player.connect_player_socket(server_ip if server_ip else None)
+
         player.send_response(name)
         return player
 
@@ -158,13 +159,14 @@ class Player:
 def main():
     player = Player.initialize_player()
     listen_thread = Thread(target=player.listen, daemon=True)
-    view_hand_continuously_thread = Thread(
-        target=player.view_hand_continuously, daemon=True
-    )
+    view_hand_thread = Thread(target=player.view_hand_continuously, daemon=True)
+
     listen_thread.start()
-    view_hand_continuously_thread.start()
+    view_hand_thread.start()
+
     listen_thread.join()
-    view_hand_continuously_thread.join()
+    view_hand_thread.join()
+    player.disconnect_player_socket()
 
 
 if __name__ == "__main__":
