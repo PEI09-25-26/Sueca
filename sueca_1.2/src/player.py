@@ -83,6 +83,18 @@ class Player:
                 else:
                     print("[INVALID] Choice must be 'top' or 'bottom'.")
 
+    def handle_trump_card_set(self, message):
+        """Receives and stores the trump suit in a variable"""
+        start = message.index("[", len("[TRUMP-CARD]"))
+        end = message.index("]", start)
+        trump_card = int(message[start+1:end])
+        self.trump_suit = trump_card[-1:]
+
+    def handle_round_suit_set(self, message):
+        """Receives and stores the current round's suit in a variable"""
+        prefix = "[ANNOUNCEMENT] This round's suit is "
+        suit = message[len(prefix):].rstrip(".")
+        self.round_suit = suit
 
     def receive_cards(self, message):
         """Receives a set of cards. """
@@ -132,6 +144,7 @@ class Player:
                 continue
             else:
                 self.hand.pop(card_index)
+                self.round_suit = None
                 break
 
     def __repr__(self):
@@ -159,6 +172,13 @@ class Player:
 
             elif message.startswith("[CHOICE] It's your turn"):
                 self.handle_turn(sock_file)
+            
+            elif message.startswith("[TRUMP-CARD]"):
+                self.handle_trump_card_set(message)
+
+            elif message.startswith("[ANNOUNCEMENT] This round's suit is"):
+                self.handle_round_suit_set(message)
+
             else:
                 self.print_mutex.acquire()
                 print(f"{message}\n")

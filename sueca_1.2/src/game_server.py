@@ -186,7 +186,7 @@ class GameServer:
             f"[TRUMP-CARD] This game's trump card is [{CardMapper.get_card(self.trump_card)}]"
         )
         self.game_logger.log_info(
-            f"[TRUMP-CARD] This game's trump card is {CardMapper.get_card(self.trump_card)}"
+            f"[TRUMP-CARD] This game's trump card is [{CardMapper.get_card(self.trump_card)}]"
         )
 
         self.deck_backup = self.deck.cards.copy()
