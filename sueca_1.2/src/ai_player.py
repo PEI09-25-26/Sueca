@@ -3,6 +3,7 @@ from src.constants import *
 import time
 from threading import Thread, Lock
 from src.card_mapper import CardMapper
+import random
 
 
 class Player:
@@ -16,6 +17,8 @@ class Player:
         self.print_mutex = Lock()
         self.turn_mutex = Lock()
         self.position = None
+        self.trump_suit = None # Needs to be used later, isn't updated properly right now
+        self.round_suit = None # Needs to be used later, isn't updated properly right now
 
     def send_response(self, response):
         """Sends a given message via socket."""
@@ -45,16 +48,17 @@ class Player:
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
 
     def handle_cut_deck_request(self):
-        """AI automatically chooses a cut index."""
-        with self.print_mutex:
-            print("[AI] Handling cut request → sending '10'")
-        self.send_response("10")
+        """AI randomly chooses a cut index."""
+        n = random.randint(1, 38)
+        self.send_response(str(n))
 
     def handle_trump_card_request(self):
-        """AI automatically chooses 'top'."""
-        with self.print_mutex:
-            print("[AI] Handling trump request → sending 'top'")
-        self.send_response("top")
+        """AI randomly chooses between top and bottom."""
+        n = random.randint(0, 1)
+        if n == 0:
+            self.send_response("top")
+        elif n == 1:
+            self.send_response("bottom")
 
     def receive_cards(self, message):
         """Receives a space-separated list of integers."""
@@ -62,19 +66,49 @@ class Player:
         split_cards = data.split(" ")
         self.hand = [int(card) for card in split_cards if card]
         self.hand.sort()
+        # self.trump_suit = ...
         print("[HAND-RECEIVED] Hand received")
 
     def handle_turn(self, sock_file):
         """AI chooses cards automatically based on validity."""
         while True:
             sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
-
+            # self.round_suit = ...
             self.turn_mutex.acquire()
 
             self.print_mutex.acquire()
             print("[AI] It's my turn. Current hand:")
             self.view_hand_statically()
             self.print_mutex.release()
+
+            if self.round_suit is not None:
+                cards_of_round_suit = [
+                    c for c in sorted_hand
+                    if CardMapper.get_card_suit(c) == self.round_suit
+                ]
+                if cards_of_round_suit:
+                    playable_cards = cards_of_round_suit
+                else:
+                    playable_cards = sorted_hand
+            else:
+                playable_cards = sorted_hand
+
+            num = 0 # just a test subject to see if it only calls it once when the logic is complete
+
+            for card in playable_cards:
+                self.send_card(card)
+                num += 1
+                server_response = sock_file.readline().strip()
+
+                with self.print_mutex:
+                    print(f"[AI] Trying card {CardMapper.get_card(card)} → Server: {server_response}")
+                    print(f"[DEBUG] Number of calls inside the playable cards code: {num}")
+
+                if not server_response.startswith("[INVALID]"):
+                    print(f"[AI] Played card: {CardMapper.get_card(card)}")
+                    self.hand.remove(card)
+                    self.turn_mutex.release()
+                    return
 
             for card_index, card in enumerate(sorted_hand):
                 self.send_card(card)
