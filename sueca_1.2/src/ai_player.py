@@ -21,6 +21,7 @@ class Player:
         self.team1 = []
         self.team2 = []
         self.partner_name = None
+        self.plays_in_trick = 0
 
     def send_response(self, response):
         """Sends a given message via socket."""
@@ -95,8 +96,15 @@ class Player:
         self.hand.sort()
         print("[HAND-RECEIVED] Hand received")
 
+    def handle_play_count(self, message):
+        if self.plays_in_trick == 3:
+            self.plays_in_trick = 0
+        else:
+            self.plays_in_trick += 1
+
     def handle_turn(self, sock_file):
         """AI chooses cards automatically based on validity."""
+        print(f"[DEBUG] AMMOUNT OF PLAYS IN THIS TRICK: {self.plays_in_trick}")
         while True:
             sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
             self.turn_mutex.acquire()
@@ -123,7 +131,7 @@ class Player:
                 server_response = sock_file.readline().strip()
 
                 with self.print_mutex:
-                    print(f"[AI] Trying card {CardMapper.get_card(card)} → Server: {server_response}")
+                    print(f"[AI] Trying card {CardMapper.get_card(card)}")
 
                 if not server_response.startswith("[INVALID]"):
                     print(f"[AI] Played card: {CardMapper.get_card(card)}")
@@ -168,6 +176,9 @@ class Player:
 
             elif message.startswith(f"[ANNOUNCEMENT]") and message.__contains__("was assigned to the"):
                 self.handle_teams(message)
+
+            elif message.startswith(f"[PLAY]"):
+                self.handle_play_count(message)
 
             else:
                 with self.print_mutex:
