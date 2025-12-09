@@ -16,6 +16,11 @@ class Player:
         self.print_mutex = Lock()
         self.turn_mutex = Lock()
         self.position = None
+        self.trump_suit = None
+        self.round_suit = None
+        self.team1 = []
+        self.team2 = []
+        self.partner_name = None
 
     def send_response(self, response):
         """Sends a given message via socket. """
@@ -43,6 +48,18 @@ class Player:
 
     def __repr__(self):
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
+    
+    def handle_teams(self, message):
+        """Player receives info and learns about the teams and its teammate"""
+        p_name = message[len("[ANNOUNCEMENT] "):].split(" was ")[0]
+        if message.__contains__("first"):
+            self.team1.append(p_name)
+        else:
+            self.team2.append(p_name)
+        if self.player_name in self.team1 and len(self.team1) == 2:
+            self.partner_name = next(p for p in self.team1 if p != self.player_name)
+        elif self.player_name in self.team2 and len(self.team2) == 2:
+            self.partner_name = next(p for p in self.team2 if p != self.player_name)
 
     def handle_cut_deck_request(self):
         """Handles cut deck request.
@@ -87,14 +104,14 @@ class Player:
         """Receives and stores the trump suit in a variable"""
         start = message.index("[", len("[TRUMP-CARD]"))
         end = message.index("]", start)
-        trump_card = int(message[start+1:end])
+        trump_card = message[start+1:end]
         self.trump_suit = trump_card[-1:]
 
     def handle_round_suit_set(self, message):
         """Receives and stores the current round's suit in a variable"""
         prefix = "[ANNOUNCEMENT] This round's suit is "
         suit = message[len(prefix):].rstrip(".")
-        self.round_suit = suit
+        self.round_suit = suit[0]
 
     def receive_cards(self, message):
         """Receives a set of cards. """
@@ -178,6 +195,9 @@ class Player:
 
             elif message.startswith("[ANNOUNCEMENT] This round's suit is"):
                 self.handle_round_suit_set(message)
+
+            elif message.startswith(f"[ANNOUNCEMENT]") and message.__contains__("was assigned to the"):
+                self.handle_teams(message)
 
             else:
                 self.print_mutex.acquire()

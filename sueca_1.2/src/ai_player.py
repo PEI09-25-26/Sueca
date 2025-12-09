@@ -8,7 +8,6 @@ import random
 
 class Player:
     """AI Player implementation based on the logic of the new Player class."""
-
     def __init__(self, player_name):
         self.player_name = player_name
         self.player_socket = socket(AF_INET, SOCK_STREAM)
@@ -19,6 +18,9 @@ class Player:
         self.position = None
         self.trump_suit = None
         self.round_suit = None
+        self.team1 = []
+        self.team2 = []
+        self.partner_name = None
 
     def send_response(self, response):
         """Sends a given message via socket."""
@@ -46,6 +48,18 @@ class Player:
 
     def __repr__(self):
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
+    
+    def handle_teams(self, message):
+        """AI receives info and learns about the teams and its teammate"""
+        p_name = message[len("[ANNOUNCEMENT] "):].split(" was ")[0]
+        if message.__contains__("first"):
+            self.team1.append(str(p_name))
+        else:
+            self.team2.append(str(p_name))
+        if self.player_name in self.team1 and len(self.team1) == 2:
+            self.partner_name = next(p for p in self.team1 if p != self.player_name)
+        elif self.player_name in self.team2 and len(self.team2) == 2:
+            self.partner_name = next(p for p in self.team2 if p != self.player_name)
 
     def handle_cut_deck_request(self):
         """AI randomly chooses a cut index."""
@@ -71,7 +85,7 @@ class Player:
         """AI receives and stores the current round's suit in a variable"""
         prefix = "[ANNOUNCEMENT] This round's suit is "
         suit = message[len(prefix):].rstrip(".")
-        self.round_suit = suit
+        self.round_suit = suit[0]
 
     def receive_cards(self, message):
         """Receives a space-separated list of integers."""
@@ -118,19 +132,6 @@ class Player:
                     self.turn_mutex.release()
                     return
 
-            for card_index, card in enumerate(sorted_hand):
-                self.send_card(card)
-                server_response = sock_file.readline().strip()
-                self.print_mutex.acquire()
-                print(f"[AI] Trying card {CardMapper.get_card(card)} → Server: {server_response}")
-                self.print_mutex.release()
-                if not server_response.startswith("[INVALID]"):
-                    print(f"[AI] Played card: {CardMapper.get_card(card)}")
-                    self.hand.remove(card)
-                    self.round_suit = None
-                    self.turn_mutex.release()
-                    return
-
             self.print_mutex.acquire()
             print("[AI ERROR] No valid card found!")
             self.print_mutex.release()
@@ -165,6 +166,9 @@ class Player:
             elif message.startswith("[ANNOUNCEMENT] This round's suit is"):
                 self.handle_round_suit_set(message)
 
+            elif message.startswith(f"[ANNOUNCEMENT]") and message.__contains__("was assigned to the"):
+                self.handle_teams(message)
+
             else:
                 with self.print_mutex:
                     print(f"{message}\n")
@@ -196,7 +200,7 @@ class Player:
     def initialize_player():
         """Initialize player + auto-connect."""
         name = input("[REGISTER] Enter your player name: ")
-        player = Player("AI PLAYER: " + name)
+        player = Player(name)
 
         server_ip = input("[CONNECT] Enter server IP (leave blank for default): ").strip()
         player.connect_player_socket(server_ip if server_ip else None)
