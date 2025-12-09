@@ -166,6 +166,8 @@ class Player:
             self.print_mutex.release()
             self.turn_mutex.release()
             if server_response.startswith("[INVALID]"):
+                self.hand.sort(key=CardMapper.get_card_points)
+                print([CardMapper.get_card(card) for card in self.hand] ,"HAND IS THIS")
                 continue
             else:
                 self.hand.pop(card_index)
