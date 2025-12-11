@@ -34,6 +34,8 @@ class GameServer:
         ]
         self.deck_backup = None
         self.game_logger = GameLogger()
+        self.trump_owner = None
+
 
     def shuffle_positions(self):
         """Shuffles positions list. """
@@ -161,6 +163,7 @@ class GameServer:
 
         self.send_direct_message("[CHOICE] Cut from what index ", north_socket)
         cut_index = int(north_socket.recv(BYTESIZE).decode(ENCODER))
+        self.trump_owner = north_player
 
         
         self.game_logger.log_info(f"[CUT-RECEIVED] Player {north_player.player_name} cut at index [{cut_index}]")
@@ -206,6 +209,8 @@ class GameServer:
             CardMapper(),
             self.trump_card_suit,
             self.trump_card,
+            self.trump_owner,
+            self.round_counter,
         )
         round_manager.play_round()
         round_winner, winner_index = round_manager.determine_round_winner()

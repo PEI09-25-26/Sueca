@@ -25,6 +25,6 @@ SERVER_BIND = (os.getenv("SUECA_BIND", "0.0.0.0"), PORT)
 DEFAULT_SERVER_IP = os.getenv("SUECA_SERVER_IP", gethostbyname(gethostname()))
 CONNECT_INFO = (DEFAULT_SERVER_IP, PORT)
 
-TABLE_HEIGHT = 75
-TABLE_WIDTH = 35
+TABLE_HEIGHT = 35
+TABLE_WIDTH = 75
 margin = 5

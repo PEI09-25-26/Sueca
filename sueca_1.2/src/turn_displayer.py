@@ -1,6 +1,5 @@
 from src.constants import *
 from src.player import Player
-from src.game_server import GameServer
 from src.deck import Deck
 from src.positions import Positions
 from pprint import pprint
@@ -8,15 +7,17 @@ from src.card_mapper import CardMapper
 from src.constants import * 
 
 class TurnDisplayer:
-    def __init__(self,player,round_manager,turn,trump_owner):
+    def __init__(self,player,turn,trump_owner,trump_card,players):
+        self.players = players
+        self.trump_card = trump_card
         self.player = player
         self.trump_owner = trump_owner  
-        self.round_manager = round_manager
         self.turn = turn
         self.card_faced_down = "🂠"
         self.height = TABLE_HEIGHT
         self.width = TABLE_WIDTH
         self.table = [[" " for _ in range(self.width)] for _ in range(self.height)]
+        self.margin = margin
         
     def draw_borders(self):
         for x in range(self.width):
@@ -28,6 +29,7 @@ class TurnDisplayer:
 
        
     def render_table(self):
+        self.player.hand.sort(key=CardMapper.get_card_points)
         self.draw_borders()
         self.draw_this_player_cards()
         self.draw_trump_owner_cards()
@@ -47,17 +49,20 @@ class TurnDisplayer:
                 for i,card in enumerate(self.player.hand):
                     self.inject_card(CardMapper.get_card(card),self.height-3,margin+i*6)
             case Positions.NORTH:
+
                 for i,card in enumerate(self.player.hand):
                     self.inject_card(CardMapper.get_card(card),3,margin+i*6)
             case Positions.WEST:
+
                 for i, card in enumerate(self.player.hand):
                     self.inject_card(CardMapper.get_card(card), margin + i*2, 3)
             case Positions.EAST:
+
                 for i, card in enumerate(self.player.hand):
                     self.inject_card(CardMapper.get_card(card), margin + i*2, self.width-10)
 
     def draw_trump_owner_cards(self):
-        trump_owner_cards = [self.game_server.trump_card] + [self.card_faced_down] * (9 - self.turn + 1)
+        trump_owner_cards = [self.trump_card] + [self.card_faced_down] * (9 - self.turn + 1)
 
         match self.trump_owner.position:
             case Positions.SOUTH:
@@ -81,7 +86,7 @@ class TurnDisplayer:
                     self.inject_card(actual_card, margin + i * 2, self.width - 10)
 
     def draw_other_cards(self):
-        for p in self.round_manager.players:
+        for p in self.players:
             if p == self.player or p == self.trump_owner:
                 continue
 

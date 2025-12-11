@@ -13,6 +13,8 @@ class RoundManager:
         card_mapper,
         trump_card_suit,
         trump_card,
+        trump_owner,
+        round_counter
     ):
         self.game_ref = game_ref
         self.players = players
@@ -26,6 +28,8 @@ class RoundManager:
         self.round_vector = []
         self.round_suit_number = None
         self.turn_order = []
+        self.trump_owner = trump_owner
+        self.round_counter = round_counter
 
     def assure_card_can_be_played(self, card_number, player):
         """Assures card can be player, given the player's hand state. """
@@ -61,10 +65,28 @@ class RoundManager:
 
         self.determine_turn_order()
         for player in self.turn_order:
+            from src.turn_displayer import TurnDisplayer
+
             self.game_ref.game_logger.log_info(f"[PLAYER-ORDER] It's Player [{player.player_name}]'s turn")
             self.game_ref.broadcast_message(
                 f"[PLAYER-ORDER] It's Player's [{player.player_name}]'s turn "
             )
+            import json
+
+            td_data = {
+                "player": player.player_name,
+                "turn": self.round_counter,
+                "trump_owner": self.trump_owner.player_name,
+                "trump_card": self.trump_card,
+                "players": [
+                    {"name": p.player_name, "hand": p.hand, "position": p.position.name}
+                    for p in self.players
+                ]
+            }
+
+            msg = "[TURN-DISPLAYER]" + json.dumps(td_data)
+            self.game_ref.send_direct_message(msg, self.game_ref.player_sockets[player.player_name])
+
             if player == self.last_round_winner:
                 self.game_ref.game_logger.log_info(
                     f"[PLAYER-ORDER] Player [{player.player_name}] takes the lead this round, as they played the strongest last round, or distributed the deck"

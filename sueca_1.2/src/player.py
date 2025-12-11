@@ -16,13 +16,7 @@ class Player:
         self.print_mutex = Lock()
         self.turn_mutex = Lock()
         self.position = None
-        self.trump_suit = None
-        self.round_suit = None
-        self.team1 = []
-        self.team2 = []
-        self.partner_name = None
-        self.plays_in_trick = 0
-
+        self.turn_displayer = None
 
     def send_response(self, response):
         """Sends a given message via socket. """
@@ -50,18 +44,6 @@ class Player:
 
     def __repr__(self):
         return f"[PLAYER-INFORMATION] [NAME:{self.player_name}] [POSITION:{self.position}] "
-    
-    def handle_teams(self, message):
-        """Player receives info and learns about the teams and its teammate"""
-        p_name = message[len("[ANNOUNCEMENT] "):].split(" was ")[0]
-        if message.__contains__("first"):
-            self.team1.append(p_name)
-        else:
-            self.team2.append(p_name)
-        if self.player_name in self.team1 and len(self.team1) == 2:
-            self.partner_name = next(p for p in self.team1 if p != self.player_name)
-        elif self.player_name in self.team2 and len(self.team2) == 2:
-            self.partner_name = next(p for p in self.team2 if p != self.player_name)
 
     def handle_cut_deck_request(self):
         """Handles cut deck request.
@@ -106,14 +88,14 @@ class Player:
         """Receives and stores the trump suit in a variable"""
         start = message.index("[", len("[TRUMP-CARD]"))
         end = message.index("]", start)
-        trump_card = message[start+1:end]
-        self.trump_suit = trump_card[-1:]
+        trump_card = int(CardMapper.get_card_id(message[start+1:end]))
+        self.trump_suit = CardMapper.get_card_suit(trump_card)
 
     def handle_round_suit_set(self, message):
         """Receives and stores the current round's suit in a variable"""
         prefix = "[ANNOUNCEMENT] This round's suit is "
         suit = message[len(prefix):].rstrip(".")
-        self.round_suit = suit[0]
+        self.round_suit = suit
 
     def receive_cards(self, message):
         """Receives a set of cards. """
@@ -122,12 +104,6 @@ class Player:
         self.hand = [int(card) for card in data_split if card]
         self.hand.sort()
         print("[HAND-RECEIVED] Hand received")
-    
-    def handle_play_count(self, message):
-        if self.plays_in_trick == 3:
-            self.plays_in_trick = 0
-        else:
-            self.plays_in_trick += 1
 
     def handle_turn(self, sock_file):
         """Handles the player's turn.
@@ -138,11 +114,15 @@ class Player:
 
         Pops it of the player's hand. 
         """
+        print("TURN DISPLAYER IS HERE",self.turn_displayer)
         while True:
             sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
-            self.turn_mutex.acquire()
-            self.print_mutex.acquire()
-            self.view_hand_statically()
+        
+            try:
+                self.turn_displayer.render_table()
+            except Exception as e:
+                print(f"[WARNING] Could not render table: {e}")
+
             while True:
                 attempt_str = input(f"[CHOICE] Pick a card number [1-{len(self.hand)}]: ") 
                 if not attempt_str:
@@ -157,17 +137,10 @@ class Player:
                     continue
                 card_index = card_number - 1 
                 break
-            self.print_mutex.release()
             card = sorted_hand[card_index]
             self.send_card(card)
             server_response = sock_file.readline().strip()
-            self.print_mutex.acquire()
-            print(server_response)
-            self.print_mutex.release()
-            self.turn_mutex.release()
             if server_response.startswith("[INVALID]"):
-                self.hand.sort(key=CardMapper.get_card_points)
-                print([CardMapper.get_card(card) for card in self.hand] ,"HAND IS THIS")
                 continue
             else:
                 self.hand.pop(card_index)
@@ -176,6 +149,40 @@ class Player:
 
     def __repr__(self):
         return f"[PLAYER-INFO] [{self.player_name}]"
+
+    def receive_turn_displayer(self, message):
+        import json
+        from src.turn_displayer import TurnDisplayer
+        from src.player import Player
+        from src.positions import Positions
+
+        data = message[len("[TURN-DISPLAYER]"):].strip()
+        info = json.loads(data)
+
+        players_list = []
+        trump_owner = None
+        trump_owner_name = info["trump_owner"]
+
+        for p_info in info["players"]:
+            player_obj = Player(p_info["name"])
+            player_obj.hand = p_info.get("hand", [])
+            player_obj.position = getattr(Positions, p_info["position"])
+            players_list.append(player_obj)
+
+            if p_info["name"] == trump_owner_name:
+                trump_owner = player_obj
+
+        current_player = next(
+            p for p in players_list if p.player_name == self.player_name
+        )
+
+        self.turn_displayer = TurnDisplayer(
+            player=current_player, #IMPORTANT TO RECEIVE POSITIONS
+            turn=int(info["turn"]),
+            trump_owner=trump_owner,
+            trump_card=info["trump_card"],
+            players=players_list
+        )
 
     def listen(self):
         """Listens for server feedback.
@@ -205,49 +212,42 @@ class Player:
 
             elif message.startswith("[ANNOUNCEMENT] This round's suit is"):
                 self.handle_round_suit_set(message)
-
-            elif message.startswith(f"[ANNOUNCEMENT]") and message.__contains__("was assigned to the"):
-                self.handle_teams(message)
-
-            elif message.startswith(f"[PLAY]"):
-                self.handle_play_count(message)
-
+            elif message.startswith("[TURN-DISPLAYER]"):
+                self.receive_turn_displayer(message)
             else:
-                self.print_mutex.acquire()
                 print(f"{message}\n")
-                self.print_mutex.release()
 
-    def view_hand_continuously(self):
-        """Prints the players hand every 8 seconds. """
-        while self.running:
-            if len(self.hand) == 0:
-                with self.print_mutex:
-                    print(
-                        f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
-                    )
-            else:
-                with self.print_mutex:
-                    print(f"[VIEW-HAND] Your hand \n")
-                    sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
-                    hand_str = "    ".join(
-                        CardMapper.get_card(card_number) for card_number in sorted_hand
-                    )
-                    print(hand_str)
-            time.sleep(8)
+    # def view_hand_continuously(self):
+    #     """Prints the players hand every 8 seconds. """
+    #     while self.running:
+    #         if len(self.hand) == 0:
+    #             with self.print_mutex:
+    #                 print(
+    #                     f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
+    #                 )
+    #         else:
+    #             with self.print_mutex:
+    #                 print(f"[VIEW-HAND] Your hand \n")
+    #                 sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
+    #                 hand_str = "    ".join(
+    #                     CardMapper.get_card(card_number) for card_number in sorted_hand
+    #                 )
+    #                 print(hand_str)
+    #         time.sleep(8)
 
-    def view_hand_statically(self):
-        """Prints the players hand once. """
-        if len(self.hand) == 0:
-            print(
-                f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
-            )
-        else:
-            print(f"[VIEW-HAND] Your hand \n")
-            sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
-            hand_str = "    ".join(
-                CardMapper.get_card(card_number) for card_number in sorted_hand
-            )
-            print(hand_str)
+    # def view_hand_statically(self):
+    #     """Prints the players hand once. """
+    #     if len(self.hand) == 0:
+    #         print(
+    #             f"[EMPTY-HAND] Your hand is empty, waiting for cards to be distributed "
+    #         )
+    #     else:
+    #         print(f"[VIEW-HAND] Your hand \n")
+    #         sorted_hand = sorted(self.hand, key=CardMapper.get_card_points)
+    #         hand_str = "    ".join(
+    #             CardMapper.get_card(card_number) for card_number in sorted_hand
+    #         )
+    #         print(hand_str)
 
     @staticmethod
     def initialize_player():
@@ -275,13 +275,8 @@ class Player:
 def main():
     player = Player.initialize_player()
     listen_thread = Thread(target=player.listen, daemon=True)
-    view_hand_continuously_thread = Thread(
-        target=player.view_hand_continuously, daemon=True
-    )
     listen_thread.start()
-    view_hand_continuously_thread.start()
     listen_thread.join()
-    view_hand_continuously_thread.join()
     player.disconnect_player_socket()
 
 

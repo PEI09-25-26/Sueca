@@ -38,3 +38,16 @@ class CardMapper:
         """Returns a card's value, given it's id. """
         rank = CardMapper.get_card_rank(card_id)
         return CardMapper.RANK_VALUES[rank]
+    
+
+    @staticmethod
+    def get_card_id(card_str):
+        """
+        """
+        rank = card_str[:-1]  
+        suit = card_str[-1]  
+
+        suit_index = CardMapper.SUITS.index(suit)
+        rank_index = CardMapper.RANKS.index(rank)
+
+        return suit_index * CardMapper.SUITSIZE + rank_index
