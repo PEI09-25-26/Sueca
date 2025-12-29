@@ -1,0 +1,4 @@
+Card Category,Precision,Recall,F1-Score,Sample Size
+Numbered (2-7),100.0,100.0,100.0,288
+"Face (A,J,Q,K)",100.0,100.0,100.0,192
+Overall,100.0,100.0,100.0,492
