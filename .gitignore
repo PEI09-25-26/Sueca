@@ -1,0 +1,20 @@
+# Environment files / directories
+.env
+.envrc
+.venv
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python cache
+__pycache__/
+
+# Python compiled files
+*.pyc
+*.pyo
+*.pyd
+
+# Logger files
+*.log
