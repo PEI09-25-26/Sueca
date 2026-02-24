@@ -20,6 +20,7 @@ class GameClient:
         self.last_state = None
         self.my_hand = []
         self.display_lock = Lock()
+        self.pause_updates = False  # Pause updates when waiting for user input
         
     def clear_screen(self):
         """Clear the terminal screen"""
@@ -87,8 +88,12 @@ class GameClient:
         except Exception as e:
             return False, f"Error: {e}"
     
-    def display_game(self):
+    def display_game(self, force=False):
         """Display current game state"""
+        # Don't refresh if updates are paused (unless forced)
+        if self.pause_updates and not force:
+            return
+        
         with self.display_lock:
             state = self.get_status()
             if not state:
@@ -233,7 +238,8 @@ class GameClient:
         """Thread that auto-updates the display"""
         while self.running:
             try:
-                self.display_game()
+                if not self.pause_updates:
+                    self.display_game()
                 time.sleep(2)
             except:
                 pass
@@ -282,6 +288,22 @@ class GameClient:
         # Main input loop
         try:
             while self.running:
+                # Check current state to decide if we should pause updates
+                state = self.get_status()
+                if state:
+                    # Pause updates when it's my turn to do something
+                    is_my_action = (
+                        (state.get('phase') == 'deck_cutting' and state.get('north_player') == self.player_name) or
+                        (state.get('phase') == 'trump_selection' and state.get('west_player') == self.player_name) or
+                        (state.get('phase') == 'playing' and state.get('current_player') == self.player_name)
+                    )
+                    
+                    # If it's my action, pause updates and show one last refresh
+                    if is_my_action:
+                        self.pause_updates = True
+                        time.sleep(0.1)  # Small delay to ensure thread doesn't interfere
+                        self.display_game(force=True)  # Force one last update before input
+                
                 user_input = input().strip().lower()
                 
                 if user_input == 'quit':
@@ -290,7 +312,6 @@ class GameClient:
                     break
                 
                 # Check game state
-                state = self.get_status()
                 if not state:
                     continue
                 
@@ -304,6 +325,7 @@ class GameClient:
                                 with self.display_lock:
                                     if success:
                                         print(f"\n[SUCCESS] {message}")
+                                        self.pause_updates = False  # Resume updates
                                     else:
                                         print(f"\n[ERROR] {message}")
                                     print("> ", end="", flush=True)
@@ -325,6 +347,7 @@ class GameClient:
                             with self.display_lock:
                                 if success:
                                     print(f"\n[SUCCESS] {message}")
+                                    self.pause_updates = False  # Resume updates
                                 else:
                                     print(f"\n[ERROR] {message}")
                                 print("> ", end="", flush=True)
@@ -347,7 +370,9 @@ class GameClient:
                     if 0 <= idx < len(self.my_hand):
                         card = self.my_hand[idx]
                         success, message = self.play_card(card)
-                        if not success:
+                        if success:
+                            self.pause_updates = False  # Resume updates after successful play
+                        else:
                             with self.display_lock:
                                 print(f"\n[ERROR] {message}")
                                 print("> ", end="", flush=True)
