@@ -11,6 +11,7 @@ from positions import Positions
 from card_mapper import CardMapper
 from random import shuffle
 import logging
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -44,6 +45,7 @@ class GameState:
         self.last_winner = None
         self.turn_order = []  # Order of players for current round
         shuffle(self.positions)
+        self._push_state("game_reset")
     
     def add_player(self, name):
         if len(self.players) >= self.max_players:
@@ -71,6 +73,7 @@ class GameState:
             self.deck.shuffle_deck()
             logger.info("All players joined - ready for deck cutting")
         
+        self._push_state("player_joined")
         return True, f"Joined as {player.position}"
     
     def cut_deck(self, player_name, cut_index):
@@ -97,7 +100,8 @@ class GameState:
         
         # Move to trump selection phase
         self.phase = 'trump_selection'
-        
+
+        self._push_state("deck_cut")
         return True, f"Deck cut at index {cut_index}"
     
     def select_trump(self, player_name, choice):
@@ -127,6 +131,7 @@ class GameState:
         self.phase = 'playing'
         self.game_started = True
         
+        self._push_state("trump_selected")
         return True, f"Trump card is {CardMapper.get_card(self.trump_card)}"
     
     def _deal_cards(self):
@@ -260,6 +265,22 @@ class GameState:
             self.game_started = False
         else:
             self._set_turn_order()
+        
+        event = {
+            "type": "round_end",
+            "round": self.current_round - 1,
+            "winner": winner.player_name,
+            "game_finished": self.phase == "finished",
+            "state": self.get_state()
+        }
+        try:
+            requests.post(
+                "http://localhost:8000/game/event",
+                json=event,
+                timeout=0.3
+            )
+        except:
+            pass
     
     def play_card(self, player_name, card_str):
         player = self.get_player(player_name)
@@ -298,6 +319,23 @@ class GameState:
         current_index = self.turn_order.index(player)
         if current_index + 1 < len(self.turn_order):
             self.current_player = self.turn_order[current_index + 1]
+
+        success = True
+        if success:
+            event = {
+                "type": "card_played",
+                "player": player_name,
+                "card": card_str,
+                "state": self.get_state()
+            }
+            try:
+                requests.post(
+                    "http://localhost:8000/game/event",
+                    json=event,
+                    timeout=0.5
+                )
+            except:
+                pass
         
         # Check if round is complete
         if len(self.round_plays) == 4:
@@ -348,6 +386,21 @@ class GameState:
             'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
             'round_plays': self.round_plays
         }
+    
+    def _push_state(self, event_type="state_update"):
+        event = {
+            "type": event_type,
+            "state": self.get_state()
+        }
+
+        try:
+            requests.post(
+                "http://localhost:8000/game/event",
+                json=event,
+                timeout=0.3
+            )
+        except:
+            pass
 
 
 # Global game state
