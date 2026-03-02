@@ -369,9 +369,24 @@ class GameActivity : AppCompatActivity() {
         
         if (playPosition == null || myPosition == null) return slotPlayer
         
+        // Extract just the position name (handles "Positions.NORTH" -> "NORTH" or "NORTH" -> "NORTH")
+        val normalizePosition: (String) -> String = { pos ->
+            val upper = pos.uppercase()
+            when {
+                upper.contains("NORTH") -> "NORTH"
+                upper.contains("SOUTH") -> "SOUTH"
+                upper.contains("EAST") -> "EAST"
+                upper.contains("WEST") -> "WEST"
+                else -> upper
+            }
+        }
+        
         val positions = listOf("NORTH", "EAST", "SOUTH", "WEST")
-        val myIndex = positions.indexOf(myPosition.uppercase())
-        val playIndex = positions.indexOf(playPosition.uppercase())
+        val myNormalized = normalizePosition(myPosition)
+        val playNormalized = normalizePosition(playPosition)
+        
+        val myIndex = positions.indexOf(myNormalized)
+        val playIndex = positions.indexOf(playNormalized)
         
         if (myIndex == -1 || playIndex == -1) return slotPlayer
         
