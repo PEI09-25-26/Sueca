@@ -394,9 +394,9 @@ class GameActivity : AppCompatActivity() {
         
         return when (relativePosition) {
             0 -> slotPlayer      // Same position (me)
-            1 -> slotRight       // Next clockwise (right)
+            1 -> slotLeft        // Previous counter-clockwise (left)
             2 -> slotPartner     // Opposite (partner)
-            3 -> slotLeft        // Previous clockwise (left)
+            3 -> slotRight       // Next counter-clockwise (right)
             else -> slotPlayer
         }
     }
