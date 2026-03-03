@@ -16,9 +16,9 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 class GameState:
     """Simple game state manager"""
@@ -153,8 +153,16 @@ class GameState:
         """Set turn order starting from last winner"""
         if not self.last_winner:
             return
-        start_index = self.players.index(self.last_winner)
-        self.turn_order = self.players[start_index:] + self.players[:start_index]
+
+        # Define counter-clockwise position order
+        position_order = [Positions.NORTH, Positions.WEST, Positions.SOUTH, Positions.EAST]
+        # Sort players by position (counter-clockwise)
+        sorted_players = sorted(self.players, key=lambda p: position_order.index(p.position))
+        # Find winner's index in the sorted list
+        start_index = sorted_players.index(self.last_winner)
+        # Rotate to start from winner
+        self.turn_order = sorted_players[start_index:] + sorted_players[:start_index]
+
         if self.turn_order:
             self.current_player = self.turn_order[0]
     
@@ -253,6 +261,13 @@ class GameState:
         
         logger.info(f"Round {self.current_round} won by {winner.player_name} - {points} points to {team_name}")
         
+        # UNCOMMENT FOR DEBUG
+        # positions_dict = {p.player_name: str(p.position) for p in self.players}
+        # print(f"\n=== Round {self.current_round} Ended ===")
+        # print(f"Player Positions BEFORE SETTING THEM AGAIN: {positions_dict}")
+        # print(f"Next starter: {winner.player_name}")
+
+
         # Prepare for next round
         self.last_winner = winner
         self.current_round += 1
@@ -264,6 +279,7 @@ class GameState:
             self.phase = 'finished'
             self.game_started = False
         else:
+            print("ENTERED _SET_TURN_ORDER()")
             self._set_turn_order()
         
         event = {
@@ -298,7 +314,7 @@ class GameState:
                 card = c
                 break
         
-        if not card:
+        if card is None:
             return False, "Card not in hand"
         
         # Check if card can be played (prevent renounce)
@@ -318,6 +334,7 @@ class GameState:
         # Move to next player in turn order
         current_index = self.turn_order.index(player)
         if current_index + 1 < len(self.turn_order):
+            print("THIS IS HERE BECAUSE I AM VERY COOL I AM PRINTING THIS HELLLLLO")
             self.current_player = self.turn_order[current_index + 1]
 
         success = True
@@ -507,4 +524,4 @@ if __name__ == '__main__':
     print("Server running on http://localhost:5000")
     print("Press Ctrl+C to stop")
     print()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
