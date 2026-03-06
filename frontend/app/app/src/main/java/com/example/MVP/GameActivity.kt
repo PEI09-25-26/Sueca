@@ -19,34 +19,42 @@ import kotlinx.coroutines.launch
 class GameActivity : AppCompatActivity() {
 
     private lateinit var cardsAdapter: CardsAdapter
-    
+
+    // Card slots on the table
     private lateinit var slotPlayer: FrameLayout
     private lateinit var slotPartner: FrameLayout
     private lateinit var slotLeft: FrameLayout
     private lateinit var slotRight: FrameLayout
-    
+
+    // Player name labels
+    private lateinit var slotPartnerName: TextView
+    private lateinit var slotLeftName: TextView
+    private lateinit var slotRightName: TextView
+
+    // UI
     private lateinit var txtStatus: TextView
     private lateinit var txtPhase: TextView
     private lateinit var txtTrump: TextView
     private lateinit var txtRound: TextView
     private lateinit var txtCurrentPlayer: TextView
     private lateinit var txtTeamScores: TextView
-    private lateinit var layoutActions: LinearLayout
+    private lateinit var actionsLayout: LinearLayout
     private lateinit var rvHand: RecyclerView
 
     private var playerName: String = ""
     private var pollingJob: Job? = null
+
     private var myHand: List<String> = emptyList()
     private var currentState: GameStatusResponse? = null
-    
-    private var isMyTurn: Boolean = false
+
+    private var isMyTurn = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_game_mvp)
 
         playerName = intent.getStringExtra("playerName") ?: ""
-        
+
         if (playerName.isEmpty()) {
             Toast.makeText(this, "Player name required!", Toast.LENGTH_SHORT).show()
             finish()
@@ -63,34 +71,43 @@ class GameActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+
         findViewById<ImageView>(R.id.backButton).setOnClickListener { finish() }
 
         slotPlayer = findViewById(R.id.slotPlayer)
         slotPartner = findViewById(R.id.slotPartner)
         slotLeft = findViewById(R.id.slotLeft)
         slotRight = findViewById(R.id.slotRight)
-        
+
+        slotPartnerName = findViewById(R.id.slotPartnerName)
+        slotLeftName = findViewById(R.id.slotLeftName)
+        slotRightName = findViewById(R.id.slotRightName)
+
         txtStatus = findViewById(R.id.txtStatus)
         txtPhase = findViewById(R.id.txtPhase)
         txtTrump = findViewById(R.id.txtTrump)
         txtRound = findViewById(R.id.txtRound)
         txtCurrentPlayer = findViewById(R.id.txtCurrentPlayer)
         txtTeamScores = findViewById(R.id.txtTeamScores)
-        layoutActions = findViewById(R.id.layoutActions)
-        
+
+        actionsLayout = findViewById(R.id.layoutActions)
+
         rvHand = findViewById(R.id.playerHandRecyclerView)
         rvHand.layoutManager = GridLayoutManager(this, 5)
-        
+
+        // Adapter for player's hand
         cardsAdapter = CardsAdapter(emptyList()) { card ->
             if (isMyTurn && currentState?.phase == "playing") {
                 playCard(card)
             } else {
-                Toast.makeText(this, "Not your turn!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Not your turn", Toast.LENGTH_SHORT).show()
             }
         }
+
         rvHand.adapter = cardsAdapter
     }
 
+    // Poll the server every few seconds
     private fun startPolling() {
         pollingJob = lifecycleScope.launch {
             while (true) {
@@ -100,7 +117,8 @@ class GameActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     txtStatus.text = "Connection error: ${e.message}"
                 }
-                delay(2000) // Poll every 2 seconds like client.py
+
+                delay(2000)
             }
         }
     }
@@ -118,6 +136,7 @@ class GameActivity : AppCompatActivity() {
     private suspend fun fetchHand() {
         try {
             val response = RetrofitClient.api.getHand(playerName)
+
             if (response.success) {
                 myHand = response.hand
                 updateHandUI()
@@ -127,47 +146,75 @@ class GameActivity : AppCompatActivity() {
         }
     }
 
+    // Normalize positions like "Positions.NORTH" -> "NORTH"
+    private fun normalizePosition(pos: String?): String {
+
+        if (pos == null) return ""
+
+        val p = pos.uppercase()
+
+        return when {
+            p.contains("NORTH") -> "NORTH"
+            p.contains("SOUTH") -> "SOUTH"
+            p.contains("EAST") -> "EAST"
+            p.contains("WEST") -> "WEST"
+            else -> p
+        }
+    }
+
+    // Main UI update
     private fun updateUI(state: GameStatusResponse) {
-        // Update phase text
-        txtPhase.text = when (state.phase) {
+
+        val phaseText = when (state.phase) {
             "waiting" -> "Waiting for players (${state.playerCount}/4)"
-            "deck_cutting" -> "Deck Cutting Phase"
-            "trump_selection" -> "Trump Selection Phase"
-            "playing" -> "Playing - Round ${state.currentRound}/10"
-            "finished" -> "Game Finished!"
-            else -> state.phase.uppercase()
+            "deck_cutting" -> "Deck Cutting"
+            "trump_selection" -> "Trump Selection"
+            "playing" -> "Round ${state.currentRound}/10"
+            "finished" -> "Game Finished"
+            else -> state.phase
         }
 
-        // Update trump display
+        txtPhase.text = phaseText
+
+        // Show trump card
         if (state.trump != null) {
             val trumpId = state.trump.toIntOrNull()
-            val trumpDisplay = if (trumpId != null) CardMapper.getCard(trumpId) else state.trump
-            txtTrump.text = "Trump: $trumpDisplay"
+
+            val display =
+                if (trumpId != null) CardMapper.getCard(trumpId)
+                else state.trump
+
+            txtTrump.text = "Trump: $display"
             txtTrump.visibility = View.VISIBLE
         } else {
             txtTrump.visibility = View.GONE
         }
 
-        // Update round info
         txtRound.text = "Round: ${state.currentRound}/10"
         txtRound.visibility = if (state.phase == "playing") View.VISIBLE else View.GONE
 
-        // Update current player
         isMyTurn = state.currentPlayer == playerName
+
         if (state.phase == "playing" && state.currentPlayer != null) {
-            val turnText = if (isMyTurn) "YOUR TURN!" else "Turn: ${state.currentPlayer}"
-            txtCurrentPlayer.text = turnText
+
+            txtCurrentPlayer.text =
+                if (isMyTurn) "YOUR TURN!"
+                else "Turn: ${state.currentPlayer}"
+
             txtCurrentPlayer.setTextColor(
-                if (isMyTurn) getColor(android.R.color.holo_green_light) 
-                else getColor(android.R.color.white)
+                if (isMyTurn)
+                    getColor(android.R.color.holo_green_light)
+                else
+                    getColor(android.R.color.white)
             )
+
             txtCurrentPlayer.visibility = View.VISIBLE
         } else {
             txtCurrentPlayer.visibility = View.GONE
         }
 
-        // Update team scores
         val scores = state.teamScores
+
         if (scores != null) {
             txtTeamScores.text = "Team 1: ${scores.team1} | Team 2: ${scores.team2}"
             txtTeamScores.visibility = View.VISIBLE
@@ -175,101 +222,95 @@ class GameActivity : AppCompatActivity() {
             txtTeamScores.visibility = View.GONE
         }
 
-        // Update cards on table
+        updatePlayerNames(state)
         updateTableCards(state.roundPlays)
-
-        // Update status text based on phase
         updateStatusText(state)
-
-        // Show action buttons for special phases
         updateActionButtons(state)
 
-        // Enable/disable cards based on turn
         cardsAdapter.isEnabled = isMyTurn && state.phase == "playing"
     }
 
+    // Status message shown to the player
     private fun updateStatusText(state: GameStatusResponse) {
+
         txtStatus.text = when (state.phase) {
-            "waiting" -> "Waiting for ${4 - state.playerCount} more player(s)..."
+
+            "waiting" ->
+                "Waiting for ${4 - state.playerCount} more player(s)..."
+
             "deck_cutting" -> {
-                if (state.northPlayer == playerName) {
-                    "YOU are NORTH! Cut the deck (1-40)"
-                } else {
-                    "Waiting for ${state.northPlayer} (NORTH) to cut..."
-                }
+                if (state.northPlayer == playerName)
+                    "You are NORTH. Cut the deck (1-40)"
+                else
+                    "Waiting for ${state.northPlayer}..."
             }
+
             "trump_selection" -> {
-                if (state.westPlayer == playerName) {
-                    "YOU are WEST! Select trump card"
-                } else {
-                    "Waiting for ${state.westPlayer} (WEST) to select trump..."
-                }
+                if (state.westPlayer == playerName)
+                    "You are WEST. Choose trump"
+                else
+                    "Waiting for ${state.westPlayer}..."
             }
+
             "playing" -> {
-                val roundSuitInfo = if (state.roundSuit != null) " | Follow: ${state.roundSuit}" else ""
-                if (isMyTurn) "Your turn! Tap a card to play$roundSuitInfo"
-                else "Waiting for ${state.currentPlayer}...$roundSuitInfo"
+                if (isMyTurn)
+                    "Your turn! Play a card"
+                else
+                    "Waiting for ${state.currentPlayer}"
             }
-            "finished" -> {
-                val scores = state.teamScores
-                if (scores != null) {
-                    when {
-                        scores.team1 > scores.team2 -> "🏆 Team 1 WINS! (${scores.team1} vs ${scores.team2})"
-                        scores.team2 > scores.team1 -> "🏆 Team 2 WINS! (${scores.team2} vs ${scores.team1})"
-                        else -> "TIE! (${scores.team1} vs ${scores.team2})"
-                    }
-                } else "Game Over!"
-            }
+
+            "finished" -> "Game Over"
+
             else -> ""
         }
     }
 
+    // Buttons for special phases
     private fun updateActionButtons(state: GameStatusResponse) {
-        layoutActions.removeAllViews()
 
-        when (state.phase) {
-            "deck_cutting" -> {
-                if (state.northPlayer == playerName) {
-                    val btnCut = Button(this).apply {
-                        text = "Cut Deck"
-                        setOnClickListener { showCutDeckDialog() }
-                    }
-                    layoutActions.addView(btnCut)
-                }
-            }
-            "trump_selection" -> {
-                if (state.westPlayer == playerName) {
-                    val btnTop = Button(this).apply {
-                        text = "TOP"
-                        setOnClickListener { selectTrump("top") }
-                    }
-                    val btnBottom = Button(this).apply {
-                        text = "BOTTOM"
-                        setOnClickListener { selectTrump("bottom") }
-                    }
-                    layoutActions.addView(btnTop)
-                    layoutActions.addView(btnBottom)
-                }
-            }
+        actionsLayout.removeAllViews()
+
+        if (state.phase == "deck_cutting" && state.northPlayer == playerName) {
+
+            val btn = Button(this)
+            btn.text = "Cut Deck"
+            btn.setOnClickListener { showCutDeckDialog() }
+
+            actionsLayout.addView(btn)
+        }
+
+        if (state.phase == "trump_selection" && state.westPlayer == playerName) {
+
+            val top = Button(this)
+            top.text = "TOP"
+            top.setOnClickListener { selectTrump("top") }
+
+            val bottom = Button(this)
+            bottom.text = "BOTTOM"
+            bottom.setOnClickListener { selectTrump("bottom") }
+
+            actionsLayout.addView(top)
+            actionsLayout.addView(bottom)
         }
     }
 
     private fun showCutDeckDialog() {
-        val input = EditText(this).apply {
-            hint = "Enter number (1-40)"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        }
-        
+
+        val input = EditText(this)
+        input.hint = "1 - 40"
+        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+
         AlertDialog.Builder(this)
-            .setTitle("Cut the Deck")
-            .setMessage("Enter a number between 1 and 40 to cut the deck")
+            .setTitle("Cut deck")
             .setView(input)
             .setPositiveButton("Cut") { _, _ ->
+
                 val index = input.text.toString().toIntOrNull()
+
                 if (index != null && index in 1..40) {
                     cutDeck(index)
                 } else {
-                    Toast.makeText(this, "Invalid number! Must be 1-40", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Invalid number", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -277,150 +318,195 @@ class GameActivity : AppCompatActivity() {
     }
 
     private fun cutDeck(index: Int) {
+
         lifecycleScope.launch {
             try {
-                val response = RetrofitClient.api.cutDeck(CutDeckRequest(playerName, index))
-                if (response.success) {
-                    Toast.makeText(this@GameActivity, response.message ?: "Deck cut!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@GameActivity, response.message ?: "Failed!", Toast.LENGTH_SHORT).show()
-                }
+                val res = RetrofitClient.api.cutDeck(
+                    CutDeckRequest(playerName, index)
+                )
+
+                Toast.makeText(
+                    this@GameActivity,
+                    res.message ?: "Deck cut",
+                    Toast.LENGTH_SHORT
+                ).show()
+
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@GameActivity, e.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun selectTrump(choice: String) {
+
         lifecycleScope.launch {
             try {
-                val response = RetrofitClient.api.selectTrump(SelectTrumpRequest(playerName, choice))
-                if (response.success) {
-                    Toast.makeText(this@GameActivity, response.message ?: "Trump selected!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@GameActivity, response.message ?: "Failed!", Toast.LENGTH_SHORT).show()
-                }
+
+                val res = RetrofitClient.api.selectTrump(
+                    SelectTrumpRequest(playerName, choice)
+                )
+
+                Toast.makeText(
+                    this@GameActivity,
+                    res.message ?: "Trump selected",
+                    Toast.LENGTH_SHORT
+                ).show()
+
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@GameActivity, e.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun playCard(card: Card) {
+
         lifecycleScope.launch {
             try {
-                val response = RetrofitClient.api.playCard(PlayRequest(playerName, card.id))
-                if (response.success) {
-                    Toast.makeText(this@GameActivity, response.message ?: "Card played!", Toast.LENGTH_SHORT).show()
-                    // Immediately fetch new state
-                    fetchGameState()
-                    fetchHand()
-                } else {
-                    Toast.makeText(this@GameActivity, response.message ?: "Cannot play this card!", Toast.LENGTH_SHORT).show()
-                }
+
+                val res = RetrofitClient.api.playCard(
+                    PlayRequest(playerName, card.id)
+                )
+
+                Toast.makeText(
+                    this@GameActivity,
+                    res.message ?: "Card played",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                fetchGameState()
+                fetchHand()
+
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@GameActivity, e.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
 
+    // Update cards in player's hand
     private fun updateHandUI() {
-        // Convert card IDs to Card objects
-        val cards = myHand.mapIndexed { index, cardStr ->
-            val cardId = cardStr.toIntOrNull() ?: 0
+
+        val cards = myHand.map { id ->
+
+            val num = id.toIntOrNull() ?: 0
+
             Card(
-                id = cardStr,
-                suit = CardMapper.getCardSuitName(cardId),
-                value = CardMapper.getCardRankName(cardId)
+                id,
+                CardMapper.getCardSuitName(num),
+                CardMapper.getCardRankName(num)
             )
         }
+
         cardsAdapter.updateCards(cards)
     }
 
+    private fun updatePlayerNames(state: GameStatusResponse) {
+
+        val myPos = state.players
+            .find { it.name == playerName }
+            ?.position ?: return
+
+        for (p in state.players) {
+
+            if (p.name == playerName) continue
+
+            val slot = getNameSlotForPosition(p.position, myPos)
+            slot?.text = p.name
+        }
+    }
+
+    private fun getNameSlotForPosition(playerPosition: String, myPosition: String): TextView? {
+
+        val positions = listOf("NORTH", "EAST", "SOUTH", "WEST")
+
+        val myIndex = positions.indexOf(normalizePosition(myPosition))
+        val otherIndex = positions.indexOf(normalizePosition(playerPosition))
+
+        if (myIndex == -1 || otherIndex == -1) return null
+
+        val relative = (otherIndex - myIndex + 4) % 4
+
+        return when (relative) {
+            1 -> slotLeftName
+            2 -> slotPartnerName
+            3 -> slotRightName
+            else -> null
+        }
+    }
+
     private fun updateTableCards(roundPlays: List<RoundPlay>) {
-        // Clear all slots first
+
         slotPlayer.removeAllViews()
         slotPartner.removeAllViews()
         slotLeft.removeAllViews()
         slotRight.removeAllViews()
 
-        // Get my position
-        val myPosition = currentState?.players?.find { it.name == playerName }?.position
+        val myPos = currentState?.players
+            ?.find { it.name == playerName }
+            ?.position
 
         for (play in roundPlays) {
-            val cardId = play.card.toIntOrNull() ?: continue
+
+            val id = play.card.toIntOrNull() ?: continue
+
             val card = Card(
-                id = play.card,
-                suit = CardMapper.getCardSuitName(cardId),
-                value = CardMapper.getCardRankName(cardId)
+                play.card,
+                CardMapper.getCardSuitName(id),
+                CardMapper.getCardRankName(id)
             )
 
-            // Determine which slot based on relative position
-            val slot = getSlotForPosition(play.position, myPosition)
+            val slot = getSlotForPosition(play.position, myPos)
             addCardToSlot(slot, card)
         }
     }
 
-    private fun getSlotForPosition(playPosition: String?, myPosition: String?): FrameLayout {
-        // Map positions relative to player's position
-        // Player is always at bottom (slotPlayer)
-        // Partner is at top (slotPartner) - opposite position
-        // Left and Right opponents on the sides
-        
-        if (playPosition == null || myPosition == null) return slotPlayer
-        
-        // Extract just the position name (handles "Positions.NORTH" -> "NORTH" or "NORTH" -> "NORTH")
-        val normalizePosition: (String) -> String = { pos ->
-            val upper = pos.uppercase()
-            when {
-                upper.contains("NORTH") -> "NORTH"
-                upper.contains("SOUTH") -> "SOUTH"
-                upper.contains("EAST") -> "EAST"
-                upper.contains("WEST") -> "WEST"
-                else -> upper
-            }
-        }
-        
+    private fun getSlotForPosition(playPos: String?, myPos: String?): FrameLayout {
+
+        if (playPos == null || myPos == null) return slotPlayer
+
         val positions = listOf("NORTH", "EAST", "SOUTH", "WEST")
-        val myNormalized = normalizePosition(myPosition)
-        val playNormalized = normalizePosition(playPosition)
-        
-        val myIndex = positions.indexOf(myNormalized)
-        val playIndex = positions.indexOf(playNormalized)
-        
+
+        val myIndex = positions.indexOf(normalizePosition(myPos))
+        val playIndex = positions.indexOf(normalizePosition(playPos))
+
         if (myIndex == -1 || playIndex == -1) return slotPlayer
-        
-        val relativePosition = (playIndex - myIndex + 4) % 4
-        
-        return when (relativePosition) {
-            0 -> slotPlayer      // Same position (me)
-            1 -> slotLeft        // Previous counter-clockwise (left)
-            2 -> slotPartner     // Opposite (partner)
-            3 -> slotRight       // Next counter-clockwise (right)
+
+        val relative = (playIndex - myIndex + 4) % 4
+
+        return when (relative) {
+            0 -> slotPlayer
+            1 -> slotLeft
+            2 -> slotPartner
+            3 -> slotRight
             else -> slotPlayer
         }
     }
 
     private fun addCardToSlot(slot: FrameLayout, card: Card) {
-        val cardView = LayoutInflater.from(this).inflate(R.layout.item_card_mvp, slot, false)
-        val imageView = cardView.findViewById<ImageView>(R.id.cardImage)
-        imageView.setImageResource(getCardResource(card))
-        
+
+        val view = LayoutInflater.from(this)
+            .inflate(R.layout.item_card_mvp, slot, false)
+
+        val img = view.findViewById<ImageView>(R.id.cardImage)
+        img.setImageResource(getCardResource(card))
+
         slot.removeAllViews()
-        slot.addView(cardView)
+        slot.addView(view)
     }
 
     private fun getCardResource(card: Card): Int {
+
         val suit = card.suit.lowercase()
-        val value = when (val v = card.value.lowercase()) {
+
+        val value = when (card.value.lowercase()) {
             "k", "king" -> "king"
             "q", "queen" -> "queen"
             "j", "jack" -> "jack"
             "a", "ace" -> "ace"
-            else -> v
+            else -> card.value.lowercase()
         }
-        val identifier = "${suit}_$value"
-        val resId = resources.getIdentifier(identifier, "drawable", packageName)
-        return if (resId != 0) resId else R.drawable.card_back
+
+        val id = resources.getIdentifier("${suit}_$value", "drawable", packageName)
+
+        return if (id != 0) id else R.drawable.card_back
     }
 }
