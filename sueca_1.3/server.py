@@ -12,6 +12,7 @@ from card_mapper import CardMapper
 from random import shuffle
 import logging
 import requests
+import threading
 
 app = Flask(__name__)
 CORS(app)
@@ -356,7 +357,7 @@ class GameState:
         
         # Check if round is complete
         if len(self.round_plays) == 4:
-            self._finish_round()
+            threading.Timer(1.69, self._finish_round).start()
         
         return True, f"Played {CardMapper.get_card(card)}"
     
