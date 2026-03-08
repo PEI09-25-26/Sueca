@@ -1,5 +1,9 @@
 package com.example.MVP
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -25,6 +29,7 @@ class GameActivity : AppCompatActivity() {
     private lateinit var slotPartner: FrameLayout
     private lateinit var slotLeft: FrameLayout
     private lateinit var slotRight: FrameLayout
+    private lateinit var slotTrump: FrameLayout
 
     // Player name labels
     private lateinit var slotPartnerName: TextView
@@ -48,6 +53,11 @@ class GameActivity : AppCompatActivity() {
     private var currentState: GameStatusResponse? = null
 
     private var isMyTurn = false
+
+    private var previousRoundNumber = 0
+    private var isAnimatingRoundEnd = false
+    private var cachedRoundPlays: List<RoundPlay> = emptyList()
+    private var cachedMyPos: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +88,7 @@ class GameActivity : AppCompatActivity() {
         slotPartner = findViewById(R.id.slotPartner)
         slotLeft = findViewById(R.id.slotLeft)
         slotRight = findViewById(R.id.slotRight)
+        slotTrump = findViewById(R.id.slotTrump)
 
         slotPartnerName = findViewById(R.id.slotPartnerName)
         slotLeftName = findViewById(R.id.slotLeftName)
@@ -179,15 +190,18 @@ class GameActivity : AppCompatActivity() {
         // Show trump card
         if (state.trump != null) {
             val trumpId = state.trump.toIntOrNull()
-
-            val display =
-                if (trumpId != null) CardMapper.getCard(trumpId)
-                else state.trump
-
-            txtTrump.text = "Trump: $display"
-            txtTrump.visibility = View.VISIBLE
+            if (trumpId != null && slotTrump.childCount == 0) {
+                val trumpCard = Card(
+                    state.trump,
+                    CardMapper.getCardSuitName(trumpId),
+                    CardMapper.getCardRankName(trumpId)
+                )
+                addTrumpCardToSlot(trumpCard)
+            }
+            slotTrump.visibility = View.VISIBLE
         } else {
-            txtTrump.visibility = View.GONE
+            slotTrump.removeAllViews()
+            slotTrump.visibility = View.GONE
         }
 
         txtRound.text = "Round: ${state.currentRound}/10"
@@ -359,6 +373,18 @@ class GameActivity : AppCompatActivity() {
     }
 
     private fun playCard(card: Card) {
+        val myPos = currentState?.players
+            ?.find { it.name == playerName }
+            ?.position
+
+        // Only add if not already in cache (avoid duplicates)
+        if (cachedRoundPlays.none { it.player == playerName && it.card == card.id }) {
+            val myPlay = RoundPlay(playerName, card.id, myPos)
+            cachedRoundPlays = cachedRoundPlays + myPlay
+            cachedMyPos = myPos
+        }
+        val slot = getSlotForPosition(myPos, myPos)
+        addCardToSlot(slot, card)
 
         lifecycleScope.launch {
             try {
@@ -435,14 +461,31 @@ class GameActivity : AppCompatActivity() {
 
     private fun updateTableCards(roundPlays: List<RoundPlay>) {
 
+        // Don't update while animating
+        if (isAnimatingRoundEnd) return
+
+        val currentRound = currentState?.currentRound ?: 1
+        val myPos = currentState?.players
+            ?.find { it.name == playerName }
+            ?.position
+
+        if (currentRound > previousRoundNumber && cachedRoundPlays.isNotEmpty()) {
+            displayCachedCardsAndAnimate()
+            previousRoundNumber = currentRound
+            return
+        }
+
+        if (roundPlays.isNotEmpty()) {
+            cachedRoundPlays = roundPlays.toList()
+            cachedMyPos = myPos
+        }
+
+        previousRoundNumber = currentRound
+
         slotPlayer.removeAllViews()
         slotPartner.removeAllViews()
         slotLeft.removeAllViews()
         slotRight.removeAllViews()
-
-        val myPos = currentState?.players
-            ?.find { it.name == playerName }
-            ?.position
 
         for (play in roundPlays) {
 
@@ -457,6 +500,96 @@ class GameActivity : AppCompatActivity() {
             val slot = getSlotForPosition(play.position, myPos)
             addCardToSlot(slot, card)
         }
+    }
+
+    private fun displayCachedCardsAndAnimate() {
+        isAnimatingRoundEnd = true
+
+        slotPlayer.removeAllViews()
+        slotPartner.removeAllViews()
+        slotLeft.removeAllViews()
+        slotRight.removeAllViews()
+
+        for (play in cachedRoundPlays) {
+            val id = play.card.toIntOrNull() ?: continue
+            val card = Card(
+                play.card,
+                CardMapper.getCardSuitName(id),
+                CardMapper.getCardRankName(id)
+            )
+            val slot = getSlotForPosition(play.position, cachedMyPos)
+            addCardToSlot(slot, card)
+        }
+
+
+        cachedRoundPlays = emptyList()
+
+        slotPlayer.postDelayed({
+            animateCardsToWinner()
+        }, 500)  // Show cards for 0.5 second before animating
+    }
+
+    private fun animateCardsToWinner() {
+        // Find winner's slot position (current player after round = winner)
+        val winnerName = currentState?.currentPlayer
+        val winnerPos = currentState?.players
+            ?.find { it.name == winnerName }
+            ?.position
+
+        val myPos = currentState?.players
+            ?.find { it.name == playerName }
+            ?.position
+
+        val targetSlot = getSlotForPosition(winnerPos, myPos)
+
+        // Get target coordinates (center of winner's slot)
+        val targetX = targetSlot.x + targetSlot.width / 2
+        val targetY = targetSlot.y + targetSlot.height / 2
+
+        val slots = listOf(slotPlayer, slotPartner, slotLeft, slotRight)
+        val animators = mutableListOf<Animator>()
+
+        for (slot in slots) {
+            if (slot.childCount == 0) continue
+
+            val cardView = slot.getChildAt(0)
+
+            // Calculate movement delta
+            val startX = slot.x + cardView.x
+            val startY = slot.y + cardView.y
+            val deltaX = targetX - startX - cardView.width / 2
+            val deltaY = targetY - startY - cardView.height / 2
+
+            val animX = ObjectAnimator.ofFloat(cardView, "translationX", 0f, deltaX)
+            val animY = ObjectAnimator.ofFloat(cardView, "translationY", 0f, deltaY)
+            val animAlpha = ObjectAnimator.ofFloat(cardView, "alpha", 1f, 0.3f)
+
+            animators.add(animX)
+            animators.add(animY)
+            animators.add(animAlpha)
+        }
+
+        if (animators.isEmpty()) {
+            isAnimatingRoundEnd = false
+            return
+        }
+
+        val animatorSet = AnimatorSet()
+        animatorSet.playTogether(animators)
+        animatorSet.duration = 500  // 500ms animation
+
+        animatorSet.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                // Clear table after animation
+                slotPlayer.removeAllViews()
+                slotPartner.removeAllViews()
+                slotLeft.removeAllViews()
+                slotRight.removeAllViews()
+                isAnimatingRoundEnd = false
+            }
+        })
+
+        animatorSet.start()
     }
 
     private fun getSlotForPosition(playPos: String?, myPos: String?): FrameLayout {
@@ -491,6 +624,22 @@ class GameActivity : AppCompatActivity() {
 
         slot.removeAllViews()
         slot.addView(view)
+    }
+
+    private fun addTrumpCardToSlot(card: Card) {
+        val view = LayoutInflater.from(this)
+            .inflate(R.layout.item_card_mvp, slotTrump, false)
+
+        val img = view.findViewById<ImageView>(R.id.cardImage)
+        img.setImageResource(getCardResource(card))
+
+        // Scale down the trump card slightly to differentiate
+        view.scaleX = 0.9f
+        view.scaleY = 0.9f
+        view.alpha = 0.85f
+
+        slotTrump.removeAllViews()
+        slotTrump.addView(view)
     }
 
     private fun getCardResource(card: Card): Int {
