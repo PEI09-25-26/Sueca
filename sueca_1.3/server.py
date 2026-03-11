@@ -2,7 +2,6 @@
 Simple Flask REST API Server for Sueca
 No WebSockets - just simple HTTP endpoints
 """
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from deck import Deck
