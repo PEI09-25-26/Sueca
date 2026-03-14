@@ -1,387 +1,366 @@
 """
 Simple Flask REST API Server for Sueca
-No WebSockets - just simple HTTP endpoints
+Supports multiple game rooms by game ID.
 """
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from deck import Deck
 from player_flask import Player
 from positions import Positions
 from card_mapper import CardMapper
-from random import shuffle
 import logging
 import requests
 import threading
+import uuid
 
 app = Flask(__name__)
 CORS(app)
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class GameState:
-    """Simple game state manager"""
-    
-    def __init__(self):
+    """Game state manager for a single room."""
+
+    def __init__(self, game_id):
+        self.game_id = game_id
         self.reset()
-    
+
     def reset(self):
         self.deck = Deck()
-        self.players = []  # List of Player objects
+        self.players = []
         self.max_players = 4
         self.trump_card = None
         self.trump_suit = None
         self.teams = [[], []]
-        self.scores = {}  # Individual player scores
-        self.team_scores = [0, 0]  # Team 1 and Team 2 scores
+        self.scores = {}
+        self.team_scores = [0, 0]
         self.positions = [Positions.NORTH, Positions.EAST, Positions.SOUTH, Positions.WEST]
+        self.available_team_positions = {
+            'team1': [Positions.NORTH, Positions.SOUTH],
+            'team2': [Positions.EAST, Positions.WEST],
+        }
         self.game_started = False
         self.phase = 'waiting'  # waiting, deck_cutting, trump_selection, playing, finished
         self.current_round = 1
-        self.round_plays = []  # Cards played in current round
-        self.round_suit = None  # Suit of first card in round
-        self.current_player = None  # Player whose turn it is
+        self.round_plays = []
+        self.round_suit = None
+        self.current_player = None
         self.last_winner = None
-        self.turn_order = []  # Order of players for current round
-        shuffle(self.positions)
-        self._push_state("game_reset")
-    
-    def add_player(self, name):
+        self.turn_order = []
+        self._push_state('game_reset')
+
+    _POSITION_MAP = {
+        'north': Positions.NORTH,
+        'south': Positions.SOUTH,
+        'east':  Positions.EAST,
+        'west':  Positions.WEST,
+    }
+    _TEAM1_POSITIONS = {Positions.NORTH, Positions.SOUTH}
+
+    def _normalize_position(self, position_choice):
+        if position_choice is None:
+            return None
+        return self._POSITION_MAP.get(str(position_choice).strip().lower())
+
+    def add_player(self, name, position_choice):
         if len(self.players) >= self.max_players:
-            return False, "Game is full"
-        
-        if any(p.player_name == name for p in self.players):
-            return False, "Name already taken"
-        
+            return False, 'Game is full', None
+
+        position = self._normalize_position(position_choice)
+        if not position:
+            return False, 'Invalid position. Choose NORTH, SOUTH, EAST, or WEST', None
+
+        team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+        if position not in self.available_team_positions[team_key]:
+            return False, f'Position {position.name} is already taken', None
+
         player = Player(name)
-        player.position = self.positions[len(self.players)]
+        player.player_id = uuid.uuid4().hex[:8]
+        player.position = position
+        self.available_team_positions[team_key].remove(position)
         self.players.append(player)
-        self.scores[name] = 0
-        
-        # Assign to team
-        if player.position in (Positions.NORTH, Positions.SOUTH):
+        self.scores[player.player_id] = 0
+
+        if team_key == 'team1':
             self.teams[0].append(player)
         else:
             self.teams[1].append(player)
-        
-        logger.info(f"Player {name} joined at position {player.position}")
-        
-        # Prepare for deck cutting when 4 players join
+
+        logger.info('Player %s joined game %s at position %s', name, self.game_id, player.position)
+
         if len(self.players) == self.max_players and not self.game_started:
             self.phase = 'deck_cutting'
             self.deck.shuffle_deck()
-            logger.info("All players joined - ready for deck cutting")
-        
-        self._push_state("player_joined")
-        return True, f"Joined as {player.position}"
-    
-    def cut_deck(self, player_name, cut_index):
-        """NORTH player cuts the deck at given index"""
-        player = self.get_player(player_name)
+            logger.info('Game %s ready for deck cutting', self.game_id)
+
+        self._push_state('player_joined')
+        return True, f'Joined as {player.position}', player.player_id
+
+    def get_player(self, player_id):
+        for player in self.players:
+            if getattr(player, 'player_id', None) == player_id:
+                return player
+        return None
+
+    def cut_deck(self, player_id, cut_index):
+        player = self.get_player(player_id)
         if not player:
-            return False, "Player not found"
-        
+            return False, 'Player not found'
+
         if player.position != Positions.NORTH:
-            return False, "Only NORTH player can cut deck"
-        
+            return False, 'Only NORTH player can cut deck'
+
         if self.phase != 'deck_cutting':
-            return False, "Not in deck cutting phase"
-        
+            return False, 'Not in deck cutting phase'
+
         try:
             cut_index = int(cut_index)
             if cut_index < 1 or cut_index > 40:
-                return False, "Cut index must be between 1 and 40"
+                return False, 'Cut index must be between 1 and 40'
         except ValueError:
-            return False, "Cut index must be a number"
-        
-        self.deck.cut_deck(cut_index)
-        logger.info(f"Deck cut by {player_name} at index {cut_index}")
-        
-        # Move to trump selection phase
-        self.phase = 'trump_selection'
+            return False, 'Cut index must be a number'
 
-        self._push_state("deck_cut")
-        return True, f"Deck cut at index {cut_index}"
-    
-    def select_trump(self, player_name, choice):
-        """WEST player selects trump card (top or bottom)"""
-        player = self.get_player(player_name)
+        self.deck.cut_deck(cut_index)
+        logger.info('Deck cut by %s at index %s in game %s', player.player_name, cut_index, self.game_id)
+
+        self.phase = 'trump_selection'
+        self._push_state('deck_cut')
+        return True, f'Deck cut at index {cut_index}'
+
+    def select_trump(self, player_id, choice):
+        player = self.get_player(player_id)
         if not player:
-            return False, "Player not found"
-        
+            return False, 'Player not found'
+
         if player.position != Positions.WEST:
-            return False, "Only WEST player can select trump"
-        
+            return False, 'Only WEST player can select trump'
+
         if self.phase != 'trump_selection':
-            return False, "Not in trump selection phase"
-        
+            return False, 'Not in trump selection phase'
+
         if choice.lower() == 'top':
             self.trump_card = self.deck.cards[0]
         elif choice.lower() == 'bottom':
             self.trump_card = self.deck.cards[-1]
         else:
             return False, "Choice must be 'top' or 'bottom'"
-        
+
         self.trump_suit = CardMapper.get_card_suit(self.trump_card)
-        logger.info(f"Trump selected by {player_name}: {CardMapper.get_card(self.trump_card)}")
-        
-        # Now deal cards and start game
+        logger.info('Trump selected by %s in game %s: %s', player.player_name, self.game_id, CardMapper.get_card(self.trump_card))
+
         self._deal_cards()
         self.phase = 'playing'
         self.game_started = True
-        
-        self._push_state("trump_selected")
-        return True, f"Trump card is {CardMapper.get_card(self.trump_card)}"
-    
+
+        self._push_state('trump_selected')
+        return True, f'Trump card is {CardMapper.get_card(self.trump_card)}'
+
     def _deal_cards(self):
-        """Internal method to deal cards to all players"""
         for player in self.players:
             player.hand = sorted([self.deck.cards.pop(0) for _ in range(10)])
-        
-        # Set starting player to SOUTH
+
         for player in self.players:
             if player.position == Positions.SOUTH:
                 self.last_winner = player
                 self.current_player = player
                 break
-        
-        # Set initial turn order
+
         self._set_turn_order()
-    
+
     def _set_turn_order(self):
-        """Set turn order starting from last winner"""
         if not self.last_winner:
             return
 
-        # Define counter-clockwise position order
         position_order = [Positions.NORTH, Positions.WEST, Positions.SOUTH, Positions.EAST]
-        # Sort players by position (counter-clockwise)
         sorted_players = sorted(self.players, key=lambda p: position_order.index(p.position))
-        # Find winner's index in the sorted list
         start_index = sorted_players.index(self.last_winner)
-        # Rotate to start from winner
         self.turn_order = sorted_players[start_index:] + sorted_players[:start_index]
 
         if self.turn_order:
             self.current_player = self.turn_order[0]
-    
+
     def start_game(self):
-        """Legacy method - now handled by cut_deck -> select_trump flow"""
         if self.game_started:
-            return False, "Game already started"
+            return False, 'Game already started'
         if len(self.players) < self.max_players:
-            return False, f"Need {self.max_players} players"
-        
+            return False, f'Need {self.max_players} players'
+
         if self.phase == 'deck_cutting':
-            return False, "Waiting for NORTH player to cut deck"
-        
+            return False, 'Waiting for NORTH player to cut deck'
+
         if self.phase == 'trump_selection':
             return False, "Waiting for WEST player to select trump (top/bottom)"
-        
-        return False, "Game cannot be started in current phase"
-    
 
-    def get_player(self, name):
-        for player in self.players:
-            if player.player_name == name:
-                return player
-        return None
-    
+        return False, 'Game cannot be started in current phase'
+
     def _can_play_card(self, player, card_id):
-        """Check if player can play this card (prevent renounce)"""
         if not self.round_suit:
-            # First card of round, any card is valid
             return True
-        
+
         card_suit = CardMapper.get_card_suit(card_id)
-        
-        # Check if player has cards of round suit
-        has_round_suit = any(
-            CardMapper.get_card_suit(c) == self.round_suit for c in player.hand
-        )
-        
-        # If playing round suit, always valid
+        has_round_suit = any(CardMapper.get_card_suit(c) == self.round_suit for c in player.hand)
+
         if card_suit == self.round_suit:
             return True
-        
-        # If not playing round suit but player has round suit cards, invalid (renounce!)
+
         if has_round_suit:
             return False
-        
-        # Player doesn't have round suit, can play anything
+
         return True
-    
+
     def _determine_round_winner(self):
-        """Determine who won the round"""
         if len(self.round_plays) != 4:
             return None
-        
-        # Check if any trump cards were played
+
         trump_played = [
-            play for play in self.round_plays 
+            play for play in self.round_plays
             if CardMapper.get_card_suit(int(play['card'])) == self.trump_suit
         ]
-        
+
         if trump_played:
-            # Highest trump wins
             winner_play = max(trump_played, key=lambda p: int(p['card']))
         else:
-            # Highest card of round suit wins
             round_suit_plays = [
                 play for play in self.round_plays
                 if CardMapper.get_card_suit(int(play['card'])) == self.round_suit
             ]
             winner_play = max(round_suit_plays, key=lambda p: int(p['card']))
-        
-        return self.get_player(winner_play['player'])
-    
+
+        return self.get_player(winner_play['player_id'])
+
     def _calculate_round_points(self):
-        """Calculate total points in the round"""
         total = 0
         for play in self.round_plays:
             total += CardMapper.get_card_points(int(play['card']))
         return total
-    
+
     def _finish_round(self):
-        """Finish the round and update scores"""
         winner = self._determine_round_winner()
         if not winner:
             return
-        
+
         points = self._calculate_round_points()
-        
-        # Add points to winner's team
+
         if winner in self.teams[0]:
             self.team_scores[0] += points
-            team_name = "Team 1 (N/S)"
+            team_name = 'Team 1 (N/S)'
         else:
             self.team_scores[1] += points
-            team_name = "Team 2 (E/W)"
-        
-        logger.info(f"Round {self.current_round} won by {winner.player_name} - {points} points to {team_name}")
-        
-        # UNCOMMENT FOR DEBUG
-        # positions_dict = {p.player_name: str(p.position) for p in self.players}
-        # print(f"\n=== Round {self.current_round} Ended ===")
-        # print(f"Player Positions BEFORE SETTING THEM AGAIN: {positions_dict}")
-        # print(f"Next starter: {winner.player_name}")
+            team_name = 'Team 2 (E/W)'
 
+        logger.info(
+            'Round %s won by %s in game %s - %s points to %s',
+            self.current_round,
+            winner.player_name,
+            self.game_id,
+            points,
+            team_name,
+        )
 
-        # Prepare for next round
         self.last_winner = winner
         self.current_round += 1
         self.round_plays = []
         self.round_suit = None
-        
-        # Check if game is over
+
         if self.current_round > 10:
             self.phase = 'finished'
             self.game_started = False
         else:
-            print("ENTERED _SET_TURN_ORDER()")
             self._set_turn_order()
-        
+
         event = {
-            "type": "round_end",
-            "round": self.current_round - 1,
-            "winner": winner.player_name,
-            "game_finished": self.phase == "finished",
-            "state": self.get_state()
+            'type': 'round_end',
+            'round': self.current_round - 1,
+            'winner': winner.player_name,
+            'winner_id': winner.player_id,
+            'game_finished': self.phase == 'finished',
+            'state': self.get_state(),
+            'game_id': self.game_id,
         }
         try:
-            requests.post(
-                "http://localhost:8000/game/event",
-                json=event,
-                timeout=0.3
-            )
-        except:
+            requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
+        except Exception:
             pass
-    
-    def play_card(self, player_name, card_str):
-        player = self.get_player(player_name)
+
+    def play_card(self, player_id, card_str):
+        player = self.get_player(player_id)
         if not player:
-            return False, "Player not found"
-        
-        # Check if it's this player's turn
+            return False, 'Player not found'
+
         if self.current_player != player:
-            return False, f"Not your turn! Waiting for {self.current_player.player_name}"
-        
-        # Find card in hand
+            return False, f'Not your turn! Waiting for {self.current_player.player_name}'
+
         card = None
         for c in player.hand:
             if str(c) == card_str:
                 card = c
                 break
-        
+
         if card is None:
-            return False, "Card not in hand"
-        
-        # Check if card can be played (prevent renounce)
+            return False, 'Card not in hand'
+
         if not self._can_play_card(player, card):
-            return False, f"You must follow suit {self.round_suit}!"
-        
-        # Play the card
+            return False, f'You must follow suit {self.round_suit}!'
+
         player.hand.remove(card)
-        self.round_plays.append({'player': player_name, 'card': str(card), 'position': str(player.position)})
-        
-        # Set round suit if this is first card
+        self.round_plays.append({
+            'player_id': player.player_id,
+            'player_name': player.player_name,
+            'card': str(card),
+            'position': str(player.position)
+        })
+
         if len(self.round_plays) == 1:
             self.round_suit = CardMapper.get_card_suit(card)
-        
-        logger.info(f"{player_name} played {CardMapper.get_card(card)}")
-        
-        # Move to next player in turn order
+
+        logger.info('%s played %s in game %s', player.player_name, CardMapper.get_card(card), self.game_id)
+
         current_index = self.turn_order.index(player)
         if current_index + 1 < len(self.turn_order):
-            print("THIS IS HERE BECAUSE I AM VERY COOL I AM PRINTING THIS HELLLLLO")
             self.current_player = self.turn_order[current_index + 1]
 
-        success = True
-        if success:
-            event = {
-                "type": "card_played",
-                "player": player_name,
-                "card": card_str,
-                "state": self.get_state()
-            }
-            try:
-                requests.post(
-                    "http://localhost:8000/game/event",
-                    json=event,
-                    timeout=0.5
-                )
-            except:
-                pass
-        
-        # Check if round is complete
+        event = {
+            'type': 'card_played',
+            'player': player.player_name,
+            'player_id': player.player_id,
+            'card': card_str,
+            'state': self.get_state(),
+            'game_id': self.game_id,
+        }
+        try:
+            requests.post('http://localhost:8000/game/event', json=event, timeout=0.5)
+        except Exception:
+            pass
+
         if len(self.round_plays) == 4:
             threading.Timer(1.69, self._finish_round).start()
-        
-        return True, f"Played {CardMapper.get_card(card)}"
-    
+
+        return True, f'Played {CardMapper.get_card(card)}'
+
     def get_state(self):
-        # Find NORTH and WEST players
         north_player = None
+        north_player_id = None
         west_player = None
+        west_player_id = None
         for p in self.players:
             if p.position == Positions.NORTH:
                 north_player = p.player_name
+                north_player_id = p.player_id
             elif p.position == Positions.WEST:
                 west_player = p.player_name
-        
-        # Get last round winner info
-        last_round_info = None
-        if self.round_plays and len(self.round_plays) == 0 and self.current_round > 1:
-            # Show previous round result
-            pass
-        
+                west_player_id = p.player_id
+
         return {
+            'game_id': self.game_id,
             'players': [
                 {
+                    'id': p.player_id,
                     'name': p.player_name,
                     'position': str(p.position),
-                    'cards_left': len(p.hand)
+                    'cards_left': len(p.hand),
                 }
                 for p in self.players
             ],
@@ -389,139 +368,236 @@ class GameState:
             'game_started': self.game_started,
             'phase': self.phase,
             'north_player': north_player,
+            'north_player_id': north_player_id,
             'west_player': west_player,
+            'west_player_id': west_player_id,
             'current_player': self.current_player.player_name if self.current_player else None,
+            'current_player_name': self.current_player.player_name if self.current_player else None,
+            'current_player_id': self.current_player.player_id if self.current_player else None,
             'trump': str(self.trump_card) if self.trump_card else None,
             'trump_suit': self.trump_suit,
             'current_round': self.current_round,
             'round_suit': self.round_suit,
             'teams': {
                 'team1': [p.player_name for p in self.teams[0]],
-                'team2': [p.player_name for p in self.teams[1]]
+                'team2': [p.player_name for p in self.teams[1]],
             },
             'scores': self.scores,
             'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
-            'round_plays': self.round_plays
+            'round_plays': self.round_plays,
+            'available_slots': [
+                {'position': p.name, 'team': 'team1', 'team_label': 'N/S'}
+                for p in self.available_team_positions['team1']
+            ] + [
+                {'position': p.name, 'team': 'team2', 'team_label': 'E/W'}
+                for p in self.available_team_positions['team2']
+            ],
         }
-    
-    def _push_state(self, event_type="state_update"):
+
+    def _push_state(self, event_type='state_update'):
         event = {
-            "type": event_type,
-            "state": self.get_state()
+            'type': event_type,
+            'state': self.get_state(),
+            'game_id': self.game_id,
         }
 
         try:
-            requests.post(
-                "http://localhost:8000/game/event",
-                json=event,
-                timeout=0.3
-            )
-        except:
+            requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
+        except Exception:
             pass
 
 
-# Global game state
-game = GameState()
+class GameManager:
+    def __init__(self):
+        self.games = {}
+        self.default_game_id = 'default'
+        self._lock = threading.Lock()
+        self.games[self.default_game_id] = GameState(self.default_game_id)
+
+    def _generate_game_id(self):
+        while True:
+            candidate = uuid.uuid4().hex[:6].upper()
+            if candidate not in self.games:
+                return candidate
+
+    def get_game(self, game_id=None):
+        if not game_id:
+            return self.games.get(self.default_game_id)
+        return self.games.get(game_id)
+
+    def create_room(self):
+        with self._lock:
+            game_id = self._generate_game_id()
+            self.games[game_id] = GameState(game_id)
+            return game_id
+
+    def create_game(self, creator_name, position_choice):
+        with self._lock:
+            game_id = self._generate_game_id()
+            game = GameState(game_id)
+            success, message, player_id = game.add_player(creator_name, position_choice)
+            if not success:
+                return False, message, None
+
+            self.games[game_id] = game
+            return True, message, game_id, player_id
 
 
-# === API ENDPOINTS ===
+manager = GameManager()
+
+
+def _get_game_from_request(data=None):
+    game_id = None
+    if isinstance(data, dict):
+        game_id = data.get('game_id')
+    if not game_id:
+        game_id = request.args.get('game_id')
+
+    if not game_id:
+        game_id = manager.default_game_id
+
+    game = manager.get_game(game_id)
+    return game, game_id
+
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    """Get current game state"""
+    game, game_id = _get_game_from_request()
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
     return jsonify(game.get_state())
+
+
+@app.route('/api/create_room', methods=['POST'])
+def create_room_endpoint():
+    """Create an empty game room and return its ID."""
+    game_id = manager.create_room()
+    return jsonify({'success': True, 'game_id': game_id})
+
+
+@app.route('/api/create_game', methods=['POST'])
+def create_game():
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    position = data.get('position')
+
+    if not name:
+        return jsonify({'success': False, 'message': 'Name required'}), 400
+
+    success, message, game_id, player_id = manager.create_game(name, position)
+    return jsonify({'success': success, 'message': message, 'game_id': game_id, 'player_id': player_id})
 
 
 @app.route('/api/join', methods=['POST'])
 def join_game():
-    """Join the game"""
-    data = request.get_json()
-    name = data.get('name', '')
-    
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    position = data.get('position')
+    game_id = data.get('game_id') or manager.default_game_id
+
     if not name:
         return jsonify({'success': False, 'message': 'Name required'}), 400
-    
-    success, message = game.add_player(name)
-    return jsonify({'success': success, 'message': message})
+
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    success, message, player_id = game.add_player(name, position)
+    return jsonify({'success': success, 'message': message, 'game_id': game_id, 'player_id': player_id})
 
 
 @app.route('/api/start', methods=['POST'])
 def start_game():
-    """Start the game"""
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
     success, message = game.start_game()
     return jsonify({'success': success, 'message': message})
 
 
 @app.route('/api/cut_deck', methods=['POST'])
 def cut_deck():
-    """Cut the deck (NORTH player only)"""
-    data = request.get_json()
-    player_name = data.get('player')
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    player_id = data.get('player_id') or data.get('player')
     cut_index = data.get('index')
-    
-    if not player_name or not cut_index:
+
+    if not player_id or cut_index is None:
         return jsonify({'success': False, 'message': 'Player and index required'}), 400
-    
-    success, message = game.cut_deck(player_name, cut_index)
+
+    success, message = game.cut_deck(player_id, cut_index)
     return jsonify({'success': success, 'message': message})
 
 
 @app.route('/api/select_trump', methods=['POST'])
 def select_trump():
-    """Select trump card (WEST player only)"""
-    data = request.get_json()
-    player_name = data.get('player')
-    choice = data.get('choice')  # 'top' or 'bottom'
-    
-    if not player_name or not choice:
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    player_id = data.get('player_id') or data.get('player')
+    choice = data.get('choice')
+
+    if not player_id or not choice:
         return jsonify({'success': False, 'message': 'Player and choice required'}), 400
-    
-    success, message = game.select_trump(player_name, choice)
+
+    success, message = game.select_trump(player_id, choice)
     return jsonify({'success': success, 'message': message})
 
 
+@app.route('/api/hand/<player_id>', methods=['GET'])
+def get_hand(player_id):
+    game, game_id = _get_game_from_request()
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
 
-
-
-@app.route('/api/hand/<player_name>', methods=['GET'])
-def get_hand(player_name):
-    """Get player's hand"""
-    player = game.get_player(player_name)
+    player = game.get_player(player_id)
     if not player:
         return jsonify({'success': False, 'message': 'Player not found'}), 404
-    
-    return jsonify({
-        'success': True,
-        'hand': [str(c) for c in player.hand]
-    })
+
+    return jsonify({'success': True, 'hand': [str(c) for c in player.hand]})
 
 
 @app.route('/api/play', methods=['POST'])
 def play_card():
-    """Play a card"""
-    data = request.get_json()
-    player_name = data.get('player')
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    player_id = data.get('player_id') or data.get('player')
     card = data.get('card')
-    
-    if not player_name or not card:
+
+    if not player_id or card is None:
         return jsonify({'success': False, 'message': 'Player and card required'}), 400
-    
-    success, message = game.play_card(player_name, card)
+
+    success, message = game.play_card(player_id, str(card))
     return jsonify({'success': success, 'message': message})
 
 
 @app.route('/api/reset', methods=['POST'])
 def reset_game():
-    """Reset the game"""
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
     game.reset()
     return jsonify({'success': True, 'message': 'Game reset'})
 
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("Sueca Game Server")
-    print("=" * 50)
-    print("Server running on http://localhost:5000")
-    print("Press Ctrl+C to stop")
+    print('=' * 50)
+    print('Sueca Game Server')
+    print('=' * 50)
+    print('Server running on http://localhost:5000')
+    print('Use /api/create_game to create isolated rooms')
+    print('Press Ctrl+C to stop')
     print()
     app.run(host='0.0.0.0', port=5000, debug=False)

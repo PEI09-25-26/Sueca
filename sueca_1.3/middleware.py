@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 import requests
 from fastapi import WebSocket
 import json
@@ -42,8 +42,9 @@ async def receive_event(event: dict):
     return {"ok": True}
 
 @app.get("/game/status")
-def get_status():
-    response = requests.get(f"{GAME_SERVER_URL}/api/status")
+def get_status(game_id: str | None = Query(default=None)):
+    params = {"game_id": game_id} if game_id else None
+    response = requests.get(f"{GAME_SERVER_URL}/api/status", params=params)
     return response.json()
 
 
@@ -84,9 +85,11 @@ def play_card(payload: dict):
 
 
 @app.get("/game/hand/{player_name}")
-def get_hand(player_name: str):
+def get_hand(player_name: str, game_id: str | None = Query(default=None)):
+    params = {"game_id": game_id} if game_id else None
     response = requests.get(
-        f"{GAME_SERVER_URL}/api/hand/{player_name}"
+        f"{GAME_SERVER_URL}/api/hand/{player_name}",
+        params=params,
     )
     return response.json()
 
