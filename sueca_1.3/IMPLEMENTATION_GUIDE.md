@@ -4,29 +4,34 @@
 
 Complete the classes in this order:
 
-### 1. **CardAnalyzer** (START HERE) ⭐
+### 1. **CardAnalyzer** (DONE) 
 - **Why first?** No dependencies, pure logic functions
 - **File:** `card_analyzer.py`
 - **Key concepts:** Card strength, legal plays, winning calculations
 - **Time:** ~30-45 minutes
 
-### 2. **GameStateTracker** (SECOND)
+### 2. **GameStateTracker** (DONE)
 - **Why second?** Uses only CardAnalyzer, builds game knowledge
 - **File:** `game_state_tracker.py`
 - **Key concepts:** State management, team tracking, card inference
 - **Time:** ~45-60 minutes
 
-### 3. **DecisionMaker** (THIRD)
+### 3. **DecisionMaker** (DONE)
 - **Why third?** Uses both previous classes to make decisions
 - **File:** `decision_maker.py`
 - **Key concepts:** Heuristics, strategy, card selection
 - **Time:** ~30-45 minutes
 
-### 4. **WeakAgent** (LAST)
+### 4. **WeakAgent** (DONE)
 - **Why last?** Orchestrates everything, handles server communication
 - **File:** `agent1.py`
 - **Key concepts:** Main loop, server API, automation
 - **Time:** ~20-30 minutes
+
+### 5. **Break** (IN PROGRESS) ⭐
+- **Why do it?** I'm tired man I need some coffee or something T-T
+- **Key concepts:** Food, coffee, break
+- **Time:** From when I hit push to when you respond with your own changes :D
 
 ---
 

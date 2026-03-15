@@ -113,91 +113,91 @@ def test_game_state_tracker():
     print("\n✓ GameStateTracker tests complete!\n")
 
 
-# def test_decision_maker():
-#     """Test DecisionMaker methods"""
-#     print("=" * 60)
-#     print("TESTING DECISION MAKER")
-#     print("=" * 60)
+def test_decision_maker():
+    """Test DecisionMaker methods"""
+    print("=" * 60)
+    print("TESTING DECISION MAKER")
+    print("=" * 60)
     
-#     tracker = GameStateTracker()
-#     tracker.trump_suit = "♠"
-#     tracker.my_hand = [0, 1, 2, 10, 20, 30, 35, 37, 38, 39]  # Mix of cards
-#     tracker.current_round = 1
+    tracker = GameStateTracker()
+    tracker.trump_suit = "♠"
+    tracker.my_hand = [0, 1, 2, 10, 20, 30, 35, 37, 38, 39]  # Mix of cards
+    tracker.current_round = 1
     
-#     decision_maker = DecisionMaker(tracker)
+    decision_maker = DecisionMaker(tracker)
     
-#     # Test 1: choose_deck_cut
-#     print("\n1. Testing choose_deck_cut()...")
-#     cut = decision_maker.choose_deck_cut()
-#     print(f"   Cut position: {cut} (should be 15-25)")
+    # Test 1: choose_deck_cut
+    print("\n1. Testing choose_deck_cut()...")
+    cut = decision_maker.choose_deck_cut()
+    print(f"   Cut position: {cut} (should be 15-25)")
     
-#     # Test 2: choose_trump_selection
-#     print("\n2. Testing choose_trump_selection()...")
-#     choice = decision_maker.choose_trump_selection()
-#     print(f"   Trump choice: {choice} (should be 'top' or 'bottom')")
+    # Test 2: choose_trump_selection
+    print("\n2. Testing choose_trump_selection()...")
+    choice = decision_maker.choose_trump_selection()
+    print(f"   Trump choice: {choice} (should be 'top' or 'bottom')")
+  
+    # Test 3: choose_card (when you implement it)
+    print("\n3. Testing choose_card()...")
+    print("   (Will work once you implement choose_card and helper methods)")
+    # Uncomment when ready:
+    # card = decision_maker.choose_card(tracker.my_hand)
+    # if card:
+    #     print(f"   Chose: {CardMapper.get_card(card)}")
     
-#     # Test 3: choose_card (when you implement it)
-#     print("\n3. Testing choose_card()...")
-#     print("   (Will work once you implement choose_card and helper methods)")
-#     # Uncomment when ready:
-#     # card = decision_maker.choose_card(tracker.my_hand)
-#     # if card:
-#     #     print(f"   Chose: {CardMapper.get_card(card)}")
-    
-#     print("\n✓ DecisionMaker tests complete!\n")
+    print("\n✓ DecisionMaker tests complete!\n")
 
 
-# def run_integration_test():
-#     """Full integration test"""
-#     print("=" * 60)
-#     print("INTEGRATION TEST")
-#     print("=" * 60)
-#     print("\nSimulating a game scenario...")
+def run_integration_test():
+    """Full integration test"""
+    print("=" * 60)
+    print("INTEGRATION TEST")
+    print("=" * 60)
+    print("\nSimulating a game scenario...")
     
-#     tracker = GameStateTracker()
-#     decision_maker = DecisionMaker(tracker)
+    tracker = GameStateTracker()
+    decision_maker = DecisionMaker(tracker)
     
-#     # Setup game state
-#     mock_state = {
-#         'players': [
-#             {'name': 'WeakAI', 'position': 'NORTH', 'cards_left': 10},
-#             {'name': 'Player2', 'position': 'EAST', 'cards_left': 10},
-#             {'name': 'Player3', 'position': 'SOUTH', 'cards_left': 10},
-#             {'name': 'Player4', 'position': 'WEST', 'cards_left': 10},
-#         ],
-#         'teams': {
-#             'team1': ['WeakAI', 'Player3'],
-#             'team2': ['Player2', 'Player4']
-#         },
-#         'trump_suit': '♠',
-#         'current_round': 5,
-#         'round_suit': '♥',
-#         'round_plays': [
-#             {'player': 'Player2', 'card': '18', 'position': 'EAST'},  # K♥
-#             {'player': 'Player3', 'card': '19', 'position': 'SOUTH'},  # A♥ (partner winning!)
-#         ],
-#         'team_scores': {'team1': 25, 'team2': 20},
-#         'current_player': 'WeakAI'
-#     }
+    # Setup game state
+    mock_state = {
+        'players': [
+            {'name': 'WeakAI', 'position': 'NORTH', 'cards_left': 10},
+            {'name': 'Player2', 'position': 'EAST', 'cards_left': 10},
+            {'name': 'Player3', 'position': 'SOUTH', 'cards_left': 10},
+            {'name': 'Player4', 'position': 'WEST', 'cards_left': 10},
+        ],
+        'teams': {
+            'team1': ['WeakAI', 'Player3'],
+            'team2': ['Player2', 'Player4']
+        },
+        'trump_suit': '♠',
+        'current_round': 5,
+        'round_suit': '♥',
+        'round_plays': [
+            {'player': 'Player2', 'card': '18', 'position': 'EAST'},  # K♥
+            {'player': 'Player3', 'card': '19', 'position': 'SOUTH'},  # A♥ (partner winning!)
+        ],
+        'team_scores': {'team1': 25, 'team2': 20},
+        'current_player': 'WeakAI'
+    }
     
-#     tracker.update_from_state(mock_state, 'WeakAI')
-#     tracker.update_my_hand(['10', '11', '15', '25', '30', '35', '38', '39'])
+    tracker.update_from_state(mock_state, 'WeakAI')
+    tracker.update_my_hand(['10', '11', '15', '25', '30', '35', '38', '39'])
     
-#     print(f"Trump: {tracker.trump_suit}")
-#     print(f"Lead suit: {tracker.lead_suit}")
-#     print(f"Partner winning? {tracker.is_partner_winning()}")
-#     print(f"Trick points: {tracker.get_trick_points()}")
-#     print(f"My hand: {[CardMapper.get_card(c) for c in tracker.my_hand]}")
+    print(f"Trump: {tracker.trump_suit}")
+    print(f"Lead suit: {tracker.lead_suit}")
+    print(f"Partner winning? {tracker.is_partner_winning()}")
+    print(f"Trick points: {tracker.get_trick_points()}")
+    print(f"My hand: {[CardMapper.get_card(c) for c in tracker.my_hand]}")
     
-#     # Try to make a decision (when you implement it)
-#     print("\nAttempting to choose a card...")
-#     # Uncomment when ready:
-#     # card = decision_maker.choose_card(tracker.my_hand)
-#     # if card:
-#     #     print(f"Decision: Play {CardMapper.get_card(card)}")
-#     #     print("(Since partner is winning with A♥, should play low card!)")
+    # Try to make a decision (when you implement it)
+    print("\nAttempting to choose a card...")
+    # Uncomment when ready:
+    card = decision_maker.choose_card(tracker.my_hand)
+    if card:
+        print(f"Decision: Play {CardMapper.get_card(card)}")
+        print("(Since partner is winning with A♥, should play low card!)")
     
-#     print("\n✓ Integration test complete!\n")
+    print("\n✓ Integration test complete!\n")
 
 
 if __name__ == "__main__":
@@ -215,15 +215,15 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ GameStateTracker tests failed: {e}\n")
     
-    # try:
-    #     test_decision_maker()
-    # except Exception as e:
-    #     print(f"❌ DecisionMaker tests failed: {e}\n")
+    try:
+        test_decision_maker()
+    except Exception as e:
+        print(f"❌ DecisionMaker tests failed: {e}\n")
     
-    # try:
-    #     run_integration_test()
-    # except Exception as e:
-    #     print(f"❌ Integration test failed: {e}\n")
+    try:
+        run_integration_test()
+    except Exception as e:
+        print(f"❌ Integration test failed: {e}\n")
     
     print("="*60)
     print("Testing complete! Fix any errors and re-run.")
