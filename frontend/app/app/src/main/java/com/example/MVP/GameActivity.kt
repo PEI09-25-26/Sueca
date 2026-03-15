@@ -47,6 +47,8 @@ class GameActivity : AppCompatActivity() {
     private lateinit var rvHand: RecyclerView
 
     private var playerName: String = ""
+    private var playerId: String = ""
+    private var gameId: String = ""
     private var pollingJob: Job? = null
 
     private var myHand: List<String> = emptyList()
@@ -64,6 +66,8 @@ class GameActivity : AppCompatActivity() {
         setContentView(R.layout.activity_game_mvp)
 
         playerName = intent.getStringExtra("playerName") ?: ""
+        playerId = intent.getStringExtra("playerId") ?: ""
+        gameId = intent.getStringExtra("roomId") ?: ""
 
         if (playerName.isEmpty()) {
             Toast.makeText(this, "Player name required!", Toast.LENGTH_SHORT).show()
@@ -136,7 +140,7 @@ class GameActivity : AppCompatActivity() {
 
     private suspend fun fetchGameState() {
         try {
-            val state = RetrofitClient.api.getStatus()
+            val state = RetrofitClient.api.getStatus(gameId.ifBlank { null })
             currentState = state
             updateUI(state)
         } catch (e: Exception) {
@@ -146,7 +150,8 @@ class GameActivity : AppCompatActivity() {
 
     private suspend fun fetchHand() {
         try {
-            val response = RetrofitClient.api.getHand(playerName)
+            val handOwner = if (playerId.isNotBlank()) playerId else playerName
+            val response = RetrofitClient.api.getHand(handOwner, gameId.ifBlank { null })
 
             if (response.success) {
                 myHand = response.hand
@@ -207,7 +212,10 @@ class GameActivity : AppCompatActivity() {
         txtRound.text = "Round: ${state.currentRound}/10"
         txtRound.visibility = if (state.phase == "playing") View.VISIBLE else View.GONE
 
-        isMyTurn = state.currentPlayer == playerName
+        isMyTurn = when {
+            playerId.isNotBlank() -> state.currentPlayerId == playerId
+            else -> state.currentPlayer == playerName
+        }
 
         if (state.phase == "playing" && state.currentPlayer != null) {
 
@@ -253,14 +261,14 @@ class GameActivity : AppCompatActivity() {
                 "Waiting for ${4 - state.playerCount} more player(s)..."
 
             "deck_cutting" -> {
-                if (state.northPlayer == playerName)
+                if ((playerId.isNotBlank() && state.northPlayerId == playerId) || state.northPlayer == playerName)
                     "You are NORTH. Cut the deck (1-40)"
                 else
                     "Waiting for ${state.northPlayer}..."
             }
 
             "trump_selection" -> {
-                if (state.westPlayer == playerName)
+                if ((playerId.isNotBlank() && state.westPlayerId == playerId) || state.westPlayer == playerName)
                     "You are WEST. Choose trump"
                 else
                     "Waiting for ${state.westPlayer}..."
@@ -284,7 +292,7 @@ class GameActivity : AppCompatActivity() {
 
         actionsLayout.removeAllViews()
 
-        if (state.phase == "deck_cutting" && state.northPlayer == playerName) {
+        if (state.phase == "deck_cutting" && ((playerId.isNotBlank() && state.northPlayerId == playerId) || state.northPlayer == playerName)) {
 
             val btn = Button(this)
             btn.text = "Cut Deck"
@@ -293,7 +301,7 @@ class GameActivity : AppCompatActivity() {
             actionsLayout.addView(btn)
         }
 
-        if (state.phase == "trump_selection" && state.westPlayer == playerName) {
+        if (state.phase == "trump_selection" && ((playerId.isNotBlank() && state.westPlayerId == playerId) || state.westPlayer == playerName)) {
 
             val top = Button(this)
             top.text = "TOP"
@@ -336,7 +344,11 @@ class GameActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val res = RetrofitClient.api.cutDeck(
-                    CutDeckRequest(playerName, index)
+                    CutDeckRequest(
+                        playerId = if (playerId.isNotBlank()) playerId else playerName,
+                        index = index,
+                        gameId = gameId.ifBlank { null }
+                    )
                 )
 
                 Toast.makeText(
@@ -357,7 +369,11 @@ class GameActivity : AppCompatActivity() {
             try {
 
                 val res = RetrofitClient.api.selectTrump(
-                    SelectTrumpRequest(playerName, choice)
+                    SelectTrumpRequest(
+                        playerId = if (playerId.isNotBlank()) playerId else playerName,
+                        choice = choice,
+                        gameId = gameId.ifBlank { null }
+                    )
                 )
 
                 Toast.makeText(
@@ -378,8 +394,8 @@ class GameActivity : AppCompatActivity() {
             ?.position
 
         // Only add if not already in cache (avoid duplicates)
-        if (cachedRoundPlays.none { it.player == playerName && it.card == card.id }) {
-            val myPlay = RoundPlay(playerName, card.id, myPos)
+        if (cachedRoundPlays.none { it.playerName == playerName && it.card == card.id }) {
+            val myPlay = RoundPlay(playerName = playerName, card = card.id, position = myPos)
             cachedRoundPlays = cachedRoundPlays + myPlay
             cachedMyPos = myPos
         }
@@ -390,7 +406,11 @@ class GameActivity : AppCompatActivity() {
             try {
 
                 val res = RetrofitClient.api.playCard(
-                    PlayRequest(playerName, card.id)
+                    PlayRequest(
+                        playerId = if (playerId.isNotBlank()) playerId else playerName,
+                        card = card.id,
+                        gameId = gameId.ifBlank { null }
+                    )
                 )
 
                 Toast.makeText(

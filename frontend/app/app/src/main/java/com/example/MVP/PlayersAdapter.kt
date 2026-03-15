@@ -20,6 +20,8 @@ class PlayersAdapter(private val players: List<Player>) : RecyclerView.Adapter<P
     override fun getItemCount(): Int = players.size
 
     override fun onBindViewHolder(holder: VH, position: Int) {
-        holder.name.text = players[position].name
+        val player = players[position]
+        val pos = player.position?.takeIf { it.isNotBlank() }
+        holder.name.text = if (pos != null) "${player.name} ($pos)" else player.name
     }
 }

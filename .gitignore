@@ -3,10 +3,16 @@
 .envrc
 .venv
 .venv/
+**/.venv/
 env/
+**/env/
 ENV/
+**/ENV/
 env.bak/
 venv.bak/
+venv
+venv/
+**/venv/
 
 # Python cache
 __pycache__/

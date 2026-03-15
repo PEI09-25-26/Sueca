@@ -22,20 +22,181 @@
         android:textSize="18sp"
         android:layout_marginTop="8dp"/>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerPlayers"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="12dp"/>
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnStart"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:text="Atualizar / Testar"
-        app:backgroundTint="@color/orange"
+    <TextView
+        android:id="@+id/txtSeatHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Escolhe o teu lugar (+)"
         android:textColor="@android:color/white"
-        app:cornerRadius="10dp"/>
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <RelativeLayout
+        android:id="@+id/seatChooserLayout"
+        android:layout_width="match_parent"
+        android:layout_height="586dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/section_outline"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/seatNorthLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:text="N"
+            android:textColor="@android:color/white"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSeatNorth"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_below="@id/seatNorthLabel"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="4dp"
+            android:text="+"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            app:backgroundTint="#33FFFFFF"
+            app:cornerRadius="24dp"
+            app:rippleColor="#66FFFFFF" />
+
+        <TextView
+            android:id="@+id/txtSeatNorthPlayer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/btnSeatNorth"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxWidth="120dp"
+            android:singleLine="true"
+            android:text="Livre"
+            android:textColor="@android:color/white"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/seatSouthLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:text="S"
+            android:textColor="@android:color/white"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSeatSouth"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_above="@id/seatSouthLabel"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="4dp"
+            android:text="+"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            app:backgroundTint="#33FFFFFF"
+            app:cornerRadius="24dp"
+            app:rippleColor="#66FFFFFF" />
+
+        <TextView
+            android:id="@+id/txtSeatSouthPlayer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@id/btnSeatSouth"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="4dp"
+            android:ellipsize="end"
+            android:maxWidth="120dp"
+            android:singleLine="true"
+            android:text="Livre"
+            android:textColor="@android:color/white"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/seatWestLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:text="W"
+            android:textColor="@android:color/white"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSeatWest"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="12dp"
+            android:layout_toEndOf="@id/seatWestLabel"
+            android:text="+"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            app:backgroundTint="#33FFFFFF"
+            app:cornerRadius="24dp"
+            app:rippleColor="#66FFFFFF" />
+
+        <TextView
+            android:id="@+id/txtSeatWestPlayer"
+            android:layout_width="72dp"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/btnSeatWest"
+            android:layout_marginStart="0dp"
+            android:layout_marginTop="0dp"
+            android:layout_toEndOf="@id/seatWestLabel"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="2"
+            android:text="Livre"
+            android:textColor="@android:color/white"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/seatEastLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:text="E"
+            android:textColor="@android:color/white"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSeatEast"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="12dp"
+            android:layout_toStartOf="@id/seatEastLabel"
+            android:text="+"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            app:backgroundTint="#33FFFFFF"
+            app:cornerRadius="24dp"
+            app:rippleColor="#66FFFFFF" />
+
+        <TextView
+            android:id="@+id/txtSeatEastPlayer"
+            android:layout_width="72dp"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/btnSeatEast"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="0dp"
+            android:layout_toStartOf="@id/seatEastLabel"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="2"
+            android:text="Livre"
+            android:textColor="@android:color/white"
+            android:textSize="12sp" />
+
+    </RelativeLayout>
 
 </LinearLayout>

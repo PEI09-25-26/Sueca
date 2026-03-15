@@ -3,12 +3,10 @@ package com.example.MVP
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
-import android.widget.EditText
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.example.MVP.models.CreateRoomRequest
-import com.example.MVP.models.JoinRoomRequest
 import com.example.MVP.models.StartGameRequest
 import com.example.MVP.network.RetrofitClient
 import kotlinx.coroutines.launch
@@ -19,44 +17,20 @@ class MainMenuActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main_menu_mvp)
 
-        val inputName = findViewById<EditText>(R.id.inputName)
-        val inputRoom = findViewById<EditText>(R.id.inputRoom)
         val btnJoin = findViewById<Button>(R.id.btnJoin)
         val btnVision = findViewById<Button>(R.id.btnVision)
 
-        // Direct join to game server (like client.py)
         btnJoin.setOnClickListener {
-            val name = inputName.text.toString().ifBlank { "Player${(1000..9999).random()}" }
-            
-            lifecycleScope.launch {
-                try {
-                    // Join game directly via middleware -> server
-                    val response = RetrofitClient.api.joinGame(mapOf("name" to name))
-                    
-                    if (response.success) {
-                        Toast.makeText(this@MainMenuActivity, response.message ?: "Joined!", Toast.LENGTH_SHORT).show()
-                        goToGame(name)
-                    } else {
-                        Toast.makeText(this@MainMenuActivity, "Error: ${response.message}", Toast.LENGTH_SHORT).show()
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    Toast.makeText(
-                        this@MainMenuActivity,
-                        "Connection error. Check if server is running.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
+            showModeDialog()
         }
 
         btnVision.setOnClickListener {
-            val name = inputName.text.toString().ifBlank { "Player${(1000..9999).random()}" }
-            val roomId = inputRoom.text.toString().ifBlank { null }
+            val name = randomName()
+            val roomId: String? = null
 
             lifecycleScope.launch {
                 try {
-                    // Call middleware to start the game with CV
+                    // Calling the middleware
                     val response = RetrofitClient.api.startGame(
                         StartGameRequest(playerName = name, roomId = roomId)
                     )
@@ -125,5 +99,35 @@ class MainMenuActivity : AppCompatActivity() {
         intent.putExtra("roomId", "SALA_LOCAL")
         intent.putExtra("playerId", "ID_LOCAL")
         startActivity(intent)
+    }
+
+    private fun showModeDialog() {
+        // Use explicit dialog buttons so mode choices are always visible.
+        AlertDialog.Builder(this)
+            .setTitle("Escolher modo")
+            .setItems(arrayOf("Local", "Online")) { _, which ->
+                when (which) {
+                    0 -> joinLocalGame()
+                    1 -> openOnlineMenu()
+                }
+            }
+            .show()
+    }
+
+    private fun joinLocalGame() {
+        // Local mode should not depend on backend endpoints.
+        val intent = Intent(this, RoomActivity::class.java)
+        intent.putExtra("roomId", "SALA_LOCAL")
+        intent.putExtra("playerId", "ID_LOCAL")
+        startActivity(intent)
+    }
+
+    private fun openOnlineMenu() {
+        val intent = Intent(this, OnlineMenuActivity::class.java)
+        startActivity(intent)
+    }
+
+    private fun randomName(): String {
+        return "Player${(1000..9999).random()}"
     }
 }

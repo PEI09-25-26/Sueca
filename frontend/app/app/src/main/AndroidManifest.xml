@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.CAMERA"/>
 
-    <!-- Declare that the app uses the camera feature -->
+    <!-- Needed for using camera-->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
 
     <application
@@ -15,7 +15,6 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.Sueca">
 
-        <!-- LAUNCHER ACTIVITY — TEM DE TER EXPORTED="true" -->
         <activity
             android:name="com.example.MVP.MainMenuActivity"
             android:exported="true">
@@ -28,6 +27,10 @@
 
         <activity
             android:name="com.example.MVP.RoomActivity"
+            android:exported="false"/>
+
+        <activity
+            android:name="com.example.MVP.OnlineMenuActivity"
             android:exported="false"/>
 
         <activity
