@@ -142,26 +142,37 @@ class GameState:
             return False, 'Not in trump selection phase'
 
         if choice.lower() == 'top':
-            self.trump_card = self.deck.cards[0]
+            self.trump_card = self.deck.cards.pop(0)
         elif choice.lower() == 'bottom':
-            self.trump_card = self.deck.cards[-1]
+            self.trump_card = self.deck.cards.pop(-1)
         else:
             return False, "Choice must be 'top' or 'bottom'"
 
         self.trump_suit = CardMapper.get_card_suit(self.trump_card)
         logger.info('Trump selected by %s in game %s: %s', player.player_name, self.game_id, CardMapper.get_card(self.trump_card))
 
-        self._deal_cards()
+        self._deal_cards(player) # Pass the WEST player to ensure they get the card
         self.phase = 'playing'
         self.game_started = True
 
         self._push_state('trump_selected')
         return True, f'Trump card is {CardMapper.get_card(self.trump_card)}'
 
-    def _deal_cards(self):
+    def _deal_cards(self, dealer):
+        # Deal 9 cards to everyone first (to keep one slot open for dealer's trump)
         for player in self.players:
-            player.hand = sorted([self.deck.cards.pop(0) for _ in range(10)])
+            player.hand = [self.deck.cards.pop(0) for _ in range(9)]
+        
+        # Give the dealer the trump card + 9 cards (total 10)
+        # Sort hands at the end
+        for player in self.players:
+            if player == dealer:
+                player.hand.append(self.trump_card)
+            else:
+                player.hand.append(self.deck.cards.pop(0))
+            player.hand.sort()
 
+        # SOUTH always starts in this implementation
         for player in self.players:
             if player.position == Positions.SOUTH:
                 self.last_winner = player
