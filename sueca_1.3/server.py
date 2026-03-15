@@ -468,6 +468,30 @@ def get_status():
     return jsonify(game.get_state())
 
 
+@app.route('/api/room/<game_id>/lobby', methods=['GET'])
+def get_room_lobby(game_id):
+    """Get room information before joining (available seats and teams)."""
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    state = game.get_state()
+    available_slots = state.get('available_slots', [])
+
+    return jsonify({
+        'success': True,
+        'game_id': game_id,
+        'phase': state.get('phase'),
+        'player_count': state.get('player_count', 0),
+        'max_players': game.max_players,
+        'available_slots': available_slots,
+        'teams': {
+            'team1': state.get('teams', {}).get('team1', []),
+            'team2': state.get('teams', {}).get('team2', []),
+        },
+    })
+
+
 @app.route('/api/create_room', methods=['POST'])
 def create_room_endpoint():
     """Create an empty game room and return its ID."""
