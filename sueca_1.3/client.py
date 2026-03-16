@@ -117,6 +117,22 @@ class GameClient:
         except Exception as e:
             return None, f'Error: {e}'
 
+    def get_match_points(self):
+        try:
+            response = requests.get(f'{SERVER_URL}/api/room/{self.game_id}/match_points', timeout=2)
+            data = response.json()
+            return data.get('success', False), data
+        except Exception as e:
+            return False, {'message': f'Error: {e}'}
+
+    def request_rematch(self):
+        try:
+            response = requests.post(f'{SERVER_URL}/api/room/{self.game_id}/rematch', timeout=2)
+            data = response.json()
+            return data.get('success', False), data.get('message', 'Unknown error')
+        except Exception as e:
+            return False, f'Error: {e}'
+
     def _prompt_position_choice(self, available_slots):
         if not available_slots:
             return None
@@ -271,7 +287,15 @@ class GameClient:
                     print(f'TEAM 2 WINS! ({team2_score} vs {team1_score})')
                 else:
                     print(f'TIE! ({team1_score} vs {team2_score})')
-                print('Type quit to exit')
+
+                match_points = state.get('match_points')
+                if match_points:
+                    print()
+                    print('MATCH WINS (1 victory = 1 point):')
+                    print(f"  Team 1 (N/S): {match_points.get('team1', 0)}")
+                    print(f"  Team 2 (E/W): {match_points.get('team2', 0)}")
+
+                print('Commands: rematch | score | quit')
             else:
                 print('Type quit to exit')
             print('> ', end='', flush=True)
@@ -373,6 +397,7 @@ class GameClient:
                         (state.get('phase') == 'deck_cutting' and state.get('north_player_id') == self.player_id)
                         or (state.get('phase') == 'trump_selection' and state.get('west_player_id') == self.player_id)
                         or (state.get('phase') == 'playing' and state.get('current_player_id') == self.player_id)
+                        or (state.get('phase') == 'finished')
                     )
 
                     if is_my_action:
@@ -388,6 +413,34 @@ class GameClient:
                     break
 
                 if not state:
+                    continue
+
+                if state.get('phase') == 'finished':
+                    if user_input in ('rematch', 'r'):
+                        success, message = self.request_rematch()
+                        with self.display_lock:
+                            if success:
+                                print(f'\n[SUCCESS] {message}')
+                                self.pause_updates = False
+                            else:
+                                print(f'\n[ERROR] {message}')
+                            print('> ', end='', flush=True)
+                    elif user_input in ('score', 's'):
+                        success, data = self.get_match_points()
+                        with self.display_lock:
+                            if success:
+                                points = data.get('points', {})
+                                print('\n[MATCH SCOREBOARD]')
+                                print(f"Team 1 (N/S): {points.get('team1', 0)}")
+                                print(f"Team 2 (E/W): {points.get('team2', 0)}")
+                                print(f"Matches played: {data.get('matches_played', 0)}")
+                            else:
+                                print(f"\n[ERROR] {data.get('message', 'Could not get score')}")
+                            print('> ', end='', flush=True)
+                    else:
+                        with self.display_lock:
+                            print('\n[ERROR] Use: rematch | score | quit')
+                            print('> ', end='', flush=True)
                     continue
 
                 if state.get('phase') == 'deck_cutting':

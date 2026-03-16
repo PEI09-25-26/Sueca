@@ -13,6 +13,7 @@ import logging
 import requests
 import threading
 import uuid
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 CORS(app)
@@ -50,7 +51,35 @@ class GameState:
         self.current_player = None
         self.last_winner = None
         self.turn_order = []
+        self.match_history = []
+        self.match_points = {'team1': 0, 'team2': 0}
+        self.next_match_number = 1
+        self.current_match_number = None
         self._push_state('game_reset')
+
+    def _prepare_new_match(self):
+        self.deck = Deck()
+        self.trump_card = None
+        self.trump_suit = None
+        self.team_scores = [0, 0]
+        self.game_started = False
+        self.current_round = 1
+        self.round_plays = []
+        self.round_suit = None
+        self.current_player = None
+        self.last_winner = None
+        self.turn_order = []
+
+        for player in self.players:
+            player.hand = []
+
+        if len(self.players) == self.max_players:
+            self.phase = 'deck_cutting'
+            self.deck.shuffle_deck()
+            self.current_match_number = self.next_match_number
+            self.next_match_number += 1
+        else:
+            self.phase = 'waiting'
 
     _POSITION_MAP = {
         'north': Positions.NORTH,
@@ -94,6 +123,8 @@ class GameState:
         if len(self.players) == self.max_players and not self.game_started:
             self.phase = 'deck_cutting'
             self.deck.shuffle_deck()
+            self.current_match_number = self.next_match_number
+            self.next_match_number += 1
             logger.info('Game %s ready for deck cutting', self.game_id)
 
         self._push_state('player_joined')
@@ -279,6 +310,22 @@ class GameState:
         if self.current_round > 10:
             self.phase = 'finished'
             self.game_started = False
+
+            match_winner_team = None
+            if self.team_scores[0] > self.team_scores[1]:
+                match_winner_team = 'team1'
+                self.match_points['team1'] += 1
+            elif self.team_scores[1] > self.team_scores[0]:
+                match_winner_team = 'team2'
+                self.match_points['team2'] += 1
+
+            self.match_history.append({
+                'match_number': self.current_match_number,
+                'winner_team': match_winner_team,
+                'winner_label': 'Team 1 (N/S)' if match_winner_team == 'team1' else ('Team 2 (E/W)' if match_winner_team == 'team2' else 'draw'),
+                'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
+                'finished_at': datetime.now(timezone.utc).isoformat(),
+            })
         else:
             self._set_turn_order()
 
@@ -351,6 +398,17 @@ class GameState:
 
         return True, f'Played {CardMapper.get_card(card)}'
 
+    def rematch(self):
+        if len(self.players) < self.max_players:
+            return False, f'Need {self.max_players} players for rematch'
+
+        if self.phase not in ('finished', 'waiting'):
+            return False, 'Rematch is only available after a finished game'
+
+        self._prepare_new_match()
+        self._push_state('rematch_ready')
+        return True, f'Rematch #{self.current_match_number} ready'
+
     def get_state(self):
         north_player = None
         north_player_id = None
@@ -395,6 +453,10 @@ class GameState:
             },
             'scores': self.scores,
             'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
+            'match_points': self.match_points,
+            'matches_played': len(self.match_history),
+            'current_match_number': self.current_match_number,
+            'last_match': self.match_history[-1] if self.match_history else None,
             'round_plays': self.round_plays,
             'available_slots': [
                 {'position': p.name, 'team': 'team1', 'team_label': 'N/S'}
@@ -501,6 +563,57 @@ def get_room_lobby(game_id):
             'team2': state.get('teams', {}).get('team2', []),
         },
     })
+
+
+@app.route('/api/room/<game_id>/history', methods=['GET'])
+def get_room_history(game_id):
+    """Get all finished matches for a room."""
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    return jsonify({
+        'success': True,
+        'game_id': game_id,
+        'matches_played': len(game.match_history),
+        'history': game.match_history,
+    })
+
+
+@app.route('/api/room/<game_id>/match_points', methods=['GET'])
+def get_room_match_points(game_id):
+    """Get number of match wins per team for a room (1 win = 1 point)."""
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    return jsonify({
+        'success': True,
+        'game_id': game_id,
+        'points': {
+            'team1': game.match_points['team1'],
+            'team2': game.match_points['team2'],
+        },
+        'teams': {
+            'team1': [p.player_name for p in game.teams[0]],
+            'team2': [p.player_name for p in game.teams[1]],
+        },
+        'matches_played': len(game.match_history),
+    })
+
+
+@app.route('/api/room/<game_id>/rematch', methods=['POST'])
+def start_room_rematch(game_id):
+    """Start a new match in the same room with the same 4 players/positions."""
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    success, message = game.rematch()
+    if not success:
+        return jsonify({'success': False, 'message': message}), 400
+
+    return jsonify({'success': True, 'message': message, 'state': game.get_state()})
 
 
 @app.route('/api/create_room', methods=['POST'])
