@@ -89,6 +89,23 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/headerInfo" />
 
+    <TextView
+        android:id="@+id/txtEndBanner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="#33FFD700"
+        android:gravity="center"
+        android:padding="10dp"
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/txtCurrentPlayer"
+        tools:text="TEAM 1 (N/S) WINS\nFinal score: 72 - 48\nMatch points: 2 - 1" />
+
     <!-- Table Area -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/tableContainer"
@@ -98,7 +115,7 @@
         app:layout_constraintBottom_toTopOf="@+id/txtStatus"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/txtCurrentPlayer">
+        app:layout_constraintTop_toBottomOf="@+id/txtEndBanner">
 
         <FrameLayout
             android:id="@+id/slotPartner"

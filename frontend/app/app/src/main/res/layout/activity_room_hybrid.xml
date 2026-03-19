@@ -32,10 +32,21 @@
         android:textSize="15sp"
         android:textStyle="bold" />
 
+    <TextView
+        android:id="@+id/txtHybridMockInfo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Modo mock: sem backend"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        android:alpha="0.85" />
+
     <RelativeLayout
         android:id="@+id/seatChooserLayout"
         android:layout_width="match_parent"
-        android:layout_height="586dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:layout_marginTop="8dp"
         android:background="@drawable/section_outline"
         android:padding="16dp">
@@ -200,5 +211,17 @@
             android:textSize="12sp" />
 
     </RelativeLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnStartHybridGame"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="10dp"
+        android:text="Iniciar jogo hibrido"
+        android:textAllCaps="false"
+        android:textColor="@android:color/white"
+        app:backgroundTint="@color/teal_700"
+        app:cornerRadius="12dp"
+        android:visibility="gone"/>
 
 </LinearLayout>

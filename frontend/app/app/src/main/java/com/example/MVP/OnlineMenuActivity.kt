@@ -1,6 +1,7 @@
 package com.example.MVP
 
 import android.content.Intent
+import android.text.InputFilter
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -20,6 +21,25 @@ class OnlineMenuActivity : AppCompatActivity() {
         val inputRoomId = findViewById<EditText>(R.id.inputRoomId)
         val btnCreateRoom = findViewById<Button>(R.id.btnCreateRoom)
         val btnJoinRoom = findViewById<Button>(R.id.btnJoinRoom)
+
+        // Block spaces/newlines in both inputs.
+        val noWhitespaceFilter = InputFilter { source, start, end, _, _, _ ->
+            val filtered = StringBuilder()
+            for (i in start until end) {
+                val c = source[i]
+                if (!c.isWhitespace()) {
+                    filtered.append(c)
+                }
+            }
+            if (filtered.length == end - start) {
+                null
+            } else {
+                filtered.toString()
+            }
+        }
+
+        inputName.filters = arrayOf(noWhitespaceFilter)
+        inputRoomId.filters = arrayOf(noWhitespaceFilter, InputFilter.AllCaps())
 
         btnCreateRoom.setOnClickListener {
             val name = inputName.text.toString().ifBlank { randomName() }

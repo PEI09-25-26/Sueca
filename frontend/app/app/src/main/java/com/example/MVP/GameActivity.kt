@@ -43,6 +43,7 @@ class GameActivity : AppCompatActivity() {
     private lateinit var txtRound: TextView
     private lateinit var txtCurrentPlayer: TextView
     private lateinit var txtTeamScores: TextView
+    private lateinit var txtEndBanner: TextView
     private lateinit var actionsLayout: LinearLayout
     private lateinit var rvHand: RecyclerView
 
@@ -104,6 +105,7 @@ class GameActivity : AppCompatActivity() {
         txtRound = findViewById(R.id.txtRound)
         txtCurrentPlayer = findViewById(R.id.txtCurrentPlayer)
         txtTeamScores = findViewById(R.id.txtTeamScores)
+        txtEndBanner = findViewById(R.id.txtEndBanner)
 
         actionsLayout = findViewById(R.id.layoutActions)
 
@@ -186,7 +188,7 @@ class GameActivity : AppCompatActivity() {
             "deck_cutting" -> "Deck Cutting"
             "trump_selection" -> "Trump Selection"
             "playing" -> "Round ${state.currentRound}/10"
-            "finished" -> "Game Finished"
+            "finished" -> "Match Finished"
             else -> state.phase
         }
 
@@ -248,8 +250,34 @@ class GameActivity : AppCompatActivity() {
         updateTableCards(state.roundPlays)
         updateStatusText(state)
         updateActionButtons(state)
+        updateFinishedBanner(state)
 
         cardsAdapter.isEnabled = isMyTurn && state.phase == "playing"
+    }
+
+    private fun updateFinishedBanner(state: GameStatusResponse) {
+        if (state.phase != "finished") {
+            txtEndBanner.visibility = View.GONE
+            return
+        }
+
+        val team1 = state.teamScores?.team1 ?: 0
+        val team2 = state.teamScores?.team2 ?: 0
+        val winnerText = when {
+            team1 > team2 -> "TEAM 1 (N/S) WINS"
+            team2 > team1 -> "TEAM 2 (E/W) WINS"
+            else -> "DRAW"
+        }
+
+        val match = state.matchPoints
+        val matchLine = if (match != null) {
+            "\nMatch points: ${match.team1} - ${match.team2}"
+        } else {
+            ""
+        }
+
+        txtEndBanner.text = "$winnerText\nFinal score: $team1 - $team2$matchLine"
+        txtEndBanner.visibility = View.VISIBLE
     }
 
     // Status message shown to the player
@@ -313,6 +341,71 @@ class GameActivity : AppCompatActivity() {
 
             actionsLayout.addView(top)
             actionsLayout.addView(bottom)
+        }
+
+        if (state.phase == "finished" && gameId.isNotBlank()) {
+            val rematch = Button(this)
+            rematch.text = "Rematch"
+            rematch.setOnClickListener { requestRematch() }
+
+            val score = Button(this)
+            score.text = "Match Score"
+            score.setOnClickListener { showMatchScoreDialog() }
+
+            actionsLayout.addView(rematch)
+            actionsLayout.addView(score)
+        }
+    }
+
+    private fun requestRematch() {
+        if (gameId.isBlank()) return
+
+        lifecycleScope.launch {
+            try {
+                val res = RetrofitClient.api.requestRematch(gameId)
+                Toast.makeText(
+                    this@GameActivity,
+                    res.message ?: if (res.success) "Rematch requested" else "Rematch failed",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@GameActivity, "Rematch error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun showMatchScoreDialog() {
+        if (gameId.isBlank()) return
+
+        lifecycleScope.launch {
+            try {
+                val response = RetrofitClient.api.getMatchPoints(gameId)
+                if (!response.success) {
+                    Toast.makeText(
+                        this@GameActivity,
+                        response.message ?: "Could not load match score",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                val points = response.points
+                val team1 = points?.team1 ?: 0
+                val team2 = points?.team2 ?: 0
+                val matchesPlayed = response.matchesPlayed ?: 0
+
+                AlertDialog.Builder(this@GameActivity)
+                    .setTitle("Match Scoreboard")
+                    .setMessage(
+                        "Team 1 (N/S): $team1\n" +
+                            "Team 2 (E/W): $team2\n\n" +
+                            "Matches played: $matchesPlayed"
+                    )
+                    .setPositiveButton("OK", null)
+                    .show()
+            } catch (e: Exception) {
+                Toast.makeText(this@GameActivity, "Score error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

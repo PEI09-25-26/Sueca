@@ -7,6 +7,22 @@
     android:layout_height="match_parent"
     android:padding="24dp">
 
+    <ImageView
+        android:id="@+id/backButton"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:src="@drawable/ic_back_arrow"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Lobby Hibrido"
+        android:textColor="@android:color/white"
+        android:textStyle="bold"
+        android:textSize="22sp"
+        android:layout_marginBottom="12dp"/>
+
     <LinearLayout
         android:id="@+id/createRoomContainer"
         android:layout_width="match_parent"
@@ -20,7 +36,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Criar sala"
+            android:text="Criar sala hibrida"
             android:textColor="@android:color/white"
             android:textSize="20sp"
             android:textStyle="bold"
@@ -30,7 +46,7 @@
             android:id="@+id/btnCreateRoom"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:text="Criar sala"
+            android:text="Criar sala mock"
             android:textAllCaps="false"
             app:backgroundTint="@color/orange"
             android:textColor="@android:color/white"
@@ -65,7 +81,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Entrar sala"
+            android:text="Entrar sala hibrida"
             android:textColor="@android:color/white"
             android:textSize="20sp"
             android:textStyle="bold"

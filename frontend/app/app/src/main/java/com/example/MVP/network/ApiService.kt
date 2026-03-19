@@ -37,6 +37,14 @@ interface ApiService {
     @POST("/api/reset")
     suspend fun resetGame(): GenericResponse
 
+    // =========== /api/room Endpoints ============
+
+    @GET("/api/room/{gameId}/match_points")
+    suspend fun getMatchPoints(@Path("gameId") gameId: String): MatchPointsResponse
+
+    @POST("/api/room/{gameId}/rematch")
+    suspend fun requestRematch(@Path("gameId") gameId: String): GenericResponse
+
     @POST("/api/start")
     suspend fun startGame(@Body request: StartGameRequest): StartGameResponse
 

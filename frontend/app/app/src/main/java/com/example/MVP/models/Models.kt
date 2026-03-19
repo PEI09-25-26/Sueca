@@ -30,7 +30,8 @@ data class GameStatusResponse(
     @SerializedName("round_suit") val roundSuit: String?,
     @SerializedName("game_started") val gameStarted: Boolean,
     val scores: Map<String, Int>?,
-    @SerializedName("available_slots") val availableSlots: List<LobbySlot>? = emptyList()
+    @SerializedName("available_slots") val availableSlots: List<LobbySlot>? = emptyList(),
+    @SerializedName("match_points") val matchPoints: MatchPoints? = null
 )
 
 data class GamePlayer(
@@ -60,6 +61,23 @@ data class Teams(
 data class TeamScores(
     val team1: Int,
     val team2: Int
+)
+
+data class MatchPoints(
+    val team1: Int,
+    val team2: Int
+)
+
+data class MatchPointsPayload(
+    val points: MatchPoints,
+    @SerializedName("matches_played") val matchesPlayed: Int
+)
+
+data class MatchPointsResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val points: MatchPoints? = null,
+    @SerializedName("matches_played") val matchesPlayed: Int? = null
 )
 
 // ============ Requests ============

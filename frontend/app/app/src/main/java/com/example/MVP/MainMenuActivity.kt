@@ -19,6 +19,7 @@ class MainMenuActivity : AppCompatActivity() {
 
         val btnJoin = findViewById<Button>(R.id.btnJoin)
         val btnVision = findViewById<Button>(R.id.btnVision)
+        val btnHybrid = findViewById<Button>(R.id.btnHybrid)
 
         btnJoin.setOnClickListener {
             showModeDialog()
@@ -77,6 +78,11 @@ class MainMenuActivity : AppCompatActivity() {
                     ).show()
                 }
             }
+        }
+
+        btnHybrid.setOnClickListener {
+            val intent = Intent(this, HybridMenuActivity::class.java)
+            startActivity(intent)
         }
     }
 
