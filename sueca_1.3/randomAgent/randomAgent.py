@@ -3,8 +3,8 @@ RandomAgent - AI agent that plays Sueca using heuristics
 """
 from client import GameClient
 from ..game_state_tracker import GameStateTracker
+from ..card_mapper import CardMapper
 from decision_maker import DecisionMaker
-from card_mapper import CardMapper
 import random
 import time
 

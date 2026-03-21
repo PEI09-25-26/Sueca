@@ -130,4 +130,4 @@ class DecisionMaker:
         Choose deck cutting position (1-40).
         (Used if agent is NORTH player)
         """
-        return random.randint(15, 25)
+        return random.randint(1, 40)
