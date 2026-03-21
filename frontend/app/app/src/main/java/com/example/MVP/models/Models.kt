@@ -175,3 +175,24 @@ data class JoinGameResponse(
     @SerializedName("game_id") val gameId: String?,
     @SerializedName("player_id") val playerId: String?
 )
+
+data class AddBotRequest(
+    @SerializedName("player_id") val playerId: String,
+    @SerializedName("game_id") val gameId: String,
+    val position: String,
+    val difficulty: String,
+    val name: String
+)
+
+data class AddBotResponse(
+    val success: Boolean,
+    val message: String?,
+    @SerializedName("game_id") val gameId: String?,
+    @SerializedName("player_id") val playerId: String?
+)
+
+data class RemoveParticipantRequest(
+    @SerializedName("actor_id") val actorId: String,
+    @SerializedName("target_id") val targetId: String,
+    @SerializedName("game_id") val gameId: String
+)

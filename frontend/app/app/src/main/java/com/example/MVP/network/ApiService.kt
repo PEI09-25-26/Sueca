@@ -48,6 +48,12 @@ interface ApiService {
     @POST("/api/start")
     suspend fun startGame(@Body request: StartGameRequest): StartGameResponse
 
+    @POST("/api/add_bot")
+    suspend fun addBot(@Body request: AddBotRequest): AddBotResponse
+
+    @POST("/api/the_council_has_decided_your_fate")
+    suspend fun removeParticipant(@Body request: RemoveParticipantRequest): GenericResponse
+
     // =========== /room Endpoints ============
 
     @POST("/room/create")
