@@ -133,6 +133,8 @@ class RoomHybridActivity : AppCompatActivity() {
         intent.putExtra("playerName", playerName)
         intent.putExtra("seat", selectedSeat)
         intent.putExtra("isHost", isHost)
+        // Mock value for now. Later this should come from room state/backend.
+        intent.putExtra("virtualPhonePlayers", if (isHost) 1 else 0)
         startActivity(intent)
         finish()
     }
