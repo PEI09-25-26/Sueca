@@ -3,6 +3,7 @@ package com.example.MVP
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.View
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.TextView
@@ -16,7 +17,11 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.Card
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class HybridActivity : AppCompatActivity() {
 
@@ -25,17 +30,40 @@ class HybridActivity : AppCompatActivity() {
     private lateinit var previewView: PreviewView
     private lateinit var mesaContainer: ConstraintLayout
     private lateinit var handRecyclerView: RecyclerView
+    private lateinit var recognitionOverlay: View
+    private lateinit var recognitionStateImage: ImageView
+    private lateinit var recognitionProgressText: TextView
 
     private lateinit var handAdapter: CardsAdapter
     private var isHost: Boolean = false
+    private var virtualPhonePlayers: Int = 0
+    private var isRecognitionRunning: Boolean = false
+    private var recognitionJob: Job? = null
+
+    private val cardsPerVirtualPlayer = 10
+    private val virtualHands = mutableMapOf<Int, MutableList<Card>>()
 
     private val cameraPermissionRequestCode = 11
+
+    private val recognitionPool = listOf(
+        Card("1", "clubs", "ace"),
+        Card("2", "hearts", "7"),
+        Card("3", "spades", "king"),
+        Card("4", "diamonds", "2"),
+        Card("5", "hearts", "jack"),
+        Card("6", "clubs", "5"),
+        Card("7", "spades", "3"),
+        Card("8", "diamonds", "queen"),
+        Card("9", "clubs", "6"),
+        Card("10", "hearts", "ace")
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_hybrid)
 
         isHost = intent.getBooleanExtra("isHost", false)
+        virtualPhonePlayers = intent.getIntExtra("virtualPhonePlayers", if (isHost) 1 else 0)
 
         findViewById<ImageView>(R.id.backButton).setOnClickListener { finish() }
 
@@ -44,10 +72,17 @@ class HybridActivity : AppCompatActivity() {
         previewView = findViewById(R.id.previewView)
         mesaContainer = findViewById(R.id.mesaContainer)
         handRecyclerView = findViewById(R.id.playerHandRecyclerView)
+        recognitionOverlay = findViewById(R.id.recognitionOverlay)
+        recognitionStateImage = findViewById(R.id.imgRecognitionState)
+        recognitionProgressText = findViewById(R.id.txtRecognitionProgress)
 
         setupMockedTable()
         setupMockedPhoneHand()
         setupSwitch()
+
+        if (shouldRunRecognitionFlow()) {
+            startRecognitionMock()
+        }
 
         if (allPermissionsGranted()) {
             startCameraPreview()
@@ -66,13 +101,21 @@ class HybridActivity : AppCompatActivity() {
             if (isChecked) {
                 modeSwitch.text = "Mesa ativa"
                 modeText.text = "Modo atual: mesa"
-                previewView.visibility = android.view.View.GONE
-                mesaContainer.visibility = android.view.View.VISIBLE
+                previewView.visibility = View.GONE
+                recognitionOverlay.visibility = View.GONE
+                mesaContainer.visibility = View.VISIBLE
             } else {
                 modeSwitch.text = "Camera ativa"
                 modeText.text = "Modo atual: camera"
-                previewView.visibility = android.view.View.VISIBLE
-                mesaContainer.visibility = android.view.View.GONE
+                mesaContainer.visibility = View.GONE
+
+                if (isRecognitionRunning) {
+                    previewView.visibility = View.GONE
+                    recognitionOverlay.visibility = View.VISIBLE
+                } else {
+                    previewView.visibility = View.VISIBLE
+                    recognitionOverlay.visibility = View.GONE
+                }
 
                 if (allPermissionsGranted()) {
                     startCameraPreview()
@@ -98,25 +141,8 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private fun setupMockedPhoneHand() {
-        val handCards = if (isHost) {
-            // Host view should keep the phone hand hidden.
-            List(10) { index ->
-                Card((index + 1).toString(), "hidden", "hidden")
-            }
-        } else {
-            listOf(
-                Card("1", "clubs", "ace"),
-                Card("2", "hearts", "7"),
-                Card("3", "spades", "king"),
-                Card("4", "diamonds", "2"),
-                Card("5", "hearts", "jack"),
-                Card("6", "clubs", "5"),
-                Card("7", "spades", "3"),
-                Card("8", "diamonds", "queen"),
-                Card("9", "clubs", "6"),
-                Card("10", "hearts", "ace")
-            )
-        }
+        // In hybrid recognition flow, cards are appended one-by-one as they are recognized.
+        val handCards = emptyList<Card>()
 
         handAdapter = CardsAdapter(
             handCards
@@ -127,6 +153,84 @@ class HybridActivity : AppCompatActivity() {
         handAdapter.isEnabled = false
         handRecyclerView.layoutManager = GridLayoutManager(this, 5)
         handRecyclerView.adapter = handAdapter
+    }
+
+    private fun shouldRunRecognitionFlow(): Boolean {
+        // Host: receives cards for each virtual phone player.
+        // Virtual phone player: receives own 10 cards one by one.
+        return if (isHost) virtualPhonePlayers > 0 else true
+    }
+
+    private fun startRecognitionMock() {
+        if (isRecognitionRunning) return
+
+        isRecognitionRunning = true
+        modeSwitch.isEnabled = false
+        modeSwitch.isChecked = false
+        modeSwitch.text = "Camera ativa"
+        modeText.text = "Modo atual: camera"
+
+        previewView.visibility = View.GONE
+        mesaContainer.visibility = View.GONE
+        recognitionOverlay.visibility = View.VISIBLE
+
+        recognitionJob = lifecycleScope.launch {
+            var recognizedTotal = 0
+            val playersToProcess = if (isHost) {
+                virtualPhonePlayers.coerceAtLeast(1)
+            } else {
+                1
+            }
+            val totalToRecognize = playersToProcess * cardsPerVirtualPlayer
+
+            for (playerIndex in 1..playersToProcess) {
+                val hand = virtualHands.getOrPut(playerIndex) { mutableListOf() }
+
+                for (cardSlot in 1..cardsPerVirtualPlayer) {
+                    // Eye icon while waiting for the next card to be shown to camera.
+                    recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+                    recognitionProgressText.text = if (isHost) {
+                        "Mostra ao telemovel a carta $cardSlot/$cardsPerVirtualPlayer"
+                    } else {
+                        "A aguardar carta $cardSlot/$cardsPerVirtualPlayer"
+                    }
+                    delay(600)
+
+                    val card = recognitionPool[(recognizedTotal) % recognitionPool.size]
+                    hand.add(mapCardForCurrentRole(card))
+                    recognizedTotal += 1
+
+                    updateVirtualHandUI(playerIndex)
+
+                    // Show success for 2 seconds after each recognized card.
+                    recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check)
+                    recognitionProgressText.text =
+                        "Carta reconhecida ($recognizedTotal/$totalToRecognize)"
+                    delay(2000)
+                }
+            }
+
+            isRecognitionRunning = false
+            modeSwitch.isEnabled = true
+            recognitionOverlay.visibility = View.GONE
+            previewView.visibility = View.VISIBLE
+            recognitionProgressText.text = "Reconhecimento terminado"
+        }
+    }
+
+    private fun updateVirtualHandUI(playerIndex: Int) {
+        val cards = virtualHands[playerIndex].orEmpty()
+        handAdapter.updateCards(cards)
+    }
+
+    private fun mapCardForCurrentRole(card: Card): Card {
+        return if (isHost) {
+            // Host should only see card backs while helping to recognize virtual player's hand.
+            Card(card.id, "hidden", "hidden")
+        } else {
+            // Virtual player sees the actual recognized cards.
+            card
+        }
     }
 
     private fun setCardResource(viewId: Int, cardName: String) {
@@ -168,6 +272,11 @@ class HybridActivity : AppCompatActivity() {
     private fun allPermissionsGranted(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
+    }
+
+    override fun onDestroy() {
+        recognitionJob?.cancel()
+        super.onDestroy()
     }
 
     override fun onRequestPermissionsResult(

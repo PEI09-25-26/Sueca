@@ -9,10 +9,12 @@ from deck import Deck
 from player_flask import Player
 from positions import Positions
 from card_mapper import CardMapper
+from randomAgent.randomAgent import RandomAgent
 import logging
 import requests
 import threading
 import uuid
+import time
 from datetime import datetime, timezone
 
 app = Flask(__name__)
@@ -33,6 +35,7 @@ class GameState:
         self.deck = Deck()
         self.players = []
         self.max_players = 4
+        self.creator_id = None  # Track who created/owns the room
         self.trump_card = None
         self.trump_suit = None
         self.teams = [[], []]
@@ -55,9 +58,11 @@ class GameState:
         self.match_points = {'team1': 0, 'team2': 0}
         self.next_match_number = 1
         self.current_match_number = None
+        # Dealer rotates each match. Initial dealer is WEST to preserve current first-match behavior.
+        self.dealer_index = self.positions.index(Positions.WEST)
         self._push_state('game_reset')
 
-    def _prepare_new_match(self):
+    def _prepare_new_match(self, advance_dealer=False):
         self.deck = Deck()
         self.trump_card = None
         self.trump_suit = None
@@ -74,12 +79,27 @@ class GameState:
             player.hand = []
 
         if len(self.players) == self.max_players:
+            if advance_dealer:
+                self.dealer_index = (self.dealer_index + 1) % len(self.positions)
             self.phase = 'deck_cutting'
             self.deck.shuffle_deck()
             self.current_match_number = self.next_match_number
             self.next_match_number += 1
         else:
             self.phase = 'waiting'
+
+    def _current_dealer_position(self):
+        return self.positions[self.dealer_index]
+
+    def _current_cutter_position(self):
+        # Cutter is next clockwise from dealer in the configured position order.
+        return self.positions[(self.dealer_index + 1) % len(self.positions)]
+
+    def _get_player_by_position(self, position):
+        for player in self.players:
+            if player.position == position:
+                return player
+        return None
 
     _POSITION_MAP = {
         'north': Positions.NORTH,
@@ -130,6 +150,41 @@ class GameState:
         self._push_state('player_joined')
         return True, f'Joined as {player.position}', player.player_id
 
+    def remove_player(self, actor_id, target_id):
+        actor = self.get_player(actor_id)
+        if not actor:
+            return False, 'Actor player not found'
+
+        if actor_id != self.creator_id:
+            return False, 'Only the host can remove players'
+
+        target = self.get_player(target_id)
+        if not target:
+            return False, 'Target player not found'
+
+        if self.game_started:
+            return False, 'Cannot remove players after game has started'
+
+        if target_id == self.creator_id:
+            return False, 'Host cannot remove themselves'
+
+        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+        self.available_team_positions[team_key].append(target.position)
+        
+        self.players.remove(target)
+        if target in self.teams[0]:
+            self.teams[0].remove(target)
+        else:
+            self.teams[1].remove(target)
+        
+        if target_id in self.scores:
+            del self.scores[target_id]
+
+        logger.info('Player %s was removed from game %s by host %s', target.player_name, self.game_id, actor.player_name)
+
+        self._push_state('player_removed')
+        return True, f'Player {target.player_name} removed successfully'
+
     def get_player(self, player_id):
         for player in self.players:
             if getattr(player, 'player_id', None) == player_id:
@@ -141,8 +196,9 @@ class GameState:
         if not player:
             return False, 'Player not found'
 
-        if player.position != Positions.NORTH:
-            return False, 'Only NORTH player can cut deck'
+        required_cutter = self._current_cutter_position()
+        if player.position != required_cutter:
+            return False, f'Only {required_cutter.name} player can cut deck'
 
         if self.phase != 'deck_cutting':
             return False, 'Not in deck cutting phase'
@@ -166,8 +222,9 @@ class GameState:
         if not player:
             return False, 'Player not found'
 
-        if player.position != Positions.WEST:
-            return False, 'Only WEST player can select trump'
+        required_selector = self._current_dealer_position()
+        if player.position != required_selector:
+            return False, f'Only {required_selector.name} player can select trump'
 
         if self.phase != 'trump_selection':
             return False, 'Not in trump selection phase'
@@ -182,7 +239,7 @@ class GameState:
         self.trump_suit = CardMapper.get_card_suit(self.trump_card)
         logger.info('Trump selected by %s in game %s: %s', player.player_name, self.game_id, CardMapper.get_card(self.trump_card))
 
-        self._deal_cards(player) # Pass the WEST player to ensure they get the card
+        self._deal_cards(player)  # Pass dealer/selector so they receive the trump card
         self.phase = 'playing'
         self.game_started = True
 
@@ -231,10 +288,10 @@ class GameState:
             return False, f'Need {self.max_players} players'
 
         if self.phase == 'deck_cutting':
-            return False, 'Waiting for NORTH player to cut deck'
+            return False, f'Waiting for {self._current_cutter_position().name} player to cut deck'
 
         if self.phase == 'trump_selection':
-            return False, "Waiting for WEST player to select trump (top/bottom)"
+            return False, f"Waiting for {self._current_dealer_position().name} player to select trump (top/bottom)"
 
         return False, 'Game cannot be started in current phase'
 
@@ -405,22 +462,20 @@ class GameState:
         if self.phase not in ('finished', 'waiting'):
             return False, 'Rematch is only available after a finished game'
 
-        self._prepare_new_match()
+        self._prepare_new_match(advance_dealer=True)
         self._push_state('rematch_ready')
         return True, f'Rematch #{self.current_match_number} ready'
 
     def get_state(self):
-        north_player = None
-        north_player_id = None
-        west_player = None
-        west_player_id = None
-        for p in self.players:
-            if p.position == Positions.NORTH:
-                north_player = p.player_name
-                north_player_id = p.player_id
-            elif p.position == Positions.WEST:
-                west_player = p.player_name
-                west_player_id = p.player_id
+        cutter_position = self._current_cutter_position()
+        selector_position = self._current_dealer_position()
+        cutter_player = self._get_player_by_position(cutter_position)
+        selector_player = self._get_player_by_position(selector_position)
+
+        cutter_player_name = cutter_player.player_name if cutter_player else None
+        cutter_player_id = cutter_player.player_id if cutter_player else None
+        selector_player_name = selector_player.player_name if selector_player else None
+        selector_player_id = selector_player.player_id if selector_player else None
 
         return {
             'game_id': self.game_id,
@@ -436,10 +491,18 @@ class GameState:
             'player_count': len(self.players),
             'game_started': self.game_started,
             'phase': self.phase,
-            'north_player': north_player,
-            'north_player_id': north_player_id,
-            'west_player': west_player,
-            'west_player_id': west_player_id,
+            # Backward-compatible keys consumed by existing clients.
+            'north_player': cutter_player_name,
+            'north_player_id': cutter_player_id,
+            'west_player': selector_player_name,
+            'west_player_id': selector_player_id,
+            # Explicit role keys for newer clients.
+            'cutter_player': cutter_player_name,
+            'cutter_player_id': cutter_player_id,
+            'cutter_position': cutter_position.name,
+            'trump_selector_player': selector_player_name,
+            'trump_selector_player_id': selector_player_id,
+            'trump_selector_position': selector_position.name,
             'current_player': self.current_player.player_name if self.current_player else None,
             'current_player_name': self.current_player.player_name if self.current_player else None,
             'current_player_id': self.current_player.player_id if self.current_player else None,
@@ -479,6 +542,39 @@ class GameState:
         except Exception:
             pass
 
+def create_random_bot(bot_name, position=None, game_id=None):
+    agent = RandomAgent(bot_name)
+    agent.position = position
+    agent.game_id = game_id
+    return agent
+
+class BotFactory:
+    """Factory for creating different types of bots."""
+    
+    _bot_types = {
+        'random': create_random_bot,
+    }
+    
+    @classmethod
+    def register_bot(cls, bot_type, factory_function):
+        """Register a new bot type that can be created."""
+        cls._bot_types[bot_type.lower()] = factory_function
+    
+    @classmethod
+    def create_bot(cls, bot_name, position, game_id, difficulty='random'):
+        """Create a bot of the specified type and return the agent."""
+        bot_type = difficulty.lower()
+        if bot_type not in cls._bot_types:
+            return None
+        
+        factory_function = cls._bot_types[bot_type]
+        agent = factory_function(bot_name, position, game_id)
+        return agent
+    
+    @classmethod
+    def get_available_bots(cls):
+        """Return list of available bot types."""
+        return list(cls._bot_types.keys())
 
 class GameManager:
     def __init__(self):
@@ -512,9 +608,9 @@ class GameManager:
             if not success:
                 return False, message, None
 
+            game.creator_id = player_id  # Creator is the first player of this room
             self.games[game_id] = game
             return True, message, game_id, player_id
-
 
 manager = GameManager()
 
@@ -531,7 +627,6 @@ def _get_game_from_request(data=None):
 
     game = manager.get_game(game_id)
     return game, game_id
-
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
@@ -651,7 +746,124 @@ def join_game():
         return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
 
     success, message, player_id = game.add_player(name, position)
+    if success and game.creator_id is None:
+        game.creator_id = player_id
     return jsonify({'success': success, 'message': message, 'game_id': game_id, 'player_id': player_id})
+
+@app.route('/api/change_position', methods=['POST'])
+def change_position():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    player_id = data.get('player_id') or data.get('player')
+    new_position = data.get('position')
+
+    if not player_id or not new_position:
+        return jsonify({'success': False, 'message': 'Player and new position required'}), 400
+
+    player = game.get_player(player_id)
+    if not player:
+        return jsonify({'success': False, 'message': 'Player not found'}), 404
+
+    if game.game_started:
+        return jsonify({'success': False, 'message': 'Cannot change position after game has started'}), 400
+    
+    normalized_new_position = game._normalize_position(new_position)
+    if not normalized_new_position:
+        return jsonify({'success': False, 'message': 'Invalid position. Choose NORTH, SOUTH, EAST, or WEST'}), 400
+
+    if player.position == normalized_new_position:
+        return jsonify({'success': True, 'message': 'Position unchanged', 'state': game.get_state()}), 200
+
+    # If new position occupied by another player, reject change
+    for p in game.players:
+        if getattr(p, 'player_id', None) != player_id and p.position == normalized_new_position:
+            return jsonify({'success': False, 'message': f'Position {new_position} is already taken by {p.player_name}'}), 400
+
+    old_position = player.position
+    old_team_key = 'team1' if old_position in game._TEAM1_POSITIONS else 'team2'
+    new_team_key = 'team1' if normalized_new_position in game._TEAM1_POSITIONS else 'team2'
+
+    # Free old slot
+    if old_position not in game.available_team_positions[old_team_key]:
+        game.available_team_positions[old_team_key].append(old_position)
+
+    # Reserve new slot
+    if normalized_new_position not in game.available_team_positions[new_team_key]:
+        return jsonify({'success': False, 'message': f'Position {new_position} is not available'}), 400
+    game.available_team_positions[new_team_key].remove(normalized_new_position)
+
+    # Move the same player object between teams if needed
+    game.teams[0] = [p for p in game.teams[0] if getattr(p, 'player_id', None) != player_id]
+    game.teams[1] = [p for p in game.teams[1] if getattr(p, 'player_id', None) != player_id]
+    player.position = normalized_new_position
+    if new_team_key == 'team1':
+        game.teams[0].append(player)
+    else:
+        game.teams[1].append(player)
+
+    game._push_state('position_changed')
+    return jsonify({'success': True, 'message': f'Position changed to {player.position.name}', 'state': game.get_state()})
+
+@app.route('/api/add_bot', methods=['POST'])
+def add_bot():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    # Only the room creator can add bots
+    requester_id = data.get('player_id')
+    if not requester_id:
+        return jsonify({'success': False, 'message': 'player_id required'}), 400
+    if game.creator_id != requester_id:
+        return jsonify({'success': False, 'message': 'Only room creator can add bots'}), 403
+    position = data.get('position')
+    if not position:
+        return jsonify({'success': False, 'message': 'Position required'}), 400
+
+    if game.game_started:
+        return jsonify({'success': False, 'message': 'Cannot add bots after game has started'}), 400
+
+    # Extract bot details from request
+    bot_name = data.get('name', f'Bot_{position}')
+    difficulty = data.get('difficulty', 'random')
+    
+    # Use factory to create bot
+    agent = BotFactory.create_bot(bot_name, position, game_id, difficulty)
+    if not agent:
+        available = ', '.join(BotFactory.get_available_bots())
+        return jsonify({
+            'success': False, 
+            'message': f'Unknown bot type. Available: {available}'
+        }), 400
+    
+    # Wait a moment for the bot to join through the API
+    time.sleep(0.5)
+    
+    # Find the bot player that just joined
+    bot_player = None
+    for p in game.players:
+        if p.player_name == bot_name:
+            bot_player = p
+            break
+    
+    if bot_player:
+        return jsonify({
+            'success': True, 
+            'message': f'Bot {bot_name} added at position {position}', 
+            'game_id': game_id, 
+            'player_id': bot_player.player_id
+        })
+    else:
+        return jsonify({
+            'success': True,
+            'message': f'Bot {bot_name} is joining...',
+            'game_id': game_id,
+            'player_id': None
+        })
 
 
 @app.route('/api/start', methods=['POST'])
@@ -726,6 +938,24 @@ def play_card():
         return jsonify({'success': False, 'message': 'Player and card required'}), 400
 
     success, message = game.play_card(player_id, str(card))
+    return jsonify({'success': success, 'message': message})
+
+
+@app.route('/api/remove_player', methods=['POST'])
+@app.route('/api/the_council_has_decided_your_fate', methods=['POST'])
+def remove_player_endpoint():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    actor_id = data.get('actor_id')
+    target_id = data.get('target_id')
+
+    if not actor_id or not target_id:
+        return jsonify({'success': False, 'message': 'Both actor_id and target_id are required'}), 400
+
+    success, message = game.remove_player(actor_id, target_id)
     return jsonify({'success': success, 'message': message})
 
 

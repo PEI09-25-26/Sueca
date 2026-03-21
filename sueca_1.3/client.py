@@ -11,7 +11,6 @@ from card_mapper import CardMapper
 
 SERVER_URL = 'http://localhost:5000'
 
-
 class GameClient:
     def __init__(self):
         self.player_name = None
@@ -107,6 +106,38 @@ class GameClient:
         except Exception as e:
             return False, f'Error: {e}'
 
+    def change_position(self, new_position):
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/change_position',
+                json={'player_id': self.player_id, 'position': new_position, 'game_id': self.game_id},
+                timeout=2,
+            )
+            data = response.json()
+            if data.get('success'):
+                self.position = new_position.upper()
+            return data.get('success', False), data.get('message', 'Unknown error')
+        except Exception as e:
+            return False, f'Error: {e}'
+
+    def add_bot(self, bot_name, position, difficulty='random'):
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/add_bot',
+                json={
+                    'player_id': self.player_id,
+                    'name': bot_name,
+                    'position': position,
+                    'difficulty': difficulty,
+                    'game_id': self.game_id
+                },
+                timeout=2,
+            )
+            data = response.json()
+            return data.get('success', False), data.get('message', 'Unknown error'), data.get('player_id')
+        except Exception as e:
+            return False, f'Error: {e}', None
+
     def create_room(self):
         try:
             response = requests.post(f'{SERVER_URL}/api/create_room', timeout=2)
@@ -158,6 +189,101 @@ class GameClient:
             if choice in ('1', '2'):
                 return choice
             print('[ERROR] Invalid action. Choose 1 or 2.')
+
+    def _resolve_position_input(self, value, available_slots):
+        if not value:
+            return None
+
+        raw = value.strip().lower()
+        if raw.isdigit():
+            idx = int(raw) - 1
+            if 0 <= idx < len(available_slots):
+                return available_slots[idx]['position'].lower()
+            return None
+
+        return raw
+
+    def _handle_waiting_command(self, state, user_input):
+        parts = user_input.split()
+        if not parts:
+            return False
+
+        cmd = parts[0]
+        if cmd in ('help', 'h'):
+            with self.display_lock:
+                print('\n[COMMANDS]')
+                print('  position <slot_number|north|south|east|west>')
+                print('  bot <bot_name>')
+                print('  bot <slot_number|north|south|east|west> [bot_name]')
+                print('  quit')
+                print('> ', end='', flush=True)
+            return True
+
+        if cmd in ('position', 'pos', 'change', 'changepos'):
+            if len(parts) < 2:
+                with self.display_lock:
+                    print('\n[ERROR] Usage: position <slot_number|position_name>')
+                    print('> ', end='', flush=True)
+                return True
+
+            available_slots = state.get('available_slots', [])
+            resolved_position = self._resolve_position_input(parts[1], available_slots)
+            if not resolved_position:
+                with self.display_lock:
+                    print('\n[ERROR] Invalid position choice.')
+                    print('> ', end='', flush=True)
+                return True
+
+            success, message = self.change_position(resolved_position)
+            with self.display_lock:
+                if success:
+                    print(f'\n[SUCCESS] {message}')
+                    self.pause_updates = False
+                else:
+                    print(f'\n[ERROR] {message}')
+                print('> ', end='', flush=True)
+            return True
+
+        if cmd in ('bot', 'addbot', 'boot', 'addboot'):
+            if len(parts) < 2:
+                with self.display_lock:
+                    print('\n[ERROR] Usage: bot <bot_name> OR bot <slot_number|position_name> [bot_name]')
+                    print('> ', end='', flush=True)
+                return True
+
+            available_slots = state.get('available_slots', [])
+            if not available_slots:
+                with self.display_lock:
+                    print('\n[ERROR] No available slots for bot.')
+                    print('> ', end='', flush=True)
+                return True
+
+            # Supports both:
+            # - bot <name>
+            # - bot <position> [name]
+            candidate = parts[1]
+            resolved_position = self._resolve_position_input(candidate, available_slots)
+            position_names = {'north', 'south', 'east', 'west'}
+
+            if resolved_position and (candidate.isdigit() or candidate.strip().lower() in position_names):
+                # First arg is a position
+                bot_name = ' '.join(parts[2:]).strip() if len(parts) > 2 else f'Bot_{resolved_position}'
+            else:
+                # First arg is bot name, choose first available slot
+                resolved_position = available_slots[0]['position'].lower()
+                bot_name = ' '.join(parts[1:]).strip()
+
+            success, message, _ = self.add_bot(bot_name, resolved_position, 'random')
+            with self.display_lock:
+                if success:
+                    print(f'\n[SUCCESS] {message}')
+                    self.pause_updates = False
+                else:
+                    print(f'\n[ERROR] {message}')
+                print('> ', end='', flush=True)
+            return True
+
+        return False
 
     def display_game(self, force=False):
         if self.pause_updates and not force:
@@ -224,6 +350,8 @@ class GameClient:
                     print()
                 print()
 
+            round_resolving = state['phase'] == 'playing' and len(state.get('round_plays', [])) == 4
+
             if state['phase'] == 'playing' and state.get('current_player_name'):
                 print(f">>> TURN: {state['current_player_name']}", end='')
                 if state.get('current_player_id') == self.player_id:
@@ -259,17 +387,26 @@ class GameClient:
 
             print('-' * 70)
             if state['phase'] == 'deck_cutting' and state.get('north_player_id') == self.player_id:
-                print('YOU are NORTH! Type a number (1-40) to cut the deck, or quit to exit')
+                cutter_pos = state.get('cutter_position', 'NORTH')
+                print(f'YOU are the cutter ({cutter_pos})! Type a number (1-40) to cut the deck, or quit to exit')
+            elif state['phase'] == 'waiting':
+                print('Commands: position <slot|name> | bot <name> | bot <slot|name> [name] | help | quit')
             elif state['phase'] == 'deck_cutting':
-                print(f"Waiting for {state['north_player']} (NORTH) to cut the deck...")
+                cutter_pos = state.get('cutter_position', 'NORTH')
+                print(f"Waiting for {state['north_player']} ({cutter_pos}) to cut the deck...")
                 print('Type quit to exit')
             elif state['phase'] == 'trump_selection' and state.get('west_player_id') == self.player_id:
-                print('YOU are WEST! Type top or bottom to select trump card, or quit to exit')
+                selector_pos = state.get('trump_selector_position', 'WEST')
+                print(f'YOU are the trump selector ({selector_pos})! Type top or bottom to select trump card, or quit to exit')
             elif state['phase'] == 'trump_selection':
-                print(f"Waiting for {state['west_player']} (WEST) to select trump...")
+                selector_pos = state.get('trump_selector_position', 'WEST')
+                print(f"Waiting for {state['west_player']} ({selector_pos}) to select trump...")
                 print('Type quit to exit')
             elif state['phase'] == 'playing':
-                if state.get('current_player_id') == self.player_id and self.my_hand:
+                if round_resolving:
+                    print('Round resolving... waiting for winner update')
+                    print('Type quit to exit')
+                elif state.get('current_player_id') == self.player_id and self.my_hand:
                     print('YOUR TURN! Type card number to play (e.g. 1) or quit to exit')
                     if state.get('round_suit'):
                         print(f"Note: You must follow suit {state['round_suit']} if you have it!")
@@ -393,10 +530,11 @@ class GameClient:
             while self.running:
                 state = self.get_status()
                 if state:
+                    round_resolving = state.get('phase') == 'playing' and len(state.get('round_plays', [])) == 4
                     is_my_action = (
                         (state.get('phase') == 'deck_cutting' and state.get('north_player_id') == self.player_id)
                         or (state.get('phase') == 'trump_selection' and state.get('west_player_id') == self.player_id)
-                        or (state.get('phase') == 'playing' and state.get('current_player_id') == self.player_id)
+                        or (state.get('phase') == 'playing' and not round_resolving and state.get('current_player_id') == self.player_id)
                         or (state.get('phase') == 'finished')
                     )
 
@@ -414,6 +552,10 @@ class GameClient:
 
                 if not state:
                     continue
+
+                if state.get('phase') == 'waiting':
+                    if self._handle_waiting_command(state, user_input):
+                        continue
 
                 if state.get('phase') == 'finished':
                     if user_input in ('rematch', 'r'):
@@ -484,6 +626,12 @@ class GameClient:
                     continue
 
                 if user_input.isdigit():
+                    if state.get('phase') == 'playing' and len(state.get('round_plays', [])) == 4:
+                        with self.display_lock:
+                            print('\n[INFO] Round is being resolved, wait a moment...')
+                            print('> ', end='', flush=True)
+                        continue
+
                     if state.get('current_player_id') != self.player_id:
                         with self.display_lock:
                             print(f"\n[ERROR] Not your turn! Wait for {state.get('current_player_name', '?')}")

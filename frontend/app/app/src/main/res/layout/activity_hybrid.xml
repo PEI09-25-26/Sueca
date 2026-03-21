@@ -68,6 +68,36 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <LinearLayout
+            android:id="@+id/recognitionOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#66000000"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/imgRecognitionState"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:contentDescription="Estado do reconhecimento"
+                android:src="@drawable/ic_hybrid_eye"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/txtRecognitionProgress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:text="Aguardando reconhecimento..."
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/mesaContainer"
             android:layout_width="match_parent"
