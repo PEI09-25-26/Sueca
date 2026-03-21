@@ -9,7 +9,7 @@ from deck import Deck
 from player_flask import Player
 from positions import Positions
 from card_mapper import CardMapper
-from ai_player import create_random_bot
+from randomAgent.randomAgent import RandomAgent
 import logging
 import requests
 import threading
@@ -542,7 +542,11 @@ class GameState:
         except Exception:
             pass
 
-
+def create_random_bot(bot_name, position=None, game_id=None):
+    agent = RandomAgent(bot_name)
+    agent.position = position
+    agent.game_id = game_id
+    return agent
 
 class BotFactory:
     """Factory for creating different types of bots."""

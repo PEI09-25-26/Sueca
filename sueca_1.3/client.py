@@ -11,7 +11,6 @@ from card_mapper import CardMapper
 
 SERVER_URL = 'http://localhost:5000'
 
-
 class GameClient:
     def __init__(self):
         self.player_name = None

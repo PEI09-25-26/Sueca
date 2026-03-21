@@ -1,17 +1,11 @@
-#!/usr/bin/env python3
 """
-Quick runner for testing WeakAgent
-
-Usage:
-    python run_agent.py          # Run one agent
-    python run_agent.py AI_Bob   # Run agent with custom name
+Quick runner for the WeakAgent
 """
 import sys
-from agent1 import WeakAgent
+from weakAgent import WeakAgent
 
 
 if __name__ == "__main__":
-    # Get agent name from command line or use default
     agent_name = sys.argv[1] if len(sys.argv) > 1 else "WeakAI"
     
     print(f"Starting agent: {agent_name}")

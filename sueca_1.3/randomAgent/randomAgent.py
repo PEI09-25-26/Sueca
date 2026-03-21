@@ -1,27 +1,30 @@
 """
-WeakAgent - AI agent that plays Sueca using heuristics
+RandomAgent - AI agent that plays Sueca using heuristics
 """
 from client import GameClient
-from game_state_tracker import GameStateTracker
+from ..game_state_tracker import GameStateTracker
 from decision_maker import DecisionMaker
 from card_mapper import CardMapper
 import random
 import time
 
 
-class WeakAgent(GameClient):
+class RandomAgent(GameClient):
     """
     AI agent that automatically plays Sueca.
     Inherits from GameClient to get server communication methods.
     """
     
-    def __init__(self, agent_name="WeakAI"):
+    def __init__(self, agent_name="RandomAI", game_id=None, position=None):
         super().__init__()
         self.agent_name = agent_name
         self.state_tracker = GameStateTracker()
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
         self.think_time = 1.0
+        self.player_id = None
+        self.game_id = game_id
+        self.position = position
     
     def run(self):
         """
@@ -29,13 +32,15 @@ class WeakAgent(GameClient):
         This is the main entry point when you start the agent.
         """
         # Join the game
-        success, msg = self.join_game(self.agent_name)
+        success, message, player_id = self.join_game(self.player_name, self.game_id, self.position)
+        if success:
+            self.player_id = player_id
         if not success:
-            print(f"[ERROR] Failed to join game: {msg}")
+            print(f"[ERROR] Failed to join game: {message}")
             return
         
         self.player_name = self.agent_name
-        print(f"WeakAgent joined as {self.player_name}\n")
+        print(f"RandomAgent joined as {self.player_name}\n")
         
         while True:
             state = self.get_status()
