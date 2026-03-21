@@ -150,6 +150,41 @@ class GameState:
         self._push_state('player_joined')
         return True, f'Joined as {player.position}', player.player_id
 
+    def remove_player(self, actor_id, target_id):
+        actor = self.get_player(actor_id)
+        if not actor:
+            return False, 'Actor player not found'
+
+        if actor_id != self.creator_id:
+            return False, 'Only the host can remove players'
+
+        target = self.get_player(target_id)
+        if not target:
+            return False, 'Target player not found'
+
+        if self.game_started:
+            return False, 'Cannot remove players after game has started'
+
+        if target_id == self.creator_id:
+            return False, 'Host cannot remove themselves'
+
+        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+        self.available_team_positions[team_key].append(target.position)
+        
+        self.players.remove(target)
+        if target in self.teams[0]:
+            self.teams[0].remove(target)
+        else:
+            self.teams[1].remove(target)
+        
+        if target_id in self.scores:
+            del self.scores[target_id]
+
+        logger.info('Player %s was removed from game %s by host %s', target.player_name, self.game_id, actor.player_name)
+
+        self._push_state('player_removed')
+        return True, f'Player {target.player_name} removed successfully'
+
     def get_player(self, player_id):
         for player in self.players:
             if getattr(player, 'player_id', None) == player_id:
@@ -899,6 +934,24 @@ def play_card():
         return jsonify({'success': False, 'message': 'Player and card required'}), 400
 
     success, message = game.play_card(player_id, str(card))
+    return jsonify({'success': success, 'message': message})
+
+
+@app.route('/api/remove_player', methods=['POST'])
+@app.route('/api/the_council_has_decided_your_fate', methods=['POST'])
+def remove_player_endpoint():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    actor_id = data.get('actor_id')
+    target_id = data.get('target_id')
+
+    if not actor_id or not target_id:
+        return jsonify({'success': False, 'message': 'Both actor_id and target_id are required'}), 400
+
+    success, message = game.remove_player(actor_id, target_id)
     return jsonify({'success': success, 'message': message})
 
 

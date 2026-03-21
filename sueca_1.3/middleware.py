@@ -84,6 +84,15 @@ def play_card(payload: dict):
     return response.json()
 
 
+@app.post("/game/the_council_has_decided_your_fate")
+def the_council_has_decided_your_fate(payload: dict):
+    response = requests.post(
+        f"{GAME_SERVER_URL}/api/the_council_has_decided_your_fate",
+        json=payload
+    )
+    return response.json()
+
+
 @app.get("/game/hand/{player_name}")
 def get_hand(player_name: str, game_id: str | None = Query(default=None)):
     params = {"game_id": game_id} if game_id else None
@@ -98,3 +107,4 @@ def get_hand(player_name: str, game_id: str | None = Query(default=None)):
 def reset_game():
     response = requests.post(f"{GAME_SERVER_URL}/api/reset")
     return response.json()
+
