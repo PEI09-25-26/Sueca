@@ -5,10 +5,10 @@ Run this to test your implementations!
 Usage:
     python test_weak_agent.py
 """
-from ..card_analyzer import CardAnalyzer
-from ..game_state_tracker import GameStateTracker
-from ..weakAgent.decision_maker import DecisionMaker
-from ..card_mapper import CardMapper
+from card_analyzer import CardAnalyzer
+from game_state_tracker import GameStateTracker
+from weakAgent.decision_maker import DecisionMaker
+from card_mapper import CardMapper
 
 
 def test_card_analyzer():
