@@ -1,5 +1,9 @@
 """Random AI player for Sueca Flask server (HTTP endpoints)."""
 
+# CURRENTLY UNDER WORKS
+# THIS WILL SOON USE THE DECISION MAKER LOGIC 
+# IT WILL HAVE A DEDICATED DECISION MAKER THAT DOES EVERYTHING RANDOM
+
 import random
 import time
 import requests
