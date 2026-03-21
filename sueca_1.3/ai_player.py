@@ -3,21 +3,36 @@
 import random
 import time
 import requests
+import threading
 from card_mapper import CardMapper
 
 SERVER_URL = 'http://localhost:5000'
 
 
+def create_random_bot(name, position, game_id=None):
+    """
+    Create a random bot and start it in a background thread.
+    The bot will join and play the game through the API.
+    """
+    # Start agent in background to play through API
+    agent = RandomFlaskAgent(player_name=name, game_id=game_id, position=position, server_url=SERVER_URL)
+    agent_thread = threading.Thread(target=agent.run, daemon=True)
+    agent_thread.start()
+    
+    return agent  # Return the agent so caller can track it if needed
+
+
 class RandomFlaskAgent:
     """Random agent that joins a room and plays through the Flask API."""
 
-    def __init__(self, player_name, game_id, server_url=SERVER_URL):
+    def __init__(self, player_name, game_id, position=None, server_url=SERVER_URL):
         self.player_name = player_name
-        self.game_id = game_id.upper().strip()
+        self.game_id = game_id.upper().strip() if game_id else None
+        self.position = position.lower() if position else None
         self.server_url = server_url.rstrip('/')
         self.player_id = None
-        self.position = None
         self.running = True
+        self._finished_announced = False
 
     def _get(self, path, params=None, timeout=2):
         response = requests.get(f'{self.server_url}{path}', params=params, timeout=timeout)
@@ -55,8 +70,18 @@ class RandomFlaskAgent:
             print('[ERROR] No available positions in this room.')
             return False
 
-        selected_slot = random.choice(available_slots)
-        selected_position = selected_slot['position'].lower()
+        # If a specific position was requested, try to use it
+        selected_position = None
+        if self.position:
+            for slot in available_slots:
+                if slot['position'].lower() == self.position:
+                    selected_position = self.position
+                    break
+        
+        # If position not available or not specified, pick a random one
+        if not selected_position:
+            selected_slot = random.choice(available_slots)
+            selected_position = selected_slot['position'].lower()
 
         payload = {
             'name': self.player_name,
@@ -88,6 +113,9 @@ class RandomFlaskAgent:
     def _act_if_needed(self, state):
         phase = state.get('phase')
 
+        if phase != 'finished':
+            self._finished_announced = False
+
         if phase == 'deck_cutting' and state.get('north_player_id') == self.player_id:
             cut_index = random.randint(1, 40)
             payload = {'player_id': self.player_id, 'index': cut_index, 'game_id': self.game_id}
@@ -117,16 +145,29 @@ class RandomFlaskAgent:
             
 
         if phase == 'finished':
-            self.running = False
-            team_scores = state.get('team_scores', {})
-            print(
-                '[GAME OVER] '
-                f"Team1={team_scores.get('team1', 0)} "
-                f"Team2={team_scores.get('team2', 0)}"
-            )
+            if not self._finished_announced:
+                team_scores = state.get('team_scores', {})
+                print(
+                    '[GAME OVER] '
+                    f"Team1={team_scores.get('team1', 0)} "
+                    f"Team2={team_scores.get('team2', 0)}"
+                )
+                self._finished_announced = True
+            return
 
     def run(self):
         print('[INFO] Random Flask AI started.')
+
+        # Join room first; without this the bot never gets a player_id and cannot act.
+        if not self.game_id:
+            print('[ERROR] Missing game_id for bot.')
+            self.running = False
+            return
+
+        if not self.join_room():
+            self.running = False
+            return
+
         while self.running:
             try:
                 state = self.get_status()
