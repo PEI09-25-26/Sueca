@@ -24,9 +24,9 @@ class DecisionMaker:
         if not hand:
             return None
 
-        legal_plays = CardAnalyzer.get_legal_plays(hand, self.state.lead_suit, self.state.trump_suit)
+        legal_plays = CardAnalyzer.get_legal_plays(hand, self.state.lead_suit)
 
-        return random.randint(0, len(legal_plays)-1)
+        return random.choice(legal_plays)
         
     def choose_trump_selection(self):
         """

@@ -25,6 +25,8 @@ class RandomAgent(GameClient):
         self.player_id = None
         self.game_id = game_id
         self.position = position
+        self._last_phase = None
+        self._last_finished_match = None
     
     def run(self):
         """
@@ -32,7 +34,7 @@ class RandomAgent(GameClient):
         This is the main entry point when you start the agent.
         """
         # Join the game
-        success, message, player_id = self.join_game(self.player_name, self.game_id, self.position)
+        success, message, player_id = self.join_game(self.agent_name, self.game_id, self.position)
         if success:
             self.player_id = player_id
         if not success:
@@ -47,6 +49,10 @@ class RandomAgent(GameClient):
             if state is None:
                 time.sleep(1)
                 continue
+
+            phase = state.get("phase")
+            if self._last_phase == "finished" and phase in {"deck_cutting", "trump_selection", "playing"}:
+                self.state_tracker.reset()
             
             # Update state tracker
             self.state_tracker.update_from_state(state, self.player_name)
@@ -56,30 +62,34 @@ class RandomAgent(GameClient):
             self.state_tracker.update_my_hand(hand)
             
             # Handle deck cutting
-            if state["phase"] == "deck_cutting":
+            if phase == "deck_cutting":
                 self._handle_deck_cutting(state)
             
             # Handle trump selection
-            elif state["phase"] == "trump_selection":
+            elif phase == "trump_selection":
                 self._handle_trump_selection(state)
             
             # Handle playing turn
-            elif state["phase"] == "playing":
+            elif phase == "playing":
                 self._handle_playing_turn(state)
             
             # Game finished
-            elif state["phase"] == "finished":
-                team1 = state.get("team_scores", {}).get("team1", 0)
-                team2 = state.get("team_scores", {}).get("team2", 0)
-                print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
-                break
+            elif phase == "finished":
+                match_number = state.get("current_match_number") or state.get("matches_played")
+                if self._last_finished_match != match_number:
+                    team1 = state.get("team_scores", {}).get("team1", 0)
+                    team2 = state.get("team_scores", {}).get("team2", 0)
+                    print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
+                    self._last_finished_match = match_number
+
+            self._last_phase = phase
             time.sleep(random.uniform(0.5, 1.0))
     
     def _handle_deck_cutting(self, state):
         """
         Handle if we're NORTH and need to cut the deck.
         """
-        if state.get("north_player") != self.player_name:
+        if state.get("north_player_id") != self.player_id and state.get("north_player") != self.player_name:
             return
         
         cut = self.decision_maker.choose_deck_cut()
@@ -93,7 +103,7 @@ class RandomAgent(GameClient):
         """
         Handle if we're WEST and need to choose trump.
         """
-        if state.get("west_player") != self.player_name:
+        if state.get("west_player_id") != self.player_id and state.get("west_player") != self.player_name:
             return
         
         choice = self.decision_maker.choose_trump_selection()
@@ -108,7 +118,11 @@ class RandomAgent(GameClient):
         """
         Handle if it's our turn to play a card.
         """
-        if state.get("current_player") != self.player_name or not self.state_tracker.my_hand:
+        current_player_name = state.get("current_player_name") or state.get("current_player")
+        if (
+            state.get("current_player_id") != self.player_id
+            and current_player_name != self.player_name
+        ) or not self.state_tracker.my_hand:
             return
         
         time.sleep(self.think_time)  # Simulate thinking

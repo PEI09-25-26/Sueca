@@ -1,5 +1,6 @@
 from typing import Annotated, Optional
 
+import logging
 import requests
 from fastapi import APIRouter, Query
 
@@ -9,6 +10,7 @@ from ..helpers import is_service_up, normalize_mode, target_base_for_mode
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/game/command/{command:path}")
@@ -31,8 +33,17 @@ def route_command(command: str, request_data: CommandRequestDTO):
     try:
         response = requests.post(target_url, json=payload, timeout=5)
         data = response.json() if response.content else {"success": response.ok}
+        backend_success = response.ok
+        if isinstance(data, dict) and "success" in data:
+            backend_success = bool(data.get("success"))
+
+        if response.ok and not backend_success:
+            logger.warning("Command %s returned HTTP %s but backend success=false: %s", command, response.status_code, data)
+
         return {
-            "success": response.ok,
+            "success": backend_success,
+            "http_success": response.ok,
+            "http_status": response.status_code,
             "mode": mode,
             "target": target_url,
             "response": data,
@@ -67,8 +78,14 @@ def route_query(
     try:
         response = requests.get(target_url, params=params, timeout=5)
         data = response.json() if response.content else {"success": response.ok}
+        backend_success = response.ok
+        if isinstance(data, dict) and "success" in data:
+            backend_success = bool(data.get("success"))
+
         return {
-            "success": response.ok,
+            "success": backend_success,
+            "http_success": response.ok,
+            "http_status": response.status_code,
             "mode": resolved_mode,
             "target": target_url,
             "response": data,

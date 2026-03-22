@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, Query
 
-from ..core import BotFactory
+from ..core import BotFactory, launch_bot_thread
+from ..event_publisher import publish_bot_added, publish_position_changed
 from .common import error, get_game_from_request
 
 
@@ -52,6 +53,7 @@ def change_position(data: dict = Body(default_factory=dict)):
     else:
         game.teams[1].append(player)
 
+    publish_position_changed(game_id, player_id, player.player_name, old_position.name, normalized_new_position.name)
     game._push_state("position_changed")
     return {"success": True, "message": f"Position changed to {player.position.name}", "state": game.get_state()}
 
@@ -83,9 +85,18 @@ def add_bot(data: dict = Body(default_factory=dict)):
 
     import time
 
-    time.sleep(0.5)
-    bot_player = next((player for player in game.players if player.player_name == bot_name), None)
+    started = launch_bot_thread(agent, game_id=game_id, bot_name=bot_name)
+    if not started:
+        return error(f"Bot thread already running for {bot_name} in game {game_id}", 409)
+
+    bot_player = None
+    for _ in range(25):
+        bot_player = next((player for player in game.players if player.player_name == bot_name), None)
+        if bot_player:
+            break
+        time.sleep(0.2)
     if bot_player:
+        publish_bot_added(game_id, bot_player.player_id, bot_name, difficulty, position)
         return {
             "success": True,
             "message": f"Bot {bot_name} added at position {position}",
@@ -93,12 +104,10 @@ def add_bot(data: dict = Body(default_factory=dict)):
             "player_id": bot_player.player_id,
         }
 
-    return {
-        "success": True,
-        "message": f"Bot {bot_name} is joining...",
-        "game_id": game_id,
-        "player_id": None,
-    }
+    return error(
+        f"Bot {bot_name} did not join in time. Check virtual-engine logs for bot thread errors.",
+        500,
+    )
 
 
 @router.get("/api/hand/{player_id}")

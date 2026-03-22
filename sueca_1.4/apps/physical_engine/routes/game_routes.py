@@ -2,8 +2,10 @@ from fastapi import APIRouter
 
 try:
     from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
+    from ..event_publisher import publish_physical_event
 except ImportError:
     from core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
+    from event_publisher import publish_physical_event
 
 
 router = APIRouter()
@@ -16,14 +18,21 @@ def get_state():
 
 @router.post("/reset")
 def reset_game():
-    return reset_game_state()
+    result = reset_game_state()
+    publish_physical_event('default', 'physical_reset')
+    return result
 
 
 @router.post("/new_round")
 def new_round():
-    return start_new_round()
+    result = start_new_round()
+    publish_physical_event('default', 'physical_new_round')
+    return result
 
 
 @router.post("/card")
 def receive_card(card: CardDTO):
-    return process_card(card)
+    result = process_card(card)
+    card_payload = card.model_dump() if hasattr(card, 'model_dump') else card.dict()
+    publish_physical_event('default', 'physical_card_received', card=card_payload)
+    return result

@@ -55,34 +55,39 @@ class GameStateTracker:
         Update tracker from server's game state dictionary.
         """
         self.player_name = player_name        
-        for player in state["players"]:
+        for player in state.get("players", []):
             if player["name"] == player_name:
-                self.position = Positions[player["position"]]
+                raw_position = str(player.get("position", ""))
+                normalized_position = raw_position.split(".")[-1].upper()
+                if normalized_position in Positions.__members__:
+                    self.position = Positions[normalized_position]
 
         self._determine_team_info(state)
-        if state["trump_suit"]:
-            self.trump_suit = state["trump_suit"]
+        if state.get("trump_suit"):
+            self.trump_suit = state.get("trump_suit")
             # Initialize remaining trumps if trump is known
             self.remaining_trumps = {
                 i for i in range(40) 
                 if CardMapper.get_card_suit(i) == self.trump_suit
             }
-        self.current_round = state["current_round"]
+        self.current_round = state.get("current_round", self.current_round)
         
         # Update team scores based on our team_id
         if self.team_id == 0:  # Team 1 (N/S)
-            self.team_points = state["team_scores"]["team1"]
-            self.opponent_points = state["team_scores"]["team2"]
+            self.team_points = state.get("team_scores", {}).get("team1", 0)
+            self.opponent_points = state.get("team_scores", {}).get("team2", 0)
         else:  # Team 2 (E/W)
-            self.team_points = state["team_scores"]["team2"]
-            self.opponent_points = state["team_scores"]["team1"]
+            self.team_points = state.get("team_scores", {}).get("team2", 0)
+            self.opponent_points = state.get("team_scores", {}).get("team1", 0)
         
         # Convert round_plays to list of (player, card_id) tuples
         self.current_trick = []
-        self.lead_suit = state["round_suit"]
-        for play in state["round_plays"]:
+        self.lead_suit = state.get("round_suit")
+        for play in state.get("round_plays", []):
             card_id = int(play["card"])
-            player_name_in_play = play["player"]
+            player_name_in_play = play.get("player") or play.get("player_name")
+            if player_name_in_play is None:
+                continue
             self.current_trick.append((player_name_in_play, card_id))
             self._update_card_knowledge(player_name_in_play, card_id)
     
@@ -100,23 +105,38 @@ class GameStateTracker:
         """
         Figure out team, partner, and opponents from state.
         """
-        teams = state["teams"]
+        teams = state.get("teams", {"team1": [], "team2": []})
+        team1 = teams.get("team1", [])
+        team2 = teams.get("team2", [])
+
+        # During lobby/partial joins, partner may not exist yet.
+        self.partner_id = None
+        self.partner_position = None
+        self.opponents = []
         
         # Check which team we're on
-        if self.player_name in teams["team1"]:
+        if self.player_name in team1:
             self.team_id = 0
             # Get partner (other player on our team)
-            self.partner_id = [partner for partner in teams["team1"] if partner != self.player_name][0]
-            self.opponents = teams["team2"]
-        else:
+            team_mates = [partner for partner in team1 if partner != self.player_name]
+            self.partner_id = team_mates[0] if team_mates else None
+            self.opponents = list(team2)
+        elif self.player_name in team2:
             self.team_id = 1
-            self.partner_id = [partner for partner in teams["team2"] if partner != self.player_name][0]
-            self.opponents = teams["team1"]
+            team_mates = [partner for partner in team2 if partner != self.player_name]
+            self.partner_id = team_mates[0] if team_mates else None
+            self.opponents = list(team1)
+        else:
+            self.team_id = None
+            return
         
         # Find partner's position
-        for player in state["players"]:
-            if player["name"] == self.partner_id:
-                self.partner_position = Positions[player["position"]]
+        for player in state.get("players", []):
+            if self.partner_id and player.get("name") == self.partner_id:
+                raw_position = str(player.get("position", ""))
+                normalized_position = raw_position.split(".")[-1].upper()
+                if normalized_position in Positions.__members__:
+                    self.partner_position = Positions[normalized_position]
                 break
 
     
@@ -174,7 +194,7 @@ class GameStateTracker:
             candidate_cards = [(player, card) for player, card in self.current_trick
                             if CardMapper.get_card_suit(card) == lead_suit]
 
-        winner_player, winner_card = max(candidate_cards, key=lambda x: CardAnalyzer.get_card_strength(x[1], self.trump_suit, self.lead_suit))
+        winner_player, _ = max(candidate_cards, key=lambda x: CardAnalyzer.get_card_strength(x[1], self.trump_suit, self.lead_suit))
 
         return winner_player
 

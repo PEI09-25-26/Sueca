@@ -14,8 +14,32 @@ import uuid
 import time
 from datetime import datetime, timezone
 
+from apps.emqx import mqtt_client
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+ACTIVE_BOT_THREADS: dict[str, threading.Thread] = {}
+
+
+def launch_bot_thread(agent, game_id: str, bot_name: str) -> bool:
+    """Start bot run loop in background and keep a reference by game/name."""
+    key = f"{game_id}:{bot_name}"
+    existing = ACTIVE_BOT_THREADS.get(key)
+    if existing and existing.is_alive():
+        return False
+
+    def _run_bot_safely():
+        try:
+            agent.run()
+        except Exception:
+            logger.exception('Bot thread crashed for %s in game %s', bot_name, game_id)
+
+    thread = threading.Thread(target=_run_bot_safely, daemon=True, name=f"bot-{bot_name}-{game_id}")
+    thread.start()
+    ACTIVE_BOT_THREADS[key] = thread
+    return True
 
 
 class GameState:
@@ -23,6 +47,7 @@ class GameState:
 
     def __init__(self, game_id):
         self.game_id = game_id
+        self._play_lock = threading.Lock()
         self.reset()
 
     def reset(self):
@@ -45,6 +70,7 @@ class GameState:
         self.current_round = 1
         self.round_plays = []
         self.round_suit = None
+        self.round_resolving = False
         self.current_player = None
         self.last_winner = None
         self.turn_order = []
@@ -65,6 +91,7 @@ class GameState:
         self.current_round = 1
         self.round_plays = []
         self.round_suit = None
+        self.round_resolving = False
         self.current_player = None
         self.last_winner = None
         self.turn_order = []
@@ -331,54 +358,57 @@ class GameState:
         return total
 
     def _finish_round(self):
-        winner = self._determine_round_winner()
-        if not winner:
-            return
+        with self._play_lock:
+            winner = self._determine_round_winner()
+            if not winner:
+                self.round_resolving = False
+                return
 
-        points = self._calculate_round_points()
+            points = self._calculate_round_points()
 
-        if winner in self.teams[0]:
-            self.team_scores[0] += points
-            team_name = 'Team 1 (N/S)'
-        else:
-            self.team_scores[1] += points
-            team_name = 'Team 2 (E/W)'
+            if winner in self.teams[0]:
+                self.team_scores[0] += points
+                team_name = 'Team 1 (N/S)'
+            else:
+                self.team_scores[1] += points
+                team_name = 'Team 2 (E/W)'
 
-        logger.info(
-            'Round %s won by %s in game %s - %s points to %s',
-            self.current_round,
-            winner.player_name,
-            self.game_id,
-            points,
-            team_name,
-        )
+            logger.info(
+                'Round %s won by %s in game %s - %s points to %s',
+                self.current_round,
+                winner.player_name,
+                self.game_id,
+                points,
+                team_name,
+            )
 
-        self.last_winner = winner
-        self.current_round += 1
-        self.round_plays = []
-        self.round_suit = None
+            self.last_winner = winner
+            self.current_round += 1
+            self.round_plays = []
+            self.round_suit = None
+            self.round_resolving = False
 
-        if self.current_round > 10:
-            self.phase = 'finished'
-            self.game_started = False
+            if self.current_round > 10:
+                self.phase = 'finished'
+                self.game_started = False
 
-            match_winner_team = None
-            if self.team_scores[0] > self.team_scores[1]:
-                match_winner_team = 'team1'
-                self.match_points['team1'] += 1
-            elif self.team_scores[1] > self.team_scores[0]:
-                match_winner_team = 'team2'
-                self.match_points['team2'] += 1
+                match_winner_team = None
+                if self.team_scores[0] > self.team_scores[1]:
+                    match_winner_team = 'team1'
+                    self.match_points['team1'] += 1
+                elif self.team_scores[1] > self.team_scores[0]:
+                    match_winner_team = 'team2'
+                    self.match_points['team2'] += 1
 
-            self.match_history.append({
-                'match_number': self.current_match_number,
-                'winner_team': match_winner_team,
-                'winner_label': 'Team 1 (N/S)' if match_winner_team == 'team1' else ('Team 2 (E/W)' if match_winner_team == 'team2' else 'draw'),
-                'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
-                'finished_at': datetime.now(timezone.utc).isoformat(),
-            })
-        else:
-            self._set_turn_order()
+                self.match_history.append({
+                    'match_number': self.current_match_number,
+                    'winner_team': match_winner_team,
+                    'winner_label': 'Team 1 (N/S)' if match_winner_team == 'team1' else ('Team 2 (E/W)' if match_winner_team == 'team2' else 'draw'),
+                    'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
+                    'finished_at': datetime.now(timezone.utc).isoformat(),
+                })
+            else:
+                self._set_turn_order()
 
         event = {
             'type': 'round_end',
@@ -394,42 +424,54 @@ class GameState:
         except Exception:
             pass
 
+        # Strict MQTT clients rely on this post-resolution state update.
+        self._push_state('round_end')
+
     def play_card(self, player_id, card_str):
-        player = self.get_player(player_id)
-        if not player:
-            return False, 'Player not found'
+        with self._play_lock:
+            player = self.get_player(player_id)
+            if not player:
+                return False, 'Player not found'
 
-        if self.current_player != player:
-            return False, f'Not your turn! Waiting for {self.current_player.player_name}'
+            if self.round_resolving or len(self.round_plays) >= 4:
+                return False, 'Round resolving, wait for next turn'
 
-        card = None
-        for c in player.hand:
-            if str(c) == card_str:
-                card = c
-                break
+            if self.current_player != player:
+                waiting_for = self.current_player.player_name if self.current_player else 'next player'
+                return False, f'Not your turn! Waiting for {waiting_for}'
 
-        if card is None:
-            return False, 'Card not in hand'
+            # Safety guard: one play per player per trick.
+            if any(play.get('player_id') == player.player_id for play in self.round_plays):
+                return False, 'You already played this round'
 
-        if not self._can_play_card(player, card):
-            return False, f'You must follow suit {self.round_suit}!'
+            card = None
+            for c in player.hand:
+                if str(c) == card_str:
+                    card = c
+                    break
 
-        player.hand.remove(card)
-        self.round_plays.append({
-            'player_id': player.player_id,
-            'player_name': player.player_name,
-            'card': str(card),
-            'position': str(player.position)
-        })
+            if card is None:
+                return False, 'Card not in hand'
 
-        if len(self.round_plays) == 1:
-            self.round_suit = CardMapper.get_card_suit(card)
+            if not self._can_play_card(player, card):
+                return False, f'You must follow suit {self.round_suit}!'
 
-        logger.info('%s played %s in game %s', player.player_name, CardMapper.get_card(card), self.game_id)
+            player.hand.remove(card)
+            self.round_plays.append({
+                'player_id': player.player_id,
+                'player_name': player.player_name,
+                'card': str(card),
+                'position': str(player.position)
+            })
 
-        current_index = self.turn_order.index(player)
-        if current_index + 1 < len(self.turn_order):
-            self.current_player = self.turn_order[current_index + 1]
+            if len(self.round_plays) == 1:
+                self.round_suit = CardMapper.get_card_suit(card)
+
+            logger.info('%s played %s in game %s', player.player_name, CardMapper.get_card(card), self.game_id)
+
+            current_index = self.turn_order.index(player)
+            if current_index + 1 < len(self.turn_order):
+                self.current_player = self.turn_order[current_index + 1]
 
         event = {
             'type': 'card_played',
@@ -445,7 +487,12 @@ class GameState:
             pass
 
         if len(self.round_plays) == 4:
+            self.current_player = None
+            self.round_resolving = True
             threading.Timer(1.69, self._finish_round).start()
+
+        # Keep MQTT/state consumers in sync after every accepted play.
+        self._push_state('card_played')
 
         return True, f'Played {CardMapper.get_card(card)}'
 
@@ -525,9 +572,10 @@ class GameState:
         }
 
     def _push_state(self, event_type='state_update'):
+        state_snapshot = self.get_state()
         event = {
             'type': event_type,
-            'state': self.get_state(),
+            'state': state_snapshot,
             'game_id': self.game_id,
         }
 
@@ -535,6 +583,30 @@ class GameState:
             requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
         except Exception:
             pass
+
+        try:
+            hands_by_player = {
+                player.player_id: [str(card) for card in player.hand]
+                for player in self.players
+                if getattr(player, 'player_id', None)
+            }
+            topic = f'sueca/games/{self.game_id}/state'
+            published = mqtt_client.publish_json(
+                f'sueca/games/{self.game_id}/state',
+                {
+                    'event_type': event_type,
+                    'game_id': self.game_id,
+                    'state': state_snapshot,
+                    'hands': hands_by_player,
+                },
+                retain=True,
+            )
+            if published:
+                logger.info('Published state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
+            else:
+                logger.warning('Failed to publish state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
+        except Exception:
+            logger.exception('Unexpected error while publishing state to MQTT (event=%s, game_id=%s)', event_type, self.game_id)
 
 def create_random_bot(bot_name, position=None, game_id=None):
     agent = RandomAgent(bot_name)

@@ -3,7 +3,9 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 
 from ..core import manager
+from ..session import session_manager
 from .common import error, get_game_from_request
+
 
 
 router = APIRouter()
@@ -120,11 +122,18 @@ def join_game(data: dict = Body(default_factory=dict)):
         return error(f"Game {game_id} not found", 404)
 
     success, message, player_id = game.add_player(name, position)
-    if success and game.creator_id is None:
-        game.creator_id = player_id
-    return {
-        "success": success,
-        "message": message,
-        "game_id": game_id,
-        "player_id": player_id,
-    }
+    if success:
+        # Rooms created with create_room start empty; first joiner becomes host.
+        if game.creator_id is None:
+            game.creator_id = player_id
+        # Issue token
+        token = session_manager.create_session(game_id, player_id, name)
+        return {
+            "success": True,
+            "message": message,
+            "game_id": game_id,
+            "player_id": player_id,
+            "token": token
+        }
+    
+    return {"success": False, "message": message}
