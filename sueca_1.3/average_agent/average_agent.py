@@ -24,6 +24,38 @@ class AverageAgent(GameClient):
         self.player_id = None
         self.game_id = game_id
         self.position = position
+        self._last_phase = None
+        self._last_match_number = None
+        self._finished_announced_key = None
+
+    def _maybe_handle_match_transition(self, state):
+        current_phase = state.get("phase")
+        current_match_number = state.get("current_match_number")
+        current_round = state.get("current_round", 1)
+
+        new_match_by_number = (
+            current_match_number is not None
+            and self._last_match_number is not None
+            and current_match_number != self._last_match_number
+        )
+        new_match_after_finished = (
+            self._last_phase == "finished"
+            and current_phase in ("deck_cutting", "trump_selection", "playing")
+            and current_round == 1
+        )
+
+        if new_match_by_number or new_match_after_finished:
+            self.state_tracker.reset()
+            self._finished_announced_key = None
+            print("New match detected. Resetting AverageAgent tracker.")
+
+        if current_match_number is not None:
+            self._last_match_number = current_match_number
+        self._last_phase = current_phase
+
+    @staticmethod
+    def _finished_key(state):
+        return (state.get("current_match_number"), state.get("matches_played"))
     
     def run(self):
         """
@@ -48,6 +80,8 @@ class AverageAgent(GameClient):
                     time.sleep(1)
                     continue
 
+                self._maybe_handle_match_transition(state)
+
                 # Update state tracker
                 self.state_tracker.update_from_state(state, self.player_name)
 
@@ -69,10 +103,12 @@ class AverageAgent(GameClient):
 
                 # Game finished
                 elif state["phase"] == "finished":
-                    team1 = state.get("team_scores", {}).get("team1", 0)
-                    team2 = state.get("team_scores", {}).get("team2", 0)
-                    print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
-                    break
+                    finished_key = self._finished_key(state)
+                    if self._finished_announced_key != finished_key:
+                        team1 = state.get("team_scores", {}).get("team1", 0)
+                        team2 = state.get("team_scores", {}).get("team2", 0)
+                        print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
+                        self._finished_announced_key = finished_key
             except Exception as error:
                 print(f"[ERROR] AverageAgent loop error: {error}")
                 time.sleep(1)
