@@ -622,6 +622,13 @@ def create_weak_bot(bot_name, position=None, game_id=None):
     agent.game_id = game_id
     return agent
 
+def create_average_bot(bot_name, position=None, game_id=None):
+    agent = WeakAgent()
+    agent.agent_name = bot_name
+    agent.position = position
+    agent.game_id = game_id
+    return agent
+
 class BotFactory:
     """Factory for creating different types of bots."""
     
@@ -629,6 +636,8 @@ class BotFactory:
         'random': create_random_bot,
         'weak': create_weak_bot,
         'weak_agent': create_weak_bot,
+        'average': create_average_bot,
+        'average_agent': create_average_bot
     }
     
     @classmethod
