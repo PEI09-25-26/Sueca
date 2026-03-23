@@ -627,6 +627,12 @@ class GameManager:
         self._lock = threading.Lock()
         self.games[self.default_game_id] = GameState(self.default_game_id)
 
+    @staticmethod
+    def normalize_game_id(game_id):
+        if game_id is None:
+            return None
+        return str(game_id).strip().upper()
+
     def _generate_game_id(self):
         while True:
             candidate = uuid.uuid4().hex[:6].upper()
@@ -636,7 +642,17 @@ class GameManager:
     def get_game(self, game_id=None):
         if not game_id:
             return self.games.get(self.default_game_id)
-        return self.games.get(game_id)
+
+        normalized = self.normalize_game_id(game_id)
+        if not normalized:
+            return self.games.get(self.default_game_id)
+
+        game = self.games.get(normalized)
+        if game:
+            return game
+
+        # Defensive fallback for legacy lowercase IDs already stored in memory.
+        return self.games.get(str(game_id).strip())
 
     def create_room(self):
         with self._lock:
@@ -662,12 +678,24 @@ manager = GameManager()
 def _get_game_from_request(data=None):
     game_id = None
     if isinstance(data, dict):
-        game_id = data.get('game_id')
+        game_id = (
+            data.get('game_id')
+            or data.get('gameId')
+            or data.get('room_id')
+            or data.get('roomId')
+        )
     if not game_id:
-        game_id = request.args.get('game_id')
+        game_id = (
+            request.args.get('game_id')
+            or request.args.get('gameId')
+            or request.args.get('room_id')
+            or request.args.get('roomId')
+        )
 
     if not game_id:
         game_id = manager.default_game_id
+
+    game_id = manager.normalize_game_id(game_id)
 
     game = manager.get_game(game_id)
     return game, game_id
@@ -852,6 +880,7 @@ def change_position():
     return jsonify({'success': True, 'message': f'Position changed to {player.position.name}', 'state': game.get_state()})
 
 @app.route('/api/add_bot', methods=['POST'])
+@app.route('/api/addBot', methods=['POST'])
 def add_bot():
     data = request.get_json() or {}
     game, game_id = _get_game_from_request(data)
