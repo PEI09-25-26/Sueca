@@ -15,13 +15,16 @@ class WeakAgent(GameClient):
     Inherits from GameClient to get server communication methods.
     """
     
-    def __init__(self, agent_name="WeakAI"):
+    def __init__(self, agent_name="WeakAI", game_id=None, position=None):
         super().__init__()
         self.agent_name = agent_name
         self.state_tracker = GameStateTracker()
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
         self.think_time = 1.0
+        self.player_id = None
+        self.game_id = game_id
+        self.position = position
     
     def run(self):
         """
@@ -29,45 +32,52 @@ class WeakAgent(GameClient):
         This is the main entry point when you start the agent.
         """
         # Join the game
-        success, msg = self.join_game(self.agent_name)
+        self.player_name = self.agent_name
+        success, msg, player_id = self.join_game(self.player_name, self.game_id, self.position)
+        if success:
+            self.player_id = player_id
         if not success:
             print(f"[ERROR] Failed to join game: {msg}")
             return
-        
-        self.player_name = self.agent_name
+
         print(f"WeakAgent joined as {self.player_name}\n")
         
         while True:
-            state = self.get_status()
-            if state is None:
+            try:
+                state = self.get_status()
+                if state is None:
+                    time.sleep(1)
+                    continue
+
+                # Update state tracker
+                self.state_tracker.update_from_state(state, self.player_name)
+
+                # Update hand
+                hand = self.get_hand()
+                self.state_tracker.update_my_hand(hand)
+
+                # Handle deck cutting
+                if state["phase"] == "deck_cutting":
+                    self._handle_deck_cutting(state)
+
+                # Handle trump selection
+                elif state["phase"] == "trump_selection":
+                    self._handle_trump_selection(state)
+
+                # Handle playing turn
+                elif state["phase"] == "playing":
+                    self._handle_playing_turn(state)
+
+                # Game finished
+                elif state["phase"] == "finished":
+                    team1 = state.get("team_scores", {}).get("team1", 0)
+                    team2 = state.get("team_scores", {}).get("team2", 0)
+                    print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
+                    break
+            except Exception as error:
+                print(f"[ERROR] WeakAgent loop error: {error}")
                 time.sleep(1)
-                continue
-            
-            # Update state tracker
-            self.state_tracker.update_from_state(state, self.player_name)
-            
-            # Update hand
-            hand = self.get_hand()
-            self.state_tracker.update_my_hand(hand)
-            
-            # Handle deck cutting
-            if state["phase"] == "deck_cutting":
-                self._handle_deck_cutting(state)
-            
-            # Handle trump selection
-            elif state["phase"] == "trump_selection":
-                self._handle_trump_selection(state)
-            
-            # Handle playing turn
-            elif state["phase"] == "playing":
-                self._handle_playing_turn(state)
-            
-            # Game finished
-            elif state["phase"] == "finished":
-                team1 = state.get("team_scores", {}).get("team1", 0)
-                team2 = state.get("team_scores", {}).get("team2", 0)
-                print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
-                break
+
             time.sleep(random.uniform(0.5, 1.0))
     
     def _handle_deck_cutting(self, state):

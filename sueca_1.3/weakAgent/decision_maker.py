@@ -25,7 +25,7 @@ class DecisionMaker:
         if not hand:
             return None
         
-        legal_plays = CardAnalyzer.get_legal_plays(hand, self.state.lead_suit, self.state.trump_suit)
+        legal_plays = CardAnalyzer.get_legal_plays(hand, self.state.lead_suit)
 
         if len(legal_plays) == 1:
             return legal_plays[0]

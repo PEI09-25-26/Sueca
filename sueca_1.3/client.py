@@ -10,6 +10,20 @@ from threading import Thread, Lock
 from card_mapper import CardMapper
 
 SERVER_URL = 'http://localhost:5000'
+SUPPORTED_BOT_TYPES = {'random', 'weak', 'weak_agent', 'average', 'average_agent'}
+
+
+def normalize_bot_type(value):
+    normalized = (value or '').strip().lower().replace('-', '_').replace(' ', '_')
+    aliases = {
+        'r': 'random',
+        'rand': 'random',
+        'w': 'weak',
+        'avg': 'average',
+        'medium': 'average',
+    }
+    normalized = aliases.get(normalized, normalized)
+    return normalized if normalized in SUPPORTED_BOT_TYPES else None
 
 class GameClient:
     def __init__(self):
@@ -138,6 +152,22 @@ class GameClient:
         except Exception as e:
             return False, f'Error: {e}', None
 
+    def remove_player(self, target_id):
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/the_council_has_decided_your_fate',
+                json={
+                    'actor_id': self.player_id,
+                    'target_id': target_id,
+                    'game_id': self.game_id,
+                },
+                timeout=2,
+            )
+            data = response.json()
+            return data.get('success', False), data.get('message', 'Unknown error')
+        except Exception as e:
+            return False, f'Error: {e}'
+
     def create_room(self):
         try:
             response = requests.post(f'{SERVER_URL}/api/create_room', timeout=2)
@@ -203,6 +233,28 @@ class GameClient:
 
         return raw
 
+    def _resolve_player_target(self, state, value):
+        token = (value or '').strip()
+        if not token:
+            return None
+
+        players = state.get('players', [])
+        token_lower = token.lower()
+
+        for player in players:
+            if player.get('id') == token:
+                return player
+
+        name_matches = [p for p in players if p.get('name', '').lower() == token_lower]
+        if len(name_matches) == 1:
+            return name_matches[0]
+
+        position_matches = [p for p in players if p.get('position', '').lower() == token_lower]
+        if len(position_matches) == 1:
+            return position_matches[0]
+
+        return None
+
     def _handle_waiting_command(self, state, user_input):
         parts = user_input.split()
         if not parts:
@@ -215,6 +267,8 @@ class GameClient:
                 print('  position <slot_number|north|south|east|west>')
                 print('  bot <bot_name>')
                 print('  bot <slot_number|north|south|east|west> [bot_name]')
+                print('  bot <...> as <random|weak|average>')
+                print('  remove <player_id|player_name|north|south|east|west>')
                 print('  quit')
                 print('> ', end='', flush=True)
             return True
@@ -258,22 +312,90 @@ class GameClient:
                     print('> ', end='', flush=True)
                 return True
 
+            args = parts[1:]
+            difficulty = 'random'
+            if 'as' in args:
+                as_index = args.index('as')
+                if as_index == len(args) - 1:
+                    with self.display_lock:
+                        print('\n[ERROR] Usage: bot <...> as <random|weak|average>')
+                        print('> ', end='', flush=True)
+                    return True
+
+                difficulty_token = args[as_index + 1]
+                normalized_bot = normalize_bot_type(difficulty_token)
+                if not normalized_bot:
+                    with self.display_lock:
+                        print('\n[ERROR] Invalid bot type. Use random, weak, or average.')
+                        print('> ', end='', flush=True)
+                    return True
+
+                difficulty = normalized_bot
+                args = args[:as_index]
+            else:
+                # Support shorthand: bot <position> [name] <type>
+                # Example: bot south mybot weak
+                if args:
+                    first = args[0].strip().lower()
+                    looks_like_position = first.isdigit() or first in {'north', 'south', 'east', 'west'}
+                    if looks_like_position and len(args) >= 2:
+                        trailing_type = normalize_bot_type(args[-1])
+                        if trailing_type:
+                            difficulty = trailing_type
+                            args = args[:-1]
+
+            if not args:
+                with self.display_lock:
+                    print('\n[ERROR] Usage: bot <bot_name> OR bot <position> [bot_name]')
+                    print('> ', end='', flush=True)
+                return True
+
             # Supports both:
             # - bot <name>
             # - bot <position> [name]
-            candidate = parts[1]
+            candidate = args[0]
             resolved_position = self._resolve_position_input(candidate, available_slots)
             position_names = {'north', 'south', 'east', 'west'}
 
             if resolved_position and (candidate.isdigit() or candidate.strip().lower() in position_names):
                 # First arg is a position
-                bot_name = ' '.join(parts[2:]).strip() if len(parts) > 2 else f'Bot_{resolved_position}'
+                bot_name = ' '.join(args[1:]).strip() if len(args) > 1 else f'{difficulty}_bot_{resolved_position}'
             else:
                 # First arg is bot name, choose first available slot
                 resolved_position = available_slots[0]['position'].lower()
-                bot_name = ' '.join(parts[1:]).strip()
+                bot_name = ' '.join(args).strip()
 
-            success, message, _ = self.add_bot(bot_name, resolved_position, 'random')
+            success, message, _ = self.add_bot(bot_name, resolved_position, difficulty)
+            with self.display_lock:
+                if success:
+                    print(f'\n[SUCCESS] {message}')
+                    self.pause_updates = False
+                else:
+                    print(f'\n[ERROR] {message}')
+                print('> ', end='', flush=True)
+            return True
+
+        if cmd in ('remove', 'kick', 'rm'):
+            if len(parts) < 2:
+                with self.display_lock:
+                    print('\n[ERROR] Usage: remove <player_id|player_name|north|south|east|west>')
+                    print('> ', end='', flush=True)
+                return True
+
+            target = self._resolve_player_target(state, parts[1])
+            if not target:
+                with self.display_lock:
+                    print('\n[ERROR] Player not found. Use exact name, id, or position.')
+                    print('> ', end='', flush=True)
+                return True
+
+            if target.get('id') == self.player_id:
+                with self.display_lock:
+                    print('\n[ERROR] You cannot remove yourself.')
+                    print('> ', end='', flush=True)
+                return True
+
+            success, message = self.remove_player(target.get('id'))
             with self.display_lock:
                 if success:
                     print(f'\n[SUCCESS] {message}')
@@ -390,7 +512,7 @@ class GameClient:
                 cutter_pos = state.get('cutter_position', 'NORTH')
                 print(f'YOU are the cutter ({cutter_pos})! Type a number (1-40) to cut the deck, or quit to exit')
             elif state['phase'] == 'waiting':
-                print('Commands: position <slot|name> | bot <name> | bot <slot|name> [name] | help | quit')
+                print('Commands: position <slot|name> | bot <name> [as type] | bot <slot|name> [name] [as type] | remove <target> | help | quit')
             elif state['phase'] == 'deck_cutting':
                 cutter_pos = state.get('cutter_position', 'NORTH')
                 print(f"Waiting for {state['north_player']} ({cutter_pos}) to cut the deck...")

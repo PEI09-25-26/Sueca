@@ -2,13 +2,13 @@
 Quick runner for the RandomAgent
 """
 import sys
-from randomAgent import RandomAgent
+try:
+    from .randomAgent import RandomAgent
+except ImportError:
+    from randomAgent.randomAgent import RandomAgent
 
 
 if __name__ == "__main__":
-    import sys
-    from randomAgent import RandomAgent
-
     agent_name = sys.argv[1] if len(sys.argv) > 1 else "RandomAI"
     print(f"Starting agent: {agent_name}")
     print("Make sure server is running on localhost:5000")

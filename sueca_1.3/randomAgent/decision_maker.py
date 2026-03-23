@@ -2,7 +2,6 @@
 DecisionMaker - Makes card play decisions using heuristics
 """
 from card_analyzer import CardAnalyzer
-from card_mapper import CardMapper
 import random
 
 class DecisionMaker:
@@ -23,9 +22,8 @@ class DecisionMaker:
         if not hand:
             return None
 
-        legal_plays = CardAnalyzer.get_legal_plays(hand, self.state.lead_suit, self.state.trump_suit)
-
-        return random.randint(0, len(legal_plays)-1)
+        legal_plays = CardAnalyzer.get_legal_plays(hand, self.state.lead_suit)
+        return random.choice(legal_plays)
         
     def choose_trump_selection(self):
         """
