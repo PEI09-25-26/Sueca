@@ -9,12 +9,14 @@ import time
 from threading import Thread, Lock
 from ..card_mapper import CardMapper
 
-SERVER_URL = 'http://localhost:5000'
+SERVER_URL = os.getenv('SUECA_SERVER_URL', 'http://localhost:5001')
 
 class GameClient:
     def __init__(self):
         self.player_name = None
         self.player_id = None
+        self.token = None
+        self.debug_tokens = os.getenv('SUECA_DEBUG_TOKENS', '').lower() in ('1', 'true', 'yes', 'on')
         self.game_id = None
         self.position = None
         self.running = True
@@ -32,6 +34,20 @@ class GameClient:
             return response.json() if response.status_code == 200 else None
         except Exception:
             return None
+
+    def _auth_headers(self):
+        headers = {}
+        if self.token:
+            headers['Authorization'] = f'Bearer {self.token}'
+        return headers
+
+    def _debug_print_token(self, label):
+        if not self.debug_tokens:
+            return
+        if self.token:
+            print(f"[DEBUG] {label} token ({len(self.token)} chars): {self.token}")
+        else:
+            print(f"[DEBUG] {label} token: <missing>")
 
     def create_game(self, name, position):
         try:
@@ -53,16 +69,25 @@ class GameClient:
                 timeout=2,
             )
             data = response.json()
+            token = data.get('token')
+            if token:
+                self.token = token
+                self._debug_print_token('join_game')
             return data.get('success', False), data.get('message', 'Unknown error'), data.get('player_id')
         except Exception as e:
             return False, f'Error: {e}', None
 
     def get_hand(self):
         try:
-            if not self.player_id:
+            if not self.token:
                 return []
             params = {'game_id': self.game_id}
-            response = requests.get(f'{SERVER_URL}/api/hand/{self.player_id}', params=params, timeout=1)
+            response = requests.get(
+                f'{SERVER_URL}/api/hand',
+                params=params,
+                headers=self._auth_headers(),
+                timeout=1,
+            )
             data = response.json()
             if data.get('success'):
                 return data.get('hand', [])
@@ -74,7 +99,8 @@ class GameClient:
         try:
             response = requests.post(
                 f'{SERVER_URL}/api/cut_deck',
-                json={'player_id': self.player_id, 'index': index, 'game_id': self.game_id},
+                json={'index': index, 'game_id': self.game_id},
+                headers=self._auth_headers(),
                 timeout=2,
             )
             data = response.json()
@@ -86,7 +112,8 @@ class GameClient:
         try:
             response = requests.post(
                 f'{SERVER_URL}/api/select_trump',
-                json={'player_id': self.player_id, 'choice': choice, 'game_id': self.game_id},
+                json={'choice': choice, 'game_id': self.game_id},
+                headers=self._auth_headers(),
                 timeout=2,
             )
             data = response.json()
@@ -98,7 +125,8 @@ class GameClient:
         try:
             response = requests.post(
                 f'{SERVER_URL}/api/play',
-                json={'player_id': self.player_id, 'card': card, 'game_id': self.game_id},
+                json={'card': card, 'game_id': self.game_id},
+                headers=self._auth_headers(),
                 timeout=2,
             )
             data = response.json()
@@ -110,7 +138,8 @@ class GameClient:
         try:
             response = requests.post(
                 f'{SERVER_URL}/api/change_position',
-                json={'player_id': self.player_id, 'position': new_position, 'game_id': self.game_id},
+                json={'position': new_position, 'game_id': self.game_id},
+                headers=self._auth_headers(),
                 timeout=2,
             )
             data = response.json()
@@ -125,12 +154,12 @@ class GameClient:
             response = requests.post(
                 f'{SERVER_URL}/api/add_bot',
                 json={
-                    'player_id': self.player_id,
                     'name': bot_name,
                     'position': position,
                     'difficulty': difficulty,
                     'game_id': self.game_id
                 },
+                headers=self._auth_headers(),
                 timeout=2,
             )
             data = response.json()
@@ -158,7 +187,11 @@ class GameClient:
 
     def request_rematch(self):
         try:
-            response = requests.post(f'{SERVER_URL}/api/room/{self.game_id}/rematch', timeout=2)
+            response = requests.post(
+                f'{SERVER_URL}/api/room/{self.game_id}/rematch',
+                headers=self._auth_headers(),
+                timeout=2,
+            )
             data = response.json()
             return data.get('success', False), data.get('message', 'Unknown error')
         except Exception as e:
@@ -215,7 +248,18 @@ class GameClient:
                 print('  position <slot_number|north|south|east|west>')
                 print('  bot <bot_name>')
                 print('  bot <slot_number|north|south|east|west> [bot_name]')
+                print('  token')
                 print('  quit')
+                print('> ', end='', flush=True)
+            return True
+
+        if cmd in ('token', 'showtoken'):
+            with self.display_lock:
+                if self.token:
+                    print(f'\n[DEBUG] Current token ({len(self.token)} chars):')
+                    print(self.token)
+                else:
+                    print('\n[DEBUG] No token stored yet.')
                 print('> ', end='', flush=True)
             return True
 

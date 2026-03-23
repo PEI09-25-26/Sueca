@@ -32,7 +32,7 @@ class RandomAgent(GameClient):
         This is the main entry point when you start the agent.
         """
         # Join the game
-        success, message, player_id = self.join_game(self.player_name, self.game_id, self.position)
+        success, message, player_id = self.join_game(self.agent_name, self.game_id, self.position)
         if success:
             self.player_id = player_id
         if not success:

@@ -18,6 +18,35 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+_BOT_THREADS: dict[str, threading.Thread] = {}
+_BOT_THREADS_LOCK = threading.Lock()
+
+
+def launch_bot_thread(agent, game_id: str, bot_name: str) -> bool:
+    """Start a bot run loop in a daemon thread; return False if already running."""
+    key = f"{game_id}:{bot_name}"
+    with _BOT_THREADS_LOCK:
+        existing = _BOT_THREADS.get(key)
+        if existing and existing.is_alive():
+            return False
+
+        def _run_bot_safely():
+            try:
+                agent.run()
+            except Exception:
+                logger.exception('Bot thread crashed for %s in game %s', bot_name, game_id)
+            finally:
+                with _BOT_THREADS_LOCK:
+                    thread = _BOT_THREADS.get(key)
+                    if thread is not None and thread is threading.current_thread():
+                        del _BOT_THREADS[key]
+
+        thread = threading.Thread(target=_run_bot_safely, daemon=True, name=f"bot-{bot_name}-{game_id}")
+        _BOT_THREADS[key] = thread
+        thread.start()
+        return True
+
+
 class GameState:
     """Game state manager for a single room."""
 

@@ -1,22 +1,30 @@
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Header, Query
 
-from ..core import BotFactory
-from .common import error, get_game_from_request
+from ..auth import check_host
+from ..core import BotFactory, launch_bot_thread
+from .common import error, get_authenticated_player, get_game_from_request
 
 
 router = APIRouter()
 
 
 @router.post("/api/change_position")
-def change_position(data: dict = Body(default_factory=dict)):
+def change_position(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    player_id = data.get("player_id") or data.get("player")
+    session_data, auth_error = get_authenticated_player(authorization, game_id)
+    if auth_error:
+        return auth_error
+
+    player_id = session_data["player_id"]
     new_position = data.get("position")
-    if not player_id or not new_position:
-        return error("Player and new position required", 400)
+    if not new_position:
+        return error("Position required", 400)
 
     player = game.get_player(player_id)
     if not player:
@@ -57,15 +65,20 @@ def change_position(data: dict = Body(default_factory=dict)):
 
 
 @router.post("/api/add_bot")
-def add_bot(data: dict = Body(default_factory=dict)):
+def add_bot(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    requester_id = data.get("player_id")
-    if not requester_id:
-        return error("player_id required", 400)
-    if game.creator_id != requester_id:
+    session_data, auth_error = get_authenticated_player(authorization, game_id)
+    if auth_error:
+        return auth_error
+
+    requester_id = session_data["player_id"]
+    if not check_host(game_id, requester_id):
         return error("Only room creator can add bots", 403)
 
     position = data.get("position")
@@ -80,6 +93,10 @@ def add_bot(data: dict = Body(default_factory=dict)):
     if not agent:
         available = ", ".join(BotFactory.get_available_bots())
         return error(f"Unknown bot type. Available: {available}", 400)
+
+    started = launch_bot_thread(agent, game_id=game_id, bot_name=bot_name)
+    if not started:
+        return error(f"Bot thread already running for {bot_name} in game {game_id}", 409)
 
     import time
 
@@ -101,11 +118,41 @@ def add_bot(data: dict = Body(default_factory=dict)):
     }
 
 
-@router.get("/api/hand/{player_id}")
-def get_hand(player_id: str, game_id: str | None = Query(default=None)):
+@router.get("/api/hand")
+def get_my_hand(
+    game_id: str | None = Query(default=None),
+    authorization: str = Header(default=None),
+):
     game, resolved_game_id = get_game_from_request(game_id_query=game_id)
     if not game:
         return error(f"Game {resolved_game_id} not found", 404)
+
+    session_data, auth_error = get_authenticated_player(authorization, resolved_game_id)
+    if auth_error:
+        return auth_error
+
+    player = game.get_player(session_data["player_id"])
+    if not player:
+        return error("Player not found", 404)
+    return {"success": True, "hand": [str(card) for card in player.hand]}
+
+
+@router.get("/api/hand/{player_id}")
+def get_hand_by_id(
+    player_id: str,
+    game_id: str | None = Query(default=None),
+    authorization: str = Header(default=None),
+):
+    game, resolved_game_id = get_game_from_request(game_id_query=game_id)
+    if not game:
+        return error(f"Game {resolved_game_id} not found", 404)
+
+    session_data, auth_error = get_authenticated_player(authorization, resolved_game_id)
+    if auth_error:
+        return auth_error
+
+    if session_data["player_id"] != player_id:
+        return error("Token does not match requested player hand", 403)
 
     player = game.get_player(player_id)
     if not player:
@@ -115,15 +162,25 @@ def get_hand(player_id: str, game_id: str | None = Query(default=None)):
 
 @router.post("/api/remove_player")
 @router.post("/api/the_council_has_decided_your_fate")
-def remove_player_endpoint(data: dict = Body(default_factory=dict)):
+def remove_player_endpoint(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    actor_id = data.get("actor_id")
+    session_data, auth_error = get_authenticated_player(authorization, game_id)
+    if auth_error:
+        return auth_error
+
+    actor_id = session_data["player_id"]
     target_id = data.get("target_id")
-    if not actor_id or not target_id:
-        return error("Both actor_id and target_id are required", 400)
+    if not target_id:
+        return error("target_id is required", 400)
+
+    if not check_host(game_id, actor_id):
+        return error("Only room creator can remove players", 403)
 
     success, message = game.remove_player(actor_id, target_id)
     return {"success": success, "message": message}

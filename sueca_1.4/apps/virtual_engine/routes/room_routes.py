@@ -1,9 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Header, Query
 
+from ..auth import check_host
 from ..core import manager
-from .common import error, get_game_from_request
+from ..session import session_manager
+from .common import error, get_authenticated_player, get_game_from_request
 
 
 router = APIRouter()
@@ -74,10 +76,17 @@ def get_room_match_points(game_id: str):
 
 
 @router.post("/api/room/{game_id}/rematch")
-def start_room_rematch(game_id: str):
+def start_room_rematch(game_id: str, authorization: str = Header(default=None)):
     game = manager.get_game(game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
+
+    session_data, auth_error = get_authenticated_player(authorization, game_id)
+    if auth_error:
+        return auth_error
+
+    if not check_host(game_id, session_data["player_id"]):
+        return error("Only room creator can start rematch", 403)
 
     success, message = game.rematch()
     if not success:
@@ -122,8 +131,18 @@ def join_game(data: dict = Body(default_factory=dict)):
     success, message, player_id = game.add_player(name, position)
     if success and game.creator_id is None:
         game.creator_id = player_id
+    if success:
+        token = session_manager.create_session(game_id, player_id, name)
+        return {
+            "success": True,
+            "message": message,
+            "game_id": game_id,
+            "player_id": player_id,
+            "token": token,
+        }
+
     return {
-        "success": success,
+        "success": False,
         "message": message,
         "game_id": game_id,
         "player_id": player_id,
