@@ -1,21 +1,21 @@
 """
-Quick runner for the RandomAgent
+Quick runner for the AverageAgent
 """
 import sys
-from randomAgent import RandomAgent
+from averageAgent import AverageAgent
 
 
 if __name__ == "__main__":
     import sys
-    from randomAgent import RandomAgent
+    from averageAgent import AverageAgent
 
-    agent_name = sys.argv[1] if len(sys.argv) > 1 else "RandomAI"
+    agent_name = sys.argv[1] if len(sys.argv) > 1 else "AverageAI"
     print(f"Starting agent: {agent_name}")
     print("Make sure server is running on localhost:5000")
     print("Press Ctrl+C to stop\n")
 
     try:
-        agent = RandomAgent(agent_name)
+        agent = AverageAgent(agent_name)
         agent.run()
     except KeyboardInterrupt:
         print("\n\nAgent stopped by user.")
