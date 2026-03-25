@@ -270,11 +270,11 @@ class RoomActivity : AppCompatActivity() {
         }
 
         btnAddAgent1Bot.setOnClickListener {
-            toggleBotPlacementMode("average", "AverageBot")
+            toggleBotPlacementMode("weak", "WeakBot")
         }
 
         btnAddAgent2Bot.setOnClickListener {
-            toggleBotPlacementMode("agent2", "Agent2Bot")
+            toggleBotPlacementMode("Average", "AverageBot")
         }
 
         botPlacementOverlay.setOnClickListener {
