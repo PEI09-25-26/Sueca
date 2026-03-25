@@ -20,7 +20,7 @@ J --> K[Update My Hand]
 K --> L{Current Phase?}
 
 L -->|Cut Deck| M[Handle Cut Deck]
-M -->N{Am I Cutting?}
+M -->N{Am I cutting deck?}
 N -->|Yes|O[Choose Deck Cut]
 O -->W[Send Cut Deck]
 W -->X{Was Cut Successful?}
@@ -31,7 +31,7 @@ N -->|No|V[Return]
 
 
 L -->|Select Trump| P[Handle Select Trump]
-P -->A1{Am I ellecting trump?}
+P -->A1{Am I selecting trump card?}
 A1 --> |Yes|C1[Choose Trump Selection]
 A1 --> |No|B1[Return]
 C1 --> D1[Select Trump]
