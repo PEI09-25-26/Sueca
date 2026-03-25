@@ -113,6 +113,18 @@ class CardAnalyzer:
         return min(cards, key=lambda card: (CardMapper.get_card_points(card), CardAnalyzer.get_card_strength(card, trump_suit, lead_suit)))
     
     @staticmethod
+    def get_highest_winning_card(hand, current_trick, trump_suit, lead_suit):
+        """
+        Get the highest card that can win the trick.
+        (Strategy: cash out on points!)
+        """
+        winning_cards = CardAnalyzer.get_winning_cards(hand, current_trick, trump_suit, lead_suit)
+        if not winning_cards:
+            return None
+        
+        return max(winning_cards, key=lambda card: CardAnalyzer.get_card_strength(card, trump_suit, lead_suit))
+
+    @staticmethod
     def get_highest_card(cards, trump_suit=None, lead_suit=None):
         """
         Get the highest strength card from a list.
