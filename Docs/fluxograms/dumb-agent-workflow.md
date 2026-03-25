@@ -53,7 +53,7 @@ L1 -->|No|N1[Convert To String]
 N1 -->O1[Send Play Card]
 O1 -->P1{Was Play Successful?}
 P1 -->|Yes|Q1[Get Card Display]
-Q1 -->R1[Print: Agent Played X]
+Q1 -->R1["Print: Agent Played X"]
 R1 -->F
 P1 -->|No|T1[Print Error Message]
 
