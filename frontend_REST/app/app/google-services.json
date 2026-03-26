@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "71247148188",
-    "project_id": "jogo-da-sueca-741d3",
-    "storage_bucket": "jogo-da-sueca-741d3.firebasestorage.app"
+    "project_number": "330040395998",
+    "project_id": "sueca-peig9",
+    "storage_bucket": "sueca-peig9.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:71247148188:android:ef071883163865205da959",
+        "mobilesdk_app_id": "1:330040395998:android:6aebc3aad08dd651595a4f",
         "android_client_info": {
           "package_name": "com.example.Jogo_da_Sueca"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyC3zPQyUqqdi2Y4ap2BIW5r3hLd_FKbKoQ"
+          "current_key": "AIzaSyBvJZsuEId9NSsE79gnxCyh1tCIZdYeS6s"
         }
       ],
       "services": {
