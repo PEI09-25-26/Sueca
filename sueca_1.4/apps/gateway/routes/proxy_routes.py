@@ -13,6 +13,21 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _decode_backend_response(response: requests.Response):
+    if not response.content:
+        return {"success": response.ok}
+
+    try:
+        return response.json()
+    except ValueError:
+        text_body = response.text.strip()
+        return {
+            "success": response.ok,
+            "message": text_body or response.reason or "Backend returned non-JSON payload",
+            "raw": text_body,
+        }
+
+
 @router.post("/game/command/{command:path}")
 def route_command(command: str, request_data: CommandRequestDTO):
     game_id = request_data.game_id
@@ -32,7 +47,7 @@ def route_command(command: str, request_data: CommandRequestDTO):
 
     try:
         response = requests.post(target_url, json=payload, timeout=5)
-        data = response.json() if response.content else {"success": response.ok}
+        data = _decode_backend_response(response)
         backend_success = response.ok
         if isinstance(data, dict) and "success" in data:
             backend_success = bool(data.get("success"))
@@ -77,7 +92,7 @@ def route_query(
 
     try:
         response = requests.get(target_url, params=params, timeout=5)
-        data = response.json() if response.content else {"success": response.ok}
+        data = _decode_backend_response(response)
         backend_success = response.ok
         if isinstance(data, dict) and "success" in data:
             backend_success = bool(data.get("success"))

@@ -10,12 +10,15 @@ from player_flask import Player
 from positions import Positions
 from card_mapper import CardMapper
 from randomAgent.randomAgent import RandomAgent
+from hybrid_vision_service import HybridVisionService
+from hybrid_game_coordinator import HybridGameCoordinator
 import logging
 import requests
 import threading
 import uuid
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 app = Flask(__name__)
 CORS(app)
@@ -246,6 +249,44 @@ class GameState:
         self._push_state('trump_selected')
         return True, f'Trump card is {CardMapper.get_card(self.trump_card)}'
 
+    def select_trump_by_card(self, player_id, trump_card_id):
+        player = self.get_player(player_id)
+        if not player:
+            return False, 'Player not found'
+
+        required_selector = self._current_dealer_position()
+        if player.position != required_selector:
+            return False, f'Only {required_selector.name} player can select trump'
+
+        if self.phase != 'trump_selection':
+            return False, 'Not in trump selection phase'
+
+        try:
+            trump_card_id = int(trump_card_id)
+        except (TypeError, ValueError):
+            return False, 'Invalid trump card id'
+
+        self.trump_card = trump_card_id
+        self.trump_suit = CardMapper.get_card_suit(self.trump_card)
+
+        # Keep deck consistency if detected card exists in the shuffled deck.
+        if trump_card_id in self.deck.cards:
+            self.deck.cards.remove(trump_card_id)
+
+        logger.info(
+            'Trump selected by capture by %s in game %s: %s',
+            player.player_name,
+            self.game_id,
+            CardMapper.get_card(self.trump_card)
+        )
+
+        self._deal_cards(player)
+        self.phase = 'playing'
+        self.game_started = True
+
+        self._push_state('trump_selected_capture')
+        return True, f'Trump card is {CardMapper.get_card(self.trump_card)}'
+
     def _deal_cards(self, dealer):
         # Deal 9 cards to everyone first (to keep one slot open for dealer's trump)
         for player in self.players:
@@ -455,6 +496,61 @@ class GameState:
 
         return True, f'Played {CardMapper.get_card(card)}'
 
+    def play_card_hybrid_capture(self, player_id, card_str):
+        """
+        Hybrid mode play: trust the physically captured card.
+        Hand membership and follow-suit are not enforced here because
+        physical dealing can differ from backend synthetic dealing.
+        """
+        player = self.get_player(player_id)
+        if not player:
+            return False, 'Player not found'
+
+        if self.current_player != player:
+            return False, f'Not your turn! Waiting for {self.current_player.player_name}'
+
+        try:
+            card = int(card_str)
+        except (TypeError, ValueError):
+            return False, 'Invalid card'
+
+        if card in player.hand:
+            player.hand.remove(card)
+
+        self.round_plays.append({
+            'player_id': player.player_id,
+            'player_name': player.player_name,
+            'card': str(card),
+            'position': str(player.position)
+        })
+
+        if len(self.round_plays) == 1:
+            self.round_suit = CardMapper.get_card_suit(card)
+
+        logger.info('[HYBRID] %s played %s in game %s', player.player_name, CardMapper.get_card(card), self.game_id)
+
+        current_index = self.turn_order.index(player)
+        if current_index + 1 < len(self.turn_order):
+            self.current_player = self.turn_order[current_index + 1]
+
+        event = {
+            'type': 'card_played',
+            'player': player.player_name,
+            'player_id': player.player_id,
+            'card': str(card),
+            'state': self.get_state(),
+            'game_id': self.game_id,
+        }
+        try:
+            requests.post('http://localhost:8000/game/event', json=event, timeout=0.5)
+        except Exception:
+            pass
+
+        if len(self.round_plays) == 4:
+            threading.Timer(1.69, self._finish_round).start()
+
+        return True, f'Played {CardMapper.get_card(card)}'
+
     def rematch(self):
         if len(self.players) < self.max_players:
             return False, f'Need {self.max_players} players for rematch'
@@ -613,6 +709,11 @@ class GameManager:
             return True, message, game_id, player_id
 
 manager = GameManager()
+
+# Shared hybrid recognition sessions by game_id.
+_HYBRID_CV12_ROOT = Path(__file__).resolve().parent.parent / "ComputerVision_1.2"
+hybrid_vision = HybridVisionService(templates_root=None, cv12_root=_HYBRID_CV12_ROOT)
+hybrid_coordinator = HybridGameCoordinator()
 
 
 def _get_game_from_request(data=None):
@@ -968,6 +1069,395 @@ def reset_game():
 
     game.reset()
     return jsonify({'success': True, 'message': 'Game reset'})
+
+
+@app.route('/api/hybrid/session/reset', methods=['POST'])
+def reset_hybrid_session():
+    data = request.get_json() or {}
+    game_id = data.get('game_id') or manager.default_game_id
+    target_count = data.get('target_count', 10)
+
+    try:
+        target_count = int(target_count)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'target_count must be an integer'}), 400
+
+    session = hybrid_vision.reset_session(game_id, target_count)
+    return jsonify({
+        'success': True,
+        'game_id': game_id,
+        'target_count': session.target_count,
+        'confirmed_count': len(session.cards),
+        'done': False,
+        'cards': [],
+    })
+
+
+@app.route('/api/hybrid/session/status', methods=['GET'])
+def get_hybrid_session_status():
+    game_id = request.args.get('game_id') or manager.default_game_id
+    target_count = request.args.get('target_count', default=10, type=int)
+    return jsonify(hybrid_vision.get_status_payload(game_id, target_count))
+
+
+@app.route('/api/hybrid/recognize_card', methods=['POST'])
+def recognize_hybrid_card():
+    data = request.get_json() or {}
+    game_id = data.get('game_id') or manager.default_game_id
+    target_count = data.get('target_count', 10)
+    frame_base64 = data.get('frame_base64')
+
+    if not frame_base64:
+        return jsonify({'success': False, 'message': 'frame_base64 is required'}), 400
+
+    try:
+        target_count = int(target_count)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'target_count must be an integer'}), 400
+
+    payload = hybrid_vision.process_frame(game_id=game_id, frame_base64=frame_base64, target_count=target_count)
+    return jsonify(payload)
+
+
+def _players_meta(game):
+    return {
+        p.player_id: {
+            'name': p.player_name,
+            'position': str(p.position),
+        }
+        for p in game.players
+    }
+
+
+def _maybe_skip_hybrid_cut(game, room):
+    """Hybrid mode does not use the deck cutting step."""
+    if not game or not room:
+        return
+    if game.phase != 'deck_cutting':
+        return
+    if not room.host_player_id and not room.player_roles:
+        return
+
+    game.phase = 'trump_selection'
+    game._push_state('hybrid_cut_skipped')
+    logger.info('[HYBRID] Skipped deck_cutting and moved game %s to trump_selection', game.game_id)
+
+
+def _autofill_missing_real_players_for_hybrid(game):
+    """Ensure hybrid rooms always have 4 players by adding real placeholders."""
+    if not game:
+        return
+    if len(game.players) >= game.max_players:
+        return
+    if game.phase == 'finished':
+        return
+
+    # Keep deterministic seat fill so host/device mappings remain stable.
+    for position in game.positions:
+        if len(game.players) >= game.max_players:
+            break
+        if game._get_player_by_position(position):
+            continue
+
+        base_name = f'Real_{position.name}'
+        candidate = base_name
+        idx = 2
+        existing_names = {p.player_name for p in game.players}
+        while candidate in existing_names:
+            candidate = f'{base_name}_{idx}'
+            idx += 1
+
+        success, message, _ = game.add_player(candidate, position.name)
+        if success:
+            logger.info('[HYBRID] Auto-added missing real player %s at %s in game %s', candidate, position.name, game.game_id)
+        else:
+            logger.warning('[HYBRID] Failed auto-adding player at %s in game %s: %s', position.name, game.game_id, message)
+
+    if len(game.players) == game.max_players:
+        game._push_state('hybrid_real_players_autofilled')
+
+
+@app.route('/api/hybrid/register_player', methods=['POST'])
+def hybrid_register_player():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    player_id = data.get('player_id')
+    role = data.get('role', 'real')
+    is_host = bool(data.get('is_host', False))
+
+    if not player_id:
+        return jsonify({'success': False, 'message': 'player_id is required'}), 400
+
+    if not game.get_player(player_id):
+        return jsonify({'success': False, 'message': 'Player not found in this game'}), 404
+
+    room = hybrid_coordinator.register_player(game_id, player_id, role, is_host)
+    _autofill_missing_real_players_for_hybrid(game)
+    _maybe_skip_hybrid_cut(game, room)
+    return jsonify({'success': True, 'state': hybrid_coordinator.to_payload(room, _players_meta(game))})
+
+
+@app.route('/api/hybrid/state', methods=['GET'])
+def hybrid_state():
+    game_id = request.args.get('game_id') or manager.default_game_id
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    _autofill_missing_real_players_for_hybrid(game)
+    _maybe_skip_hybrid_cut(game, room)
+    return jsonify({'success': True, 'state': hybrid_coordinator.to_payload(room, _players_meta(game))})
+
+
+@app.route('/api/hybrid/deal/reset', methods=['POST'])
+def hybrid_deal_reset():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    host_player_id = data.get('player_id')
+    cards_per_virtual = data.get('cards_per_virtual', 10)
+
+    if not host_player_id:
+        return jsonify({'success': False, 'message': 'player_id is required'}), 400
+
+    if game.phase != 'playing':
+        return jsonify({
+            'success': False,
+            'message': 'Hybrid card assignment is only available after trump selection (playing phase)',
+            'phase': game.phase,
+        }), 409
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    _maybe_skip_hybrid_cut(game, room)
+    if room.host_player_id and room.host_player_id != host_player_id:
+        return jsonify({'success': False, 'message': 'Only host can reset deal'}), 403
+
+    registered_virtual_ids = [
+        pid for pid, role in room.player_roles.items()
+        if role == 'virtual' and game.get_player(pid) is not None and pid != host_player_id
+    ]
+
+    if not (0 <= len(registered_virtual_ids) <= 3):
+        return jsonify({'success': False, 'message': 'Hybrid mode supports up to 3 virtual players'}), 400
+
+    room = hybrid_coordinator.reset_deal(
+        game_id=game_id,
+        host_player_id=host_player_id,
+        virtual_player_ids=registered_virtual_ids,
+        cards_per_virtual=cards_per_virtual,
+    )
+    return jsonify({'success': True, 'state': hybrid_coordinator.to_payload(room, _players_meta(game))})
+
+
+@app.route('/api/hybrid/trump/confirm_capture', methods=['POST'])
+def hybrid_confirm_trump_capture():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    host_player_id = data.get('host_player_id')
+    frame_base64 = data.get('frame_base64')
+
+    if not host_player_id or not frame_base64:
+        return jsonify({'success': False, 'message': 'host_player_id and frame_base64 are required'}), 400
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    _maybe_skip_hybrid_cut(game, room)
+
+    if game.phase != 'trump_selection':
+        return jsonify({'success': False, 'message': 'Not in trump selection phase', 'phase': game.phase}), 409
+
+    if room.host_player_id and host_player_id != room.host_player_id:
+        return jsonify({'success': False, 'message': 'Only host can submit trump frame'}), 403
+
+    selector = game._get_player_by_position(game._current_dealer_position())
+    if selector is None:
+        return jsonify({'success': False, 'message': 'Trump selector player not found'}), 400
+
+    recognized = hybrid_vision.recognize_once(frame_base64)
+    if recognized is None:
+        return jsonify({'success': False, 'message': 'No valid card detected'}), 400
+
+    success, message = game.select_trump_by_card(selector.player_id, recognized.card_id)
+    if not success:
+        return jsonify({'success': False, 'message': message}), 400
+
+    return jsonify({
+        'success': True,
+        'message': message,
+        'captured_card_id': recognized.card_id,
+        'captured_display': recognized.display,
+        'game_state': game.get_state(),
+        'state': hybrid_coordinator.to_payload(room, _players_meta(game)),
+    })
+
+
+@app.route('/api/hybrid/deal/recognize', methods=['POST'])
+def hybrid_deal_recognize():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    host_player_id = data.get('player_id')
+    frame_base64 = data.get('frame_base64')
+    target_player_id = data.get('target_player_id')
+
+    if not host_player_id:
+        return jsonify({'success': False, 'message': 'player_id is required'}), 400
+    if not frame_base64:
+        return jsonify({'success': False, 'message': 'frame_base64 is required'}), 400
+
+    if game.phase != 'playing':
+        return jsonify({
+            'success': False,
+            'recognized': False,
+            'confirmed': False,
+            'message': 'Waiting for trump selection to finish before dealing virtual cards',
+            'phase': game.phase,
+            'state': hybrid_coordinator.to_payload(hybrid_coordinator.get_room_state(game_id), _players_meta(game)),
+        }), 409
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    _maybe_skip_hybrid_cut(game, room)
+    if room.host_player_id and room.host_player_id != host_player_id:
+        return jsonify({'success': False, 'message': 'Only host can process deal frames'}), 403
+
+    recognized = hybrid_vision.recognize_once(frame_base64)
+    if recognized is None:
+        return jsonify({
+            'success': True,
+            'recognized': False,
+            'confirmed': False,
+            'message': 'No valid card detected',
+            'state': hybrid_coordinator.to_payload(room, _players_meta(game)),
+        })
+
+    target = target_player_id or hybrid_coordinator.deal_next_target(game_id)
+    if not target:
+        return jsonify({
+            'success': True,
+            'recognized': True,
+            'confirmed': False,
+            'message': 'All virtual players already have their cards',
+            'card': {'id': recognized.card_id, 'display': recognized.display},
+            'state': hybrid_coordinator.to_payload(room, _players_meta(game)),
+        })
+
+    ok, message, room = hybrid_coordinator.add_deal_card(game_id, target, recognized.card_id)
+    return jsonify({
+        'success': True,
+        'recognized': True,
+        'confirmed': ok,
+        'message': message,
+        'target_player_id': target,
+        'card': {
+            'id': recognized.card_id,
+            'rank': recognized.rank,
+            'suit': recognized.suit_name,
+            'suit_symbol': recognized.suit_symbol,
+            'drawable_key': recognized.drawable_key,
+            'display': recognized.display,
+        },
+        'state': hybrid_coordinator.to_payload(room, _players_meta(game)),
+    })
+
+
+@app.route('/api/hybrid/virtual/select_card', methods=['POST'])
+def hybrid_virtual_select_card():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    player_id = data.get('player_id')
+    card = data.get('card')
+
+    if not player_id or card is None:
+        return jsonify({'success': False, 'message': 'player_id and card are required'}), 400
+
+    try:
+        card = int(card)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'card must be an integer'}), 400
+
+    ok, message, room = hybrid_coordinator.select_virtual_card(game_id, player_id, card)
+    status = 200 if ok else 400
+    return jsonify({'success': ok, 'message': message, 'state': hybrid_coordinator.to_payload(room, _players_meta(game))}), status
+
+
+@app.route('/api/hybrid/pending_play', methods=['GET'])
+def hybrid_pending_play():
+    game_id = request.args.get('game_id') or manager.default_game_id
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    payload = hybrid_coordinator.to_payload(room, _players_meta(game))
+    return jsonify({'success': True, 'pending': payload.get('pending_virtual_play'), 'state': payload})
+
+
+@app.route('/api/hybrid/play/confirm_capture', methods=['POST'])
+def hybrid_confirm_capture():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    player_id = data.get('player_id')
+    host_player_id = data.get('host_player_id')
+    frame_base64 = data.get('frame_base64')
+
+    if not player_id or not frame_base64:
+        return jsonify({'success': False, 'message': 'player_id and frame_base64 are required'}), 400
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    _maybe_skip_hybrid_cut(game, room)
+    if room.host_player_id:
+        if not host_player_id:
+            return jsonify({'success': False, 'message': 'host_player_id is required for capture confirmation'}), 400
+        if host_player_id != room.host_player_id:
+            return jsonify({'success': False, 'message': 'Only host can submit capture frames'}), 403
+
+    recognized = hybrid_vision.recognize_once(frame_base64)
+    if recognized is None:
+        return jsonify({'success': False, 'message': 'No valid card detected'}), 400
+
+    recognized_card = str(recognized.card_id)
+    room = hybrid_coordinator.get_room_state(game_id)
+    pending = room.pending_virtual_play
+
+    # If this player has a pending virtual card, enforce exact match.
+    if pending and pending.player_id == player_id:
+        if int(recognized.card_id) != int(pending.card_id):
+            return jsonify({
+                'success': False,
+                'message': f'Captured card {recognized.display} does not match selected virtual card',
+                'expected_card_id': pending.card_id,
+                'captured_card_id': recognized.card_id,
+            }), 400
+
+    success, message = game.play_card_hybrid_capture(player_id, recognized_card)
+    if not success:
+        return jsonify({'success': False, 'message': message, 'captured_card_id': recognized.card_id}), 400
+
+    room = hybrid_coordinator.confirm_play_success(game_id, player_id, recognized.card_id)
+    return jsonify({
+        'success': True,
+        'message': message,
+        'captured_card_id': recognized.card_id,
+        'captured_display': recognized.display,
+        'state': hybrid_coordinator.to_payload(room, _players_meta(game)),
+        'game_state': game.get_state(),
+    })
 
 
 if __name__ == '__main__':
