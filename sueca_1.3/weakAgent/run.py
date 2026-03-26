@@ -2,7 +2,10 @@
 Quick runner for the WeakAgent
 """
 import sys
-from weakAgent import WeakAgent
+try:
+    from .weakAgent import WeakAgent
+except ImportError:
+    from weakAgent.weakAgent import WeakAgent
 
 
 if __name__ == "__main__":

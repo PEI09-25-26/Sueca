@@ -15,13 +15,48 @@ class WeakAgent(GameClient):
     Inherits from GameClient to get server communication methods.
     """
     
-    def __init__(self, agent_name="WeakAI"):
+    def __init__(self, agent_name="WeakAI", game_id=None, position=None):
         super().__init__()
         self.agent_name = agent_name
         self.state_tracker = GameStateTracker()
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
         self.think_time = 1.0
+        self.player_id = None
+        self.game_id = game_id
+        self.position = position
+        self._last_phase = None
+        self._last_match_number = None
+        self._finished_announced_key = None
+
+    def _maybe_handle_match_transition(self, state):
+        current_phase = state.get("phase")
+        current_match_number = state.get("current_match_number")
+        current_round = state.get("current_round", 1)
+
+        new_match_by_number = (
+            current_match_number is not None
+            and self._last_match_number is not None
+            and current_match_number != self._last_match_number
+        )
+        new_match_after_finished = (
+            self._last_phase == "finished"
+            and current_phase in ("deck_cutting", "trump_selection", "playing")
+            and current_round == 1
+        )
+
+        if new_match_by_number or new_match_after_finished:
+            self.state_tracker.reset()
+            self._finished_announced_key = None
+            print("New match detected. Resetting WeakAgent tracker.")
+
+        if current_match_number is not None:
+            self._last_match_number = current_match_number
+        self._last_phase = current_phase
+
+    @staticmethod
+    def _finished_key(state):
+        return (state.get("current_match_number"), state.get("matches_played"))
     
     def run(self):
         """
@@ -29,45 +64,56 @@ class WeakAgent(GameClient):
         This is the main entry point when you start the agent.
         """
         # Join the game
-        success, msg = self.join_game(self.agent_name)
+        self.player_name = self.agent_name
+        success, msg, player_id = self.join_game(self.player_name, self.game_id, self.position)
+        if success:
+            self.player_id = player_id
         if not success:
             print(f"[ERROR] Failed to join game: {msg}")
             return
-        
-        self.player_name = self.agent_name
+
         print(f"WeakAgent joined as {self.player_name}\n")
         
         while True:
-            state = self.get_status()
-            if state is None:
+            try:
+                state = self.get_status()
+                if state is None:
+                    time.sleep(1)
+                    continue
+
+                self._maybe_handle_match_transition(state)
+
+                # Update state tracker
+                self.state_tracker.update_from_state(state, self.player_name)
+
+                # Update hand
+                hand = self.get_hand()
+                self.state_tracker.update_my_hand(hand)
+
+                # Handle deck cutting
+                if state["phase"] == "deck_cutting":
+                    self._handle_deck_cutting(state)
+
+                # Handle trump selection
+                elif state["phase"] == "trump_selection":
+                    self._handle_trump_selection(state)
+
+                # Handle playing turn
+                elif state["phase"] == "playing":
+                    self._handle_playing_turn(state)
+
+                # Game finished
+                elif state["phase"] == "finished":
+                    finished_key = self._finished_key(state)
+                    if self._finished_announced_key != finished_key:
+                        team1 = state.get("team_scores", {}).get("team1", 0)
+                        team2 = state.get("team_scores", {}).get("team2", 0)
+                        print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
+                        self._finished_announced_key = finished_key
+            except Exception as error:
+                print(f"[ERROR] WeakAgent loop error: {error}")
                 time.sleep(1)
-                continue
-            
-            # Update state tracker
-            self.state_tracker.update_from_state(state, self.player_name)
-            
-            # Update hand
-            hand = self.get_hand()
-            self.state_tracker.update_my_hand(hand)
-            
-            # Handle deck cutting
-            if state["phase"] == "deck_cutting":
-                self._handle_deck_cutting(state)
-            
-            # Handle trump selection
-            elif state["phase"] == "trump_selection":
-                self._handle_trump_selection(state)
-            
-            # Handle playing turn
-            elif state["phase"] == "playing":
-                self._handle_playing_turn(state)
-            
-            # Game finished
-            elif state["phase"] == "finished":
-                team1 = state.get("team_scores", {}).get("team1", 0)
-                team2 = state.get("team_scores", {}).get("team2", 0)
-                print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
-                break
+
             time.sleep(random.uniform(0.5, 1.0))
     
     def _handle_deck_cutting(self, state):

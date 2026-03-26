@@ -39,6 +39,7 @@ class RoomActivity : AppCompatActivity() {
     private lateinit var txtSeatHint: TextView
     private lateinit var btnAddRandomBot: Button
     private lateinit var btnAddAgent1Bot: Button
+    private lateinit var btnAddAgent2Bot: Button
     private lateinit var botActionsContainer: View
     private lateinit var botPlacementOverlay: View
     private lateinit var txtBotPlacementHint: TextView
@@ -74,6 +75,7 @@ class RoomActivity : AppCompatActivity() {
         txtSeatHint = findViewById(R.id.txtSeatHint)
         btnAddRandomBot = findViewById(R.id.btnAddRandomBot)
         btnAddAgent1Bot = findViewById(R.id.btnAddAgent1Bot)
+        btnAddAgent2Bot = findViewById(R.id.btnAddAgent2Bot)
         botActionsContainer = findViewById(R.id.botActionsContainer)
         botPlacementOverlay = findViewById(R.id.botPlacementOverlay)
         txtBotPlacementHint = findViewById(R.id.txtBotPlacementHint)
@@ -167,6 +169,7 @@ class RoomActivity : AppCompatActivity() {
         val canRemovePlayers = state.phase == "waiting" && isHost && !botPlacementMode
         botActionsContainer.visibility = if (canUseBotActions) View.VISIBLE else View.GONE
         btnAddRandomBot.isEnabled = canUseBotActions
+        btnAddAgent2Bot.isEnabled = canUseBotActions
         btnAddAgent1Bot.isEnabled = canUseBotActions
 
         if (!canUseBotActions && botPlacementMode) {
@@ -267,7 +270,11 @@ class RoomActivity : AppCompatActivity() {
         }
 
         btnAddAgent1Bot.setOnClickListener {
-            toggleBotPlacementMode("agent1", "Agent1Bot")
+            toggleBotPlacementMode("weak", "WeakBot")
+        }
+
+        btnAddAgent2Bot.setOnClickListener {
+            toggleBotPlacementMode("Average", "AverageBot")
         }
 
         botPlacementOverlay.setOnClickListener {
@@ -422,6 +429,7 @@ class RoomActivity : AppCompatActivity() {
 
         btnAddRandomBot.alpha = if (pendingBotDifficulty == "random" && modeActive) 1f else 0.85f
         btnAddAgent1Bot.alpha = if (pendingBotDifficulty == "agent1" && modeActive) 1f else 0.85f
+        btnAddAgent2Bot.alpha = if (pendingBotDifficulty == "agent2" && modeActive) 1f else 0.85f
 
         if (modeActive) {
             btnSeatNorth.bringToFront()

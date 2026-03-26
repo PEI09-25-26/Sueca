@@ -38,8 +38,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
         android:gravity="center"
-        android:orientation="horizontal"
-        android:weightSum="2">
+        android:orientation="horizontal">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddRandomBot"
@@ -58,7 +57,18 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
-            android:text="+ Bot Agent1"
+            android:text="+ Bot Fraco"
+            android:textAllCaps="false"
+            app:backgroundTint="#26FFFFFF"
+            app:cornerRadius="16dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddAgent2Bot"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="+ Bot Average"
             android:textAllCaps="false"
             app:backgroundTint="#26FFFFFF"
             app:cornerRadius="16dp" />

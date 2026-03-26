@@ -25,7 +25,7 @@ MQTT_USERNAME = os.getenv('MQTT_USERNAME', '')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
 MQTT_USE_AUTH = os.getenv('MQTT_USE_AUTH', 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
 HTTP_POLL_INTERVAL = float(os.getenv('SUECA_HTTP_POLL_INTERVAL', '2'))
-SUPPORTED_BOT_TYPES = {'random', 'weak', 'weak_agent'}
+SUPPORTED_BOT_TYPES = {'random', 'weak', 'weak_agent', 'average', 'average_agent'}
 POSITION_REFRESH = '__refresh__'
 
 
@@ -37,6 +37,8 @@ def normalize_bot_type(value):
         'r': 'random',
         'rand': 'random',
         'w': 'weak',
+        'avg': 'average',
+        'medium': 'average',
     }
     normalized = aliases.get(normalized, normalized)
     return normalized if normalized in SUPPORTED_BOT_TYPES else None
@@ -361,7 +363,7 @@ class GameClient:
                 print('  position <slot_number|north|south|east|west>')
                 print('  bot <bot_name>')
                 print('  bot <slot_number|north|south|east|west> [bot_name]')
-                print('  bot <...> as <random|weak|weak_agent>')
+                print('  bot <...> as <random|weak|weak_agent|average|average_agent>')
                 print('  quit')
                 print('> ', end='', flush=True)
             return True

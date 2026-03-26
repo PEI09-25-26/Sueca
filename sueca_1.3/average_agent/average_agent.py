@@ -1,6 +1,5 @@
-"""
-RandomAgent - AI agent that plays Sueca using heuristics
-"""
+"""AverageAgent - AI agent that plays Sueca using simple heuristics."""
+
 from client import GameClient
 from game_state_tracker import GameStateTracker
 from card_mapper import CardMapper
@@ -9,13 +8,13 @@ import random
 import time
 
 
-class RandomAgent(GameClient):
+class AverageAgent(GameClient):
     """
     AI agent that automatically plays Sueca.
     Inherits from GameClient to get server communication methods.
     """
     
-    def __init__(self, agent_name="RandomAI", game_id=None, position=None):
+    def __init__(self, agent_name="AverageAI", game_id=None, position=None):
         super().__init__()
         self.agent_name = agent_name
         self.state_tracker = GameStateTracker()
@@ -48,7 +47,7 @@ class RandomAgent(GameClient):
         if new_match_by_number or new_match_after_finished:
             self.state_tracker.reset()
             self._finished_announced_key = None
-            print("New match detected. Resetting RandomAgent tracker.")
+            print("New match detected. Resetting AverageAgent tracker.")
 
         if current_match_number is not None:
             self._last_match_number = current_match_number
@@ -72,7 +71,7 @@ class RandomAgent(GameClient):
             print(f"[ERROR] Failed to join game: {message}")
             return
         
-        print(f"RandomAgent joined as {self.player_name}\n")
+        print(f"AverageAgent joined as {self.player_name}\n")
         
         while True:
             try:
@@ -111,7 +110,7 @@ class RandomAgent(GameClient):
                         print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
                         self._finished_announced_key = finished_key
             except Exception as error:
-                print(f"[ERROR] RandomAgent loop error: {error}")
+                print(f"[ERROR] AverageAgent loop error: {error}")
                 time.sleep(1)
 
             time.sleep(random.uniform(0.5, 1.0))
@@ -165,3 +164,7 @@ class RandomAgent(GameClient):
             print(f"Agent played: {card_display}")
         else:
             print(f"[ERROR] Playing card failed: {msg}")
+
+
+# Backward-compatible alias for older imports.
+AverageClient = AverageAgent

@@ -32,6 +32,7 @@ class GameState:
 
     def __init__(self, game_id):
         self.game_id = game_id
+        self._lock = threading.RLock()
         self.reset()
 
     def reset(self):
@@ -55,6 +56,7 @@ class GameState:
         self.round_plays = []
         self.round_suit = None
         self.current_player = None
+        self.round_resolving = False
         self.last_winner = None
         self.turn_order = []
         self.match_history = []
@@ -75,6 +77,7 @@ class GameState:
         self.round_plays = []
         self.round_suit = None
         self.current_player = None
+        self.round_resolving = False
         self.last_winner = None
         self.turn_order = []
 
@@ -378,123 +381,155 @@ class GameState:
         return total
 
     def _finish_round(self):
-        winner = self._determine_round_winner()
-        if not winner:
-            return
+        with self._lock:
+            if len(self.round_plays) != 4:
+                self.round_resolving = False
+                return
 
-        points = self._calculate_round_points()
+            winner = self._determine_round_winner()
+            if not winner:
+                self.round_resolving = False
+                return
 
-        if winner in self.teams[0]:
-            self.team_scores[0] += points
-            team_name = 'Team 1 (N/S)'
-        else:
-            self.team_scores[1] += points
-            team_name = 'Team 2 (E/W)'
+            points = self._calculate_round_points()
 
-        logger.info(
-            'Round %s won by %s in game %s - %s points to %s',
-            self.current_round,
-            winner.player_name,
-            self.game_id,
-            points,
-            team_name,
-        )
+            if winner in self.teams[0]:
+                self.team_scores[0] += points
+                team_name = 'Team 1 (N/S)'
+            else:
+                self.team_scores[1] += points
+                team_name = 'Team 2 (E/W)'
 
-        self.last_winner = winner
-        self.current_round += 1
-        self.round_plays = []
-        self.round_suit = None
+            logger.info(
+                'Round %s won by %s in game %s - %s points to %s',
+                self.current_round,
+                winner.player_name,
+                self.game_id,
+                points,
+                team_name,
+            )
 
-        if self.current_round > 10:
-            self.phase = 'finished'
-            self.game_started = False
+            self.last_winner = winner
+            finished_round = self.current_round
+            self.current_round += 1
+            self.round_plays = []
+            self.round_suit = None
 
-            match_winner_team = None
-            if self.team_scores[0] > self.team_scores[1]:
-                match_winner_team = 'team1'
-                self.match_points['team1'] += 1
-            elif self.team_scores[1] > self.team_scores[0]:
-                match_winner_team = 'team2'
-                self.match_points['team2'] += 1
+            if self.current_round > 10:
+                self.phase = 'finished'
+                self.game_started = False
+                self.current_player = None
 
-            self.match_history.append({
-                'match_number': self.current_match_number,
-                'winner_team': match_winner_team,
-                'winner_label': 'Team 1 (N/S)' if match_winner_team == 'team1' else ('Team 2 (E/W)' if match_winner_team == 'team2' else 'draw'),
-                'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
-                'finished_at': datetime.now(timezone.utc).isoformat(),
-            })
-        else:
-            self._set_turn_order()
+                match_winner_team = None
+                if self.team_scores[0] > self.team_scores[1]:
+                    match_winner_team = 'team1'
+                    self.match_points['team1'] += 1
+                elif self.team_scores[1] > self.team_scores[0]:
+                    match_winner_team = 'team2'
+                    self.match_points['team2'] += 1
 
-        event = {
-            'type': 'round_end',
-            'round': self.current_round - 1,
-            'winner': winner.player_name,
-            'winner_id': winner.player_id,
-            'game_finished': self.phase == 'finished',
-            'state': self.get_state(),
-            'game_id': self.game_id,
-        }
+                if match_winner_team == 'team1':
+                    winner_label = 'Team 1 (N/S)'
+                elif match_winner_team == 'team2':
+                    winner_label = 'Team 2 (E/W)'
+                else:
+                    winner_label = 'draw'
+
+                self.match_history.append({
+                    'match_number': self.current_match_number,
+                    'winner_team': match_winner_team,
+                    'winner_label': winner_label,
+                    'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
+                    'finished_at': datetime.now(timezone.utc).isoformat(),
+                })
+            else:
+                self._set_turn_order()
+
+            self.round_resolving = False
+            event = {
+                'type': 'round_end',
+                'round': finished_round,
+                'winner': winner.player_name,
+                'winner_id': winner.player_id,
+                'game_finished': self.phase == 'finished',
+                'state': self.get_state(),
+                'game_id': self.game_id,
+            }
         try:
             requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
         except Exception:
             pass
 
     def play_card(self, player_id, card_str):
-        player = self.get_player(player_id)
-        if not player:
-            return False, 'Player not found'
+        with self._lock:
+            if self.phase != 'playing':
+                return False, 'Game is not in playing phase'
 
-        if self.current_player != player:
-            return False, f'Not your turn! Waiting for {self.current_player.player_name}'
+            if self.round_resolving or len(self.round_plays) >= 4:
+                return False, 'Round is being resolved. Wait for next round.'
 
-        card = None
-        for c in player.hand:
-            if str(c) == card_str:
-                card = c
-                break
+            player = self.get_player(player_id)
+            if not player:
+                return False, 'Player not found'
 
-        if card is None:
-            return False, 'Card not in hand'
+            if self.current_player != player:
+                waiting_for = self.current_player.player_name if self.current_player else 'next round'
+                return False, f'Not your turn! Waiting for {waiting_for}'
 
-        if not self._can_play_card(player, card):
-            return False, f'You must follow suit {self.round_suit}!'
+            try:
+                card_id = int(card_str)
+            except (TypeError, ValueError):
+                return False, 'Invalid card'
 
-        player.hand.remove(card)
-        self.round_plays.append({
-            'player_id': player.player_id,
-            'player_name': player.player_name,
-            'card': str(card),
-            'position': str(player.position)
-        })
+            if card_id < 0 or card_id > 39:
+                return False, 'Invalid card'
 
-        if len(self.round_plays) == 1:
-            self.round_suit = CardMapper.get_card_suit(card)
+            if card_id not in player.hand:
+                return False, 'Card not in hand'
 
-        logger.info('%s played %s in game %s', player.player_name, CardMapper.get_card(card), self.game_id)
+            if not self._can_play_card(player, card_id):
+                return False, f'You must follow suit {self.round_suit}!'
 
-        current_index = self.turn_order.index(player)
-        if current_index + 1 < len(self.turn_order):
-            self.current_player = self.turn_order[current_index + 1]
+            player.hand.remove(card_id)
+            self.round_plays.append({
+                'player_id': player.player_id,
+                'player_name': player.player_name,
+                'card': str(card_id),
+                'position': player.position.name
+            })
 
-        event = {
-            'type': 'card_played',
-            'player': player.player_name,
-            'player_id': player.player_id,
-            'card': card_str,
-            'state': self.get_state(),
-            'game_id': self.game_id,
-        }
+            if len(self.round_plays) == 1:
+                self.round_suit = CardMapper.get_card_suit(card_id)
+
+            logger.info('%s played %s in game %s', player.player_name, CardMapper.get_card(card_id), self.game_id)
+
+            should_finish_round = len(self.round_plays) == 4
+            if should_finish_round:
+                self.round_resolving = True
+                self.current_player = None
+            else:
+                current_index = self.turn_order.index(player)
+                if current_index + 1 < len(self.turn_order):
+                    self.current_player = self.turn_order[current_index + 1]
+
+            event = {
+                'type': 'card_played',
+                'player': player.player_name,
+                'player_id': player.player_id,
+                'card': str(card_id),
+                'state': self.get_state(),
+                'game_id': self.game_id,
+            }
+
         try:
             requests.post('http://localhost:8000/game/event', json=event, timeout=0.5)
         except Exception:
             pass
 
-        if len(self.round_plays) == 4:
+        if should_finish_round:
             threading.Timer(1.69, self._finish_round).start()
 
-        return True, f'Played {CardMapper.get_card(card)}'
+        return True, f'Played {CardMapper.get_card(card_id)}'
 
     def play_card_hybrid_capture(self, player_id, card_str):
         """
@@ -579,7 +614,7 @@ class GameState:
                 {
                     'id': p.player_id,
                     'name': p.player_name,
-                    'position': str(p.position),
+                    'position': p.position.name,
                     'cards_left': len(p.hand),
                 }
                 for p in self.players
@@ -639,16 +674,25 @@ class GameState:
             pass
 
 def create_random_bot(bot_name, position=None, game_id=None):
-    agent = RandomAgent(bot_name)
-    agent.position = position
-    agent.game_id = game_id
-    return agent
+    return RandomAgent(bot_name, game_id, position)
+
+
+def create_average_bot(bot_name, position=None, game_id=None):
+    from average_agent import AverageAgent
+    return AverageAgent(bot_name, game_id, position)
+
+
+def create_weak_bot(bot_name, position=None, game_id=None):
+    from weakAgent import WeakAgent
+    return WeakAgent(bot_name, game_id, position)
 
 class BotFactory:
     """Factory for creating different types of bots."""
     
     _bot_types = {
         'random': create_random_bot,
+        'average': create_average_bot,
+        'weak': create_weak_bot,
     }
     
     @classmethod
@@ -679,6 +723,12 @@ class GameManager:
         self._lock = threading.Lock()
         self.games[self.default_game_id] = GameState(self.default_game_id)
 
+    @staticmethod
+    def normalize_game_id(game_id):
+        if game_id is None:
+            return None
+        return str(game_id).strip().upper()
+
     def _generate_game_id(self):
         while True:
             candidate = uuid.uuid4().hex[:6].upper()
@@ -688,7 +738,17 @@ class GameManager:
     def get_game(self, game_id=None):
         if not game_id:
             return self.games.get(self.default_game_id)
-        return self.games.get(game_id)
+
+        normalized = self.normalize_game_id(game_id)
+        if not normalized:
+            return self.games.get(self.default_game_id)
+
+        game = self.games.get(normalized)
+        if game:
+            return game
+
+        # Defensive fallback for legacy lowercase IDs already stored in memory.
+        return self.games.get(str(game_id).strip())
 
     def create_room(self):
         with self._lock:
@@ -719,12 +779,24 @@ hybrid_coordinator = HybridGameCoordinator()
 def _get_game_from_request(data=None):
     game_id = None
     if isinstance(data, dict):
-        game_id = data.get('game_id')
+        game_id = (
+            data.get('game_id')
+            or data.get('gameId')
+            or data.get('room_id')
+            or data.get('roomId')
+        )
     if not game_id:
-        game_id = request.args.get('game_id')
+        game_id = (
+            request.args.get('game_id')
+            or request.args.get('gameId')
+            or request.args.get('room_id')
+            or request.args.get('roomId')
+        )
 
     if not game_id:
         game_id = manager.default_game_id
+
+    game_id = manager.normalize_game_id(game_id)
 
     game = manager.get_game(game_id)
     return game, game_id
@@ -909,6 +981,7 @@ def change_position():
     return jsonify({'success': True, 'message': f'Position changed to {player.position.name}', 'state': game.get_state()})
 
 @app.route('/api/add_bot', methods=['POST'])
+@app.route('/api/addBot', methods=['POST'])
 def add_bot():
     data = request.get_json() or {}
     game, game_id = _get_game_from_request(data)
@@ -941,15 +1014,19 @@ def add_bot():
             'message': f'Unknown bot type. Available: {available}'
         }), 400
     
-    # Wait a moment for the bot to join through the API
-    time.sleep(0.5)
-    
-    # Find the bot player that just joined
+    bot_thread = threading.Thread(target=agent.run, daemon=True)
+    bot_thread.start()
+
     bot_player = None
-    for p in game.players:
-        if p.player_name == bot_name:
-            bot_player = p
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        for p in game.players:
+            if p.player_name == bot_name:
+                bot_player = p
+                break
+        if bot_player:
             break
+        time.sleep(0.1)
     
     if bot_player:
         return jsonify({
