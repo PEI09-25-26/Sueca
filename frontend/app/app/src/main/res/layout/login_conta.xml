@@ -19,23 +19,23 @@
     <LinearLayout
         android:id="@+id/createRoomContainer"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center"
+        android:layout_height="324dp"
         android:background="@drawable/section_outline"
+        android:gravity="center"
+        android:orientation="vertical"
         android:padding="16dp">
 
+
         <TextView
-            android:id="@+id/CriarConta"
+            android:id="@+id/LoginConta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
             android:gravity="center"
-            android:text="Criar Conta:"
+            android:text="Entrar na Conta:"
             android:textColor="@android:color/white"
             android:textSize="23sp"
             android:textStyle="bold" />
-
 
         <EditText
             android:id="@+id/inputName2"
@@ -66,7 +66,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="12dp"
-            android:text="Criar Conta"
+            android:text="Entrar"
             android:textAllCaps="false"
             android:textColor="@android:color/white"
             android:textSize="20sp"
