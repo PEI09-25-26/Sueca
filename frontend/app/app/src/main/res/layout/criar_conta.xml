@@ -44,7 +44,7 @@
             android:layout_marginTop="12dp"
             android:layout_marginBottom="12dp"
             android:background="@drawable/edittext_bg"
-            android:hint="Nome*"
+            android:hint="Nome"
             android:padding="12dp"
             android:textColor="@android:color/white" />
 
@@ -56,7 +56,7 @@
             android:layout_marginBottom="12dp"
             android:background="@drawable/edittext_bg"
             android:ems="10"
-            android:hint="Password*"
+            android:hint="Password"
             android:inputType="textPassword"
             android:padding="12dp"
             android:textColor="@android:color/white" />
