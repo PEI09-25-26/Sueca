@@ -1,162 +1,163 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:orientation="vertical"
-    android:padding="24dp"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/background_gradient">
+    android:background="@drawable/background_gradient"
+    android:fillViewport="true">
 
-    <!-- Back button -->
-
-    <!-- Main container -->
     <LinearLayout
-        android:id="@+id/container_profile"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:background="@drawable/section_outline"
-        android:padding="16dp">
-
-        <!-- Banner + Profile -->
-
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="160dp">
-
-            <!-- Banner -->
-            <ImageView
-                android:id="@+id/edit_banner_profile"
-                android:layout_width="345dp"
-                android:layout_height="138dp"
-                android:background="@drawable/banner_background"
-                android:scaleType="centerCrop"
-                android:clickable="true"
-                android:focusable="true"/>
-
-            <!-- Profile picture centered -->
-            <ImageView
-                android:id="@+id/edit_image_profile"
-                android:layout_width="106dp"
-                android:layout_height="104dp"
-                android:layout_gravity="center"
-                android:background="@drawable/profile_circle"
-                android:clipToOutline="true"
-                android:scaleType="centerCrop"
-                android:clickable="true"
-                android:focusable="true"
-                android:translationY="23dp" />
-
-            <ImageView
-                android:id="@+id/backButton3"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_gravity="start"
-                android:layout_marginBottom="16dp"
-                android:contentDescription="Voltar"
-                android:src="@drawable/ic_back_arrow" />
-        </FrameLayout>
-
-        <!-- Username -->
-
-        <!-- Description -->
-
-        <EditText
-            android:id="@+id/edit_name_profile"
-            android:layout_width="336dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:ems="10"
-            android:gravity="center"
-            android:inputType="text"
-            android:text="nomedaconta"
-            android:textSize="22sp" />
-
-        <EditText
-            android:id="@+id/edit_description_profile"
-            android:layout_width="match_parent"
-            android:layout_height="72dp"
-            android:layout_marginTop="15dp"
-            android:ems="10"
-            android:gravity="center"
-            android:text="isto aqui é uma descição super fixe. Qual é a tua opinião sobre descrições grandes? concordo!"
-            android:inputType="textMultiLine"
-            android:textSize="16sp"/>
-
-        <!-- User Statistics Section -->
-
-        <TextView
-            android:id="@+id/edit_statisticstext_profile"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="Estatísticas:"
-            android:textColor="@android:color/darker_gray"
-            android:textSize="19sp"
-            android:textStyle="bold" />
+        android:gravity="center_horizontal"
+        android:padding="16dp"
+        android:paddingBottom="24dp">
 
         <LinearLayout
-            android:id="@+id/container2_profile"
+            android:id="@+id/container_profile"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/section_outline"
             android:orientation="vertical"
-            android:padding="8dp">
+            android:background="@drawable/section_outline"
+            android:padding="16dp">
 
-            <!-- Vitórias -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="170dp">
+
+                <ImageView
+                    android:id="@+id/edit_banner_profile"
+                    android:layout_width="match_parent"
+                    android:layout_height="140dp"
+                    android:background="@drawable/banner_background"
+                    android:scaleType="centerCrop"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <ImageView
+                    android:id="@+id/edit_image_profile"
+                    android:layout_width="106dp"
+                    android:layout_height="104dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/profile_avatar_circle"
+                    android:clipToOutline="true"
+                    android:outlineProvider="background"
+                    android:contentDescription="Escolher foto de perfil"
+                    android:scaleType="centerCrop"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:translationY="24dp" />
+
+                <ImageView
+                    android:id="@+id/backButton3"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="start|top"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginTop="8dp"
+                    android:contentDescription="Voltar"
+                    android:src="@drawable/ic_back_arrow" />
+            </FrameLayout>
+
+            <EditText
+                android:id="@+id/edit_name_profile"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:ems="10"
+                android:gravity="center"
+                android:inputType="text"
+                android:text="nomedaconta"
+                android:textSize="24sp" />
+
+            <EditText
+                android:id="@+id/edit_description_profile"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="72dp"
+                android:layout_marginTop="15dp"
+                android:ems="10"
+                android:gravity="center"
+                android:inputType="textMultiLine"
+                android:text="isto aqui é uma descição super fixe. Qual é a tua opinião sobre descrições grandes? concordo!"
+                android:textSize="17sp" />
 
             <TextView
-                android:id="@+id/stat_vitorias"
-                android:layout_width="wrap_content"
+                android:id="@+id/edit_statisticstext_profile"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Vitórias: x"
+                android:layout_marginTop="20dp"
+                android:text="Estatísticas:"
                 android:textColor="@android:color/darker_gray"
-                android:textSize="16sp" />
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/stat_winrate"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/container2_profile"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Win Rate: x%"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="16sp" />
+                android:layout_marginTop="16dp"
+                android:background="@drawable/section_outline"
+                android:orientation="vertical"
+                android:padding="8dp">
 
-            <TextView
-                android:id="@+id/stat_total_games"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Jogos Totais: x"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="16sp" />
+                <TextView
+                    android:id="@+id/stat_vitorias"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Vitórias: x"
+                    android:textColor="@android:color/darker_gray"
+                    android:textSize="17sp" />
 
-            <TextView
-                android:id="@+id/stat_win_streak"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Streak de Vitórias: x"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="16sp" />
+                <TextView
+                    android:id="@+id/stat_winrate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Win Rate: x%"
+                    android:textColor="@android:color/darker_gray"
+                    android:textSize="17sp" />
+
+                <TextView
+                    android:id="@+id/stat_total_games"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Jogos Totais: x"
+                    android:textColor="@android:color/darker_gray"
+                    android:textSize="17sp" />
+
+                <TextView
+                    android:id="@+id/stat_win_streak"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Streak de Vitórias: x"
+                    android:textColor="@android:color/darker_gray"
+                    android:textSize="17sp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/edit_save_profile"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="44dp"
+                android:layout_marginBottom="60dp"
+                android:text="Salvar Alterações"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="19sp"
+                app:backgroundTint="@color/teal_700"
+                app:cornerRadius="12dp" />
+
         </LinearLayout>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/edit_save_profile"
-            android:layout_width="243dp"
-            android:layout_height="48dp"
-            android:layout_marginTop="55dp"
-            android:layout_marginBottom="2dp"
-            android:text="Salvar Alterações"
-            android:textAllCaps="false"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            app:backgroundTint="@color/teal_700"
-            app:cornerRadius="12dp" />
-
     </LinearLayout>
 
-</LinearLayout>
+</ScrollView>
