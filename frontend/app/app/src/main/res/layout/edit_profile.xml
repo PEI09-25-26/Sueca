@@ -31,7 +31,9 @@
                 android:layout_width="345dp"
                 android:layout_height="138dp"
                 android:background="@drawable/banner_background"
-                android:scaleType="centerCrop" />
+                android:scaleType="centerCrop"
+                android:clickable="true"
+                android:focusable="true"/>
 
             <!-- Profile picture centered -->
             <ImageView
@@ -42,6 +44,8 @@
                 android:background="@drawable/profile_circle"
                 android:clipToOutline="true"
                 android:scaleType="centerCrop"
+                android:clickable="true"
+                android:focusable="true"
                 android:translationY="23dp" />
 
             <ImageView
@@ -50,6 +54,7 @@
                 android:layout_height="40dp"
                 android:layout_gravity="start"
                 android:layout_marginBottom="16dp"
+                android:contentDescription="Voltar"
                 android:src="@drawable/ic_back_arrow" />
         </FrameLayout>
 

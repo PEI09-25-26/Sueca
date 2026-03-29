@@ -3,6 +3,7 @@ package com.example.MVP
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -20,6 +21,7 @@ class MainMenuActivity : AppCompatActivity() {
         val btnJoin = findViewById<Button>(R.id.btnJoin)
         val btnVision = findViewById<Button>(R.id.btnVision)
         val btnHybrid = findViewById<Button>(R.id.btnHybrid)
+        val profileIcon = findViewById<ImageView>(R.id.image_profile2)
 
         btnJoin.setOnClickListener {
             showModeDialog()
@@ -82,6 +84,11 @@ class MainMenuActivity : AppCompatActivity() {
 
         btnHybrid.setOnClickListener {
             val intent = Intent(this, HybridMenuActivity::class.java)
+            startActivity(intent)
+        }
+
+        profileIcon.setOnClickListener {
+            val intent = Intent(this, ProfileActivity::class.java)
             startActivity(intent)
         }
     }

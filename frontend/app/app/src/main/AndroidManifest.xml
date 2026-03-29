@@ -63,5 +63,15 @@
             android:exported="false"
             android:screenOrientation="portrait"/>
 
+        <activity
+            android:name="com.example.MVP.EditActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <activity
+            android:name="com.example.MVP.ProfileActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
     </application>
 </manifest>
