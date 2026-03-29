@@ -14,14 +14,11 @@
         android:padding="16dp"
         android:paddingBottom="24dp">
 
-
         <ImageView
             android:id="@+id/backButton2"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:layout_gravity="start|top"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
+            android:layout_gravity="start"
             android:contentDescription="Voltar"
             android:src="@drawable/ic_back_arrow" />
 
@@ -29,124 +26,161 @@
             android:id="@+id/container_friends"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:maxWidth="620dp"
             android:background="@drawable/section_outline"
             android:orientation="vertical"
             android:padding="16dp">
 
-
-
-
             <TextView
                 android:id="@+id/title_friend_requests"
-                android:layout_width="346dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:text="Pedidos de amizade"
                 android:textColor="@android:color/white"
-                android:textSize="20sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
 
             <LinearLayout
                 android:id="@+id/friend_requests_container"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/section_outline"
+                android:layout_marginTop="12dp"
                 android:orientation="vertical"
-                android:padding="10dp">
+                android:padding="12dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_marginBottom="10dp"
+                    android:background="@drawable/section_outline"
+                    android:orientation="vertical"
+                    android:padding="10dp">
 
-                    <ImageView
-                        android:id="@+id/request_profile_1"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:background="@drawable/profile_avatar_circle"
-                        android:clipToOutline="true"
-                        android:outlineProvider="background"
-                        android:scaleType="centerCrop"
-                        android:src="@drawable/profile_pic1" />
-
-                    <TextView
-                        android:id="@+id/request_name_1"
-                        android:layout_width="0dp"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_weight="1"
-                        android:text="Jogador 1"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
-                    <Button
-                        android:id="@+id/accept_request_1"
-                        android:layout_width="wrap_content"
-                        android:layout_height="40dp"
-                        android:layout_marginEnd="6dp"
-                        android:backgroundTint="@color/online_green"
-                        android:text="Aceitar"
-                        android:textAllCaps="false"
-                        android:textColor="@android:color/white" />
+                        <ImageView
+                            android:id="@+id/request_profile_1"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/profile_avatar_circle"
+                            android:clipToOutline="true"
+                            android:outlineProvider="background"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/profile_pic1" />
 
-                    <Button
-                        android:id="@+id/reject_request_1"
-                        android:layout_width="wrap_content"
-                        android:layout_height="40dp"
-                        android:backgroundTint="@color/badge_red"
-                        android:text="Recusar"
-                        android:textAllCaps="false"
-                        android:textColor="@android:color/white" />
+                        <TextView
+                            android:id="@+id/request_name_1"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:text="Jogador 1"
+                            android:textColor="@android:color/white"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/accept_request_1"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
+                            android:text="Aceitar"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@color/online_green"
+                            app:cornerRadius="10dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/reject_request_1"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:text="Recusar"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@color/badge_red"
+                            app:cornerRadius="10dp" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:background="@drawable/section_outline"
+                    android:orientation="vertical"
+                    android:padding="10dp">
 
-                    <ImageView
-                        android:id="@+id/request_profile_2"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:background="@drawable/profile_avatar_circle"
-                        android:clipToOutline="true"
-                        android:outlineProvider="background"
-                        android:scaleType="centerCrop"
-                        android:src="@drawable/profile_pic2" />
-
-                    <TextView
-                        android:id="@+id/request_name_2"
-                        android:layout_width="0dp"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_weight="1"
-                        android:text="Jogador 2"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
-                    <Button
-                        android:id="@+id/accept_request_2"
-                        android:layout_width="wrap_content"
-                        android:layout_height="40dp"
-                        android:layout_marginEnd="6dp"
-                        android:backgroundTint="@color/online_green"
-                        android:text="Aceitar"
-                        android:textAllCaps="false"
-                        android:textColor="@android:color/white" />
+                        <ImageView
+                            android:id="@+id/request_profile_2"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/profile_avatar_circle"
+                            android:clipToOutline="true"
+                            android:outlineProvider="background"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/profile_pic2" />
 
-                    <Button
-                        android:id="@+id/reject_request_2"
-                        android:layout_width="wrap_content"
-                        android:layout_height="40dp"
-                        android:backgroundTint="@color/badge_red"
-                        android:text="Recusar"
-                        android:textAllCaps="false"
-                        android:textColor="@android:color/white" />
+                        <TextView
+                            android:id="@+id/request_name_2"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:text="Jogador 2"
+                            android:textColor="@android:color/white"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/accept_request_2"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
+                            android:text="Aceitar"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@color/online_green"
+                            app:cornerRadius="10dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/reject_request_2"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:text="Recusar"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@color/badge_red"
+                            app:cornerRadius="10dp" />
+                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
 
@@ -154,20 +188,19 @@
                 android:id="@+id/title_friends"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
-                android:text="Amigos:"
+                android:layout_marginTop="20dp"
+                android:text="Amigos"
                 android:textColor="@android:color/white"
-                android:textSize="20sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
 
             <LinearLayout
                 android:id="@+id/friends_list_container"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/section_outline"
+                android:layout_marginTop="12dp"
                 android:orientation="vertical"
-                android:padding="10dp">
+                android:padding="12dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -175,26 +208,26 @@
                     android:layout_marginBottom="12dp"
                     android:background="@drawable/section_outline"
                     android:orientation="vertical"
-                    android:padding="8dp">
+                    android:padding="10dp">
 
                     <ImageView
                         android:id="@+id/friend_banner_1"
                         android:layout_width="match_parent"
-                        android:layout_height="72dp"
+                        android:layout_height="84dp"
                         android:background="@drawable/banner_background"
                         android:scaleType="centerCrop" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="10dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
                         <ImageView
                             android:id="@+id/friend_profile_1"
-                            android:layout_width="46dp"
-                            android:layout_height="46dp"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
                             android:background="@drawable/profile_avatar_circle"
                             android:clipToOutline="true"
                             android:outlineProvider="background"
@@ -204,7 +237,7 @@
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
+                            android:layout_marginStart="12dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
 
@@ -214,7 +247,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="Amigo_on"
                                 android:textColor="@android:color/white"
-                                android:textSize="16sp"
+                                android:textSize="17sp"
                                 android:textStyle="bold" />
 
                             <TextView
@@ -225,26 +258,36 @@
                                 android:textColor="@color/online_green"
                                 android:textSize="14sp" />
                         </LinearLayout>
+                    </LinearLayout>
 
-                        <Button
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/join_room_1"
-                            android:layout_width="wrap_content"
-                            android:layout_height="40dp"
-                            android:layout_marginEnd="6dp"
-                            android:backgroundTint="@color/bright_orange"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
                             android:text="Entrar na Sala"
                             android:textAllCaps="false"
-                            android:textColor="@android:color/white" />
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@color/bright_orange"
+                            app:cornerRadius="10dp" />
 
-                        <Button
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/remove_friend_1"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:backgroundTint="@color/badge_red"
+                            android:layout_width="48dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
                             android:text="X"
                             android:textAllCaps="false"
                             android:textColor="@android:color/white"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            app:backgroundTint="@color/badge_red"
+                            app:cornerRadius="10dp" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -253,26 +296,26 @@
                     android:layout_height="wrap_content"
                     android:background="@drawable/section_outline"
                     android:orientation="vertical"
-                    android:padding="8dp">
+                    android:padding="10dp">
 
                     <ImageView
                         android:id="@+id/friend_banner_2"
                         android:layout_width="match_parent"
-                        android:layout_height="72dp"
+                        android:layout_height="84dp"
                         android:background="@drawable/banner_background"
                         android:scaleType="centerCrop" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="10dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
                         <ImageView
                             android:id="@+id/friend_profile_2"
-                            android:layout_width="46dp"
-                            android:layout_height="46dp"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
                             android:background="@drawable/profile_avatar_circle"
                             android:clipToOutline="true"
                             android:outlineProvider="background"
@@ -282,7 +325,7 @@
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
+                            android:layout_marginStart="12dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
 
@@ -292,7 +335,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="Amigo_off"
                                 android:textColor="@android:color/white"
-                                android:textSize="16sp"
+                                android:textSize="17sp"
                                 android:textStyle="bold" />
 
                             <TextView
@@ -303,26 +346,37 @@
                                 android:textColor="@color/offline_grey"
                                 android:textSize="14sp" />
                         </LinearLayout>
+                    </LinearLayout>
 
-                        <Button
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/join_room_2"
-                            android:layout_width="wrap_content"
-                            android:layout_height="40dp"
-                            android:layout_marginEnd="6dp"
-                            android:backgroundTint="@color/offline_grey"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
+                            android:enabled="false"
                             android:text="Entrar na Sala"
                             android:textAllCaps="false"
-                            android:textColor="@android:color/white" />
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@color/offline_grey"
+                            app:cornerRadius="10dp" />
 
-                        <Button
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/remove_friend_2"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:backgroundTint="@color/badge_red"
+                            android:layout_width="48dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
                             android:text="X"
                             android:textAllCaps="false"
                             android:textColor="@android:color/white"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            app:backgroundTint="@color/badge_red"
+                            app:cornerRadius="10dp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -331,20 +385,20 @@
                 android:id="@+id/title_add_friend"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
+                android:layout_marginTop="20dp"
                 android:text="Adicionar Amigo"
                 android:textColor="@android:color/white"
-                android:textSize="20sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/section_outline"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="8dp">
+                android:padding="10dp">
 
                 <EditText
                     android:id="@+id/input_add_friend"
@@ -359,15 +413,16 @@
                     android:textColor="@android:color/white"
                     android:textColorHint="@color/white_50_percent_opacity" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/button_add_friend"
                     android:layout_width="wrap_content"
                     android:layout_height="48dp"
                     android:layout_marginStart="8dp"
-                    android:backgroundTint="@color/teal_700"
-                    android:text="Adicionar Amigo"
+                    android:text="Adicionar"
                     android:textAllCaps="false"
-                    android:textColor="@android:color/white" />
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="@color/teal_700"
+                    app:cornerRadius="10dp" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
