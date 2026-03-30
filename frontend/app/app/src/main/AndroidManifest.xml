@@ -42,6 +42,11 @@
             android:screenOrientation="portrait"/>
 
         <activity
+            android:name="com.example.MVP.GameMvp2MockActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <activity
             android:name="com.example.MVP.VisionActivity"
             android:exported="false"
             android:theme="@style/Theme.AppCompat.NoActionBar"

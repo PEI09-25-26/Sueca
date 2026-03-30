@@ -65,6 +65,18 @@
             app:backgroundTint="@color/orange"
             app:cornerRadius="12dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnMockMvp2"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="Mock Mesa MVP2 (sem servidor)"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            app:backgroundTint="@color/teal_700"
+            app:cornerRadius="12dp" />
+
     </LinearLayout>
 
     <!-- Friends image top-right (left of profile) -->

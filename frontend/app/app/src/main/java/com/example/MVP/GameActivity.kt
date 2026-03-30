@@ -5,6 +5,9 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.os.Bundle
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
@@ -240,7 +243,25 @@ class GameActivity : AppCompatActivity() {
         val scores = state.teamScores
 
         if (scores != null) {
-            txtTeamScores.text = "Team 1: ${scores.team1} | Team 2: ${scores.team2}"
+            val team1Label = "Team N/S: ${scores.team1}"
+            val separator = "  |  "
+            val team2Label = "Team E/W: ${scores.team2}"
+            val scoreText = team1Label + separator + team2Label
+
+            txtTeamScores.text = SpannableStringBuilder(scoreText).apply {
+                setSpan(
+                    ForegroundColorSpan(getColor(android.R.color.holo_green_light)),
+                    0,
+                    team1Label.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                setSpan(
+                    ForegroundColorSpan(getColor(android.R.color.holo_blue_light)),
+                    team1Label.length + separator.length,
+                    scoreText.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
             txtTeamScores.visibility = View.VISIBLE
         } else {
             txtTeamScores.visibility = View.GONE
