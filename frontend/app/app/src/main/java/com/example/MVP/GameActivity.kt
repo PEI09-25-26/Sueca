@@ -12,6 +12,7 @@ import androidx.core.graphics.toColorInt
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
+import android.view.Gravity
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -23,6 +24,7 @@ import com.example.MVP.utils.CardMapper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.Normalizer
 
 class GameActivity : AppCompatActivity() {
 
@@ -52,7 +54,6 @@ class GameActivity : AppCompatActivity() {
     private lateinit var txtStatus: TextView
     private lateinit var txtPhase: TextView
     private lateinit var txtTrump: TextView
-    private lateinit var txtRound: TextView
     private lateinit var txtCurrentPlayer: TextView
     private lateinit var txtTeamScores: TextView
     private lateinit var txtEndBanner: TextView
@@ -128,7 +129,6 @@ class GameActivity : AppCompatActivity() {
         txtStatus = findViewById(R.id.txtStatus)
         txtPhase = findViewById(R.id.txtPhase)
         txtTrump = findViewById(R.id.txtTrump)
-        txtRound = findViewById(R.id.txtRound)
         txtCurrentPlayer = findViewById(R.id.txtCurrentPlayer)
         txtTeamScores = findViewById(R.id.txtTeamScores)
         txtEndBanner = findViewById(R.id.txtEndBanner)
@@ -238,9 +238,6 @@ class GameActivity : AppCompatActivity() {
 
         updateTrumpOwnerUi(state)
 
-        txtRound.text = "Ronda: ${state.currentRound}/10"
-        txtRound.visibility = if (state.phase == "playing") View.VISIBLE else View.GONE
-
         isMyTurn = when {
             playerId.isNotBlank() -> state.currentPlayerId == playerId
             else -> state.currentPlayer == playerName
@@ -259,7 +256,7 @@ class GameActivity : AppCompatActivity() {
                     getColor(android.R.color.white)
             )
 
-            txtCurrentPlayer.visibility = View.VISIBLE
+            txtCurrentPlayer.visibility = View.GONE
         } else {
             txtCurrentPlayer.visibility = View.GONE
         }
@@ -334,8 +331,7 @@ class GameActivity : AppCompatActivity() {
 
     // Status message shown to the player
     private fun updateStatusText(state: GameStatusResponse) {
-
-        txtStatus.text = when (state.phase) {
+        val statusText = when (state.phase) {
 
             "waiting" ->
                 "Waiting for ${4 - state.playerCount} more player(s)..."
@@ -356,15 +352,21 @@ class GameActivity : AppCompatActivity() {
 
             "playing" -> {
                 if (isMyTurn)
-                    "Your turn! Play a card"
+                    "Vez: Tu"
                 else
-                    "Waiting for ${state.currentPlayer}"
+                    "Vez: ${state.currentPlayer ?: "?"}"
             }
 
             "finished" -> "Game Over"
 
             else -> ""
         }
+
+        txtStatus.text = statusText
+        txtStatus.setTextColor(
+            if (state.phase == "playing" && isMyTurn) "#FFD166".toColorInt()
+            else getColor(android.R.color.white)
+        )
     }
 
     // Buttons for special phases
@@ -795,12 +797,11 @@ class GameActivity : AppCompatActivity() {
         clearTrumpOwnerUi()
 
         val trumpId = state.trump?.toIntOrNull() ?: return
-        val myPos = state.players.find {
-            (playerId.isNotBlank() && it.id == playerId) || it.name == playerName
-        }?.position
+        val myPos = resolveMyPosition(state) ?: "SOUTH"
 
-        val ownerAbsolutePos = resolveTrumpOwnerPosition(state, myPos)
+        val ownerAbsolutePos = resolveTrumpOwnerPosition(state) ?: "WEST"
         val ownerRelative = getRelativePosition(ownerAbsolutePos, myPos)
+        if (ownerRelative !in 0..3) return
 
         val trumpCard = Card(
             trumpId.toString(),
@@ -843,54 +844,88 @@ class GameActivity : AppCompatActivity() {
         slotTrumpRightLabel.visibility = View.GONE
     }
 
-    private fun resolveTrumpOwnerPosition(state: GameStatusResponse, myPos: String?): String {
+    private fun resolveMyPosition(state: GameStatusResponse): String? {
+        val byId = state.players.find { playerId.isNotBlank() && it.id == playerId }?.position
+        if (!byId.isNullOrBlank()) return normalizePosition(byId)
+
+        val byName = state.players.find { samePersonName(it.name, playerName) }?.position
+        if (!byName.isNullOrBlank()) return normalizePosition(byName)
+
+        return null
+    }
+
+    private fun resolveTrumpOwnerPosition(state: GameStatusResponse): String? {
         val selectorPosition = normalizePosition(state.trumpSelectorPosition)
         if (selectorPosition.isNotEmpty()) return selectorPosition
 
         val bySelectorId = state.players.find { it.id != null && it.id == state.trumpSelectorPlayerId }?.position
         if (!bySelectorId.isNullOrBlank()) return normalizePosition(bySelectorId)
 
-        val bySelectorName = state.players.find { it.name == state.trumpSelectorPlayer }?.position
+        val bySelectorName = state.players.find { samePersonName(it.name, state.trumpSelectorPlayer) }?.position
         if (!bySelectorName.isNullOrBlank()) return normalizePosition(bySelectorName)
 
         val byWestId = state.players.find { it.id != null && it.id == state.westPlayerId }?.position
         if (!byWestId.isNullOrBlank()) return normalizePosition(byWestId)
 
-        val byWestName = state.players.find { it.name == state.westPlayer }?.position
+        val byWestName = state.players.find { samePersonName(it.name, state.westPlayer) }?.position
         if (!byWestName.isNullOrBlank()) return normalizePosition(byWestName)
 
-        if (!myPos.isNullOrBlank() && state.trump != null && myHand.contains(state.trump)) {
-            return normalizePosition(myPos)
+        return null
+    }
+
+    private fun samePersonName(a: String?, b: String?): Boolean {
+        if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+
+        fun normalizeName(value: String): String {
+            val normalized = Normalizer.normalize(value, Normalizer.Form.NFD)
+            return normalized
+                .replace("\\p{Mn}+".toRegex(), "")
+                .trim()
+                .lowercase()
         }
 
-        return "WEST"
+        return normalizeName(a) == normalizeName(b)
     }
 
     private fun getRelativePosition(playerPosition: String?, myPosition: String?): Int {
-        if (playerPosition.isNullOrBlank() || myPosition.isNullOrBlank()) return 0
+        if (playerPosition.isNullOrBlank() || myPosition.isNullOrBlank()) return -1
 
         val positions = listOf("NORTH", "EAST", "SOUTH", "WEST")
         val myIndex = positions.indexOf(normalizePosition(myPosition))
         val otherIndex = positions.indexOf(normalizePosition(playerPosition))
 
-        if (myIndex == -1 || otherIndex == -1) return 0
+        if (myIndex == -1 || otherIndex == -1) return -1
         return (otherIndex - myIndex + 4) % 4
     }
 
     private fun addTrumpCardToSlot(targetSlot: FrameLayout, card: Card) {
-        val view = LayoutInflater.from(this)
-            .inflate(R.layout.item_card_mvp, targetSlot, false)
+        val resId = getCardResource(card)
+        val image = ImageView(this)
+        image.setImageResource(resId)
+        image.scaleType = ImageView.ScaleType.FIT_XY
 
-        val img = view.findViewById<ImageView>(R.id.cardImage)
-        img.setImageResource(getCardResource(card))
+        val density = resources.displayMetrics.density
+        val fallbackWidth = (35 * density).toInt()
+        val fallbackHeight = (72 * density).toInt()
+        val slotWidth = targetSlot.layoutParams?.width?.takeIf { it > 0 } ?: fallbackWidth
+        val slotHeight = targetSlot.layoutParams?.height?.takeIf { it > 0 } ?: fallbackHeight
 
-        // Scale down the trump card slightly to differentiate
-        view.scaleX = 0.9f
-        view.scaleY = 0.9f
-        view.alpha = 0.85f
+        // Keep slot size but zoom the card image inside, like the mockup corner style.
+        val imageWidth = (slotWidth * 5f).toInt()
+        val imageHeight = (slotHeight * 4f).toInt()
+        image.layoutParams = FrameLayout.LayoutParams(imageWidth, imageHeight).apply {
+            gravity = Gravity.TOP or Gravity.START
+        }
+
+        image.translationX = 0f
+        image.translationY = 0f
 
         targetSlot.removeAllViews()
-        targetSlot.addView(view)
+        targetSlot.setPadding(0, 0, 0, 0)
+        targetSlot.clipToPadding = true
+        targetSlot.clipChildren = true
+        targetSlot.background = null
+        targetSlot.addView(image)
     }
 
     private fun getCardResource(card: Card): Int {

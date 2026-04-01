@@ -21,7 +21,6 @@ class MainMenuActivity : AppCompatActivity() {
         val btnJoin = findViewById<Button>(R.id.btnJoin)
         val btnVision = findViewById<Button>(R.id.btnVision)
         val btnHybrid = findViewById<Button>(R.id.btnHybrid)
-        val btnMockMvp2 = findViewById<Button>(R.id.btnMockMvp2)
         val friendsIcon = findViewById<ImageView>(R.id.image_friends)
         val profileIcon = findViewById<ImageView>(R.id.image_profile2)
 
@@ -86,11 +85,6 @@ class MainMenuActivity : AppCompatActivity() {
 
         btnHybrid.setOnClickListener {
             val intent = Intent(this, HybridMenuActivity::class.java)
-            startActivity(intent)
-        }
-
-        btnMockMvp2.setOnClickListener {
-            val intent = Intent(this, GameMvp2MockActivity::class.java)
             startActivity(intent)
         }
 
