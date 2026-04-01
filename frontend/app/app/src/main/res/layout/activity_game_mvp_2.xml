@@ -195,7 +195,7 @@
 
             <TextView
                 android:id="@+id/slotLeftName"
-                android:layout_width="72dp"
+                android:layout_width="100dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
                 android:ellipsize="end"
@@ -217,7 +217,7 @@
 
             <TextView
                 android:id="@+id/slotRightName"
-                android:layout_width="72dp"
+                android:layout_width="100dp"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="4dp"
                 android:ellipsize="end"
@@ -254,7 +254,7 @@
             android:id="@+id/slotLeft"
             android:layout_width="70dp"
             android:layout_height="100dp"
-            android:layout_marginStart="60dp"
+            android:layout_marginStart="24dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
@@ -264,7 +264,7 @@
             android:id="@+id/slotRight"
             android:layout_width="70dp"
             android:layout_height="100dp"
-            android:layout_marginEnd="60dp"
+            android:layout_marginEnd="24dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
@@ -336,6 +336,7 @@
             android:textColor="#FFD166"
             android:textSize="9sp"
             android:textStyle="bold"
+            android:visibility="gone"
             app:layout_constraintBottom_toTopOf="@id/slotTrumpPartner"
             app:layout_constraintEnd_toEndOf="@id/slotTrumpPartner"
             app:layout_constraintStart_toStartOf="@id/slotTrumpPartner" />
@@ -365,6 +366,7 @@
             android:textColor="#FFD166"
             android:textSize="9sp"
             android:textStyle="bold"
+            android:visibility="gone"
             app:layout_constraintBottom_toTopOf="@id/slotTrumpLeft"
             app:layout_constraintEnd_toEndOf="@id/slotTrumpLeft"
             app:layout_constraintStart_toStartOf="@id/slotTrumpLeft" />
@@ -386,6 +388,7 @@
             android:textColor="#FFD166"
             android:textSize="9sp"
             android:textStyle="bold"
+            android:visibility="gone"
             app:layout_constraintBottom_toTopOf="@id/slotTrumpRight"
             app:layout_constraintEnd_toEndOf="@id/slotTrumpRight"
             app:layout_constraintStart_toStartOf="@id/slotTrumpRight" />
@@ -413,6 +416,7 @@
             android:textColor="#FFD166"
             android:textSize="9sp"
             android:textStyle="bold"
+            android:visibility="gone"
             app:layout_constraintBottom_toTopOf="@id/slotTrump"
             app:layout_constraintEnd_toEndOf="@id/slotTrump"
             app:layout_constraintStart_toStartOf="@id/slotTrump" />

@@ -8,13 +8,14 @@ import android.os.Bundle
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
+import androidx.core.graphics.toColorInt
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.MVP.models.*
 import com.example.MVP.network.RetrofitClient
@@ -33,6 +34,14 @@ class GameActivity : AppCompatActivity() {
     private lateinit var slotLeft: FrameLayout
     private lateinit var slotRight: FrameLayout
     private lateinit var slotTrump: FrameLayout
+    private lateinit var slotTrumpPartner: FrameLayout
+    private lateinit var slotTrumpLeft: FrameLayout
+    private lateinit var slotTrumpRight: FrameLayout
+
+    private lateinit var slotTrumpPlayerLabel: TextView
+    private lateinit var slotTrumpPartnerLabel: TextView
+    private lateinit var slotTrumpLeftLabel: TextView
+    private lateinit var slotTrumpRightLabel: TextView
 
     // Player name labels
     private lateinit var slotPartnerName: TextView
@@ -90,13 +99,27 @@ class GameActivity : AppCompatActivity() {
 
     private fun setupUI() {
 
-        findViewById<ImageView>(R.id.backButton).setOnClickListener { finish() }
+        findViewById<ImageView>(R.id.backButton).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setMessage("Desistir do jogo?")
+                .setPositiveButton("Sim") { _, _ -> finish() }
+                .setNegativeButton("Nao", null)
+                .show()
+        }
 
         slotPlayer = findViewById(R.id.slotPlayer)
         slotPartner = findViewById(R.id.slotPartner)
         slotLeft = findViewById(R.id.slotLeft)
         slotRight = findViewById(R.id.slotRight)
         slotTrump = findViewById(R.id.slotTrump)
+        slotTrumpPartner = findViewById(R.id.slotTrumpPartner)
+        slotTrumpLeft = findViewById(R.id.slotTrumpLeft)
+        slotTrumpRight = findViewById(R.id.slotTrumpRight)
+
+        slotTrumpPlayerLabel = findViewById(R.id.slotTrumpPlayerLabel)
+        slotTrumpPartnerLabel = findViewById(R.id.slotTrumpPartnerLabel)
+        slotTrumpLeftLabel = findViewById(R.id.slotTrumpLeftLabel)
+        slotTrumpRightLabel = findViewById(R.id.slotTrumpRightLabel)
 
         slotPartnerName = findViewById(R.id.slotPartnerName)
         slotLeftName = findViewById(R.id.slotLeftName)
@@ -113,7 +136,17 @@ class GameActivity : AppCompatActivity() {
         actionsLayout = findViewById(R.id.layoutActions)
 
         rvHand = findViewById(R.id.playerHandRecyclerView)
-        rvHand.layoutManager = GridLayoutManager(this, 5)
+        rvHand.layoutManager = object : LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false) {
+            override fun canScrollHorizontally(): Boolean = false
+        }
+        rvHand.setHasFixedSize(true)
+        rvHand.itemAnimator = null
+        rvHand.overScrollMode = View.OVER_SCROLL_NEVER
+        rvHand.setPadding(4, 0, 4, 0)
+        rvHand.clipToPadding = false
+        rvHand.clipChildren = false
+        (rvHand.parent as? android.view.ViewGroup)?.clipChildren = false
+        (rvHand.parent as? android.view.ViewGroup)?.clipToPadding = false
 
         // Adapter for player's hand
         cardsAdapter = CardsAdapter(emptyList()) { card ->
@@ -125,6 +158,12 @@ class GameActivity : AppCompatActivity() {
         }
 
         rvHand.adapter = cardsAdapter
+        rvHand.post {
+            cardsAdapter.setAvailableWidth(rvHand.width - rvHand.paddingStart - rvHand.paddingEnd)
+        }
+        rvHand.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            cardsAdapter.setAvailableWidth(rvHand.width - rvHand.paddingStart - rvHand.paddingEnd)
+        }
     }
 
     // Poll the server every few seconds
@@ -197,24 +236,9 @@ class GameActivity : AppCompatActivity() {
 
         txtPhase.text = phaseText
 
-        // Show trump card
-        if (state.trump != null) {
-            val trumpId = state.trump.toIntOrNull()
-            if (trumpId != null && slotTrump.childCount == 0) {
-                val trumpCard = Card(
-                    state.trump,
-                    CardMapper.getCardSuitName(trumpId),
-                    CardMapper.getCardRankName(trumpId)
-                )
-                addTrumpCardToSlot(trumpCard)
-            }
-            slotTrump.visibility = View.VISIBLE
-        } else {
-            slotTrump.removeAllViews()
-            slotTrump.visibility = View.GONE
-        }
+        updateTrumpOwnerUi(state)
 
-        txtRound.text = "Round: ${state.currentRound}/10"
+        txtRound.text = "Ronda: ${state.currentRound}/10"
         txtRound.visibility = if (state.phase == "playing") View.VISIBLE else View.GONE
 
         isMyTurn = when {
@@ -225,12 +249,12 @@ class GameActivity : AppCompatActivity() {
         if (state.phase == "playing" && state.currentPlayer != null) {
 
             txtCurrentPlayer.text =
-                if (isMyTurn) "YOUR TURN!"
-                else "Turn: ${state.currentPlayer}"
+                if (isMyTurn) "Vez: Tu"
+                else "Vez: ${state.currentPlayer}"
 
             txtCurrentPlayer.setTextColor(
                 if (isMyTurn)
-                    getColor(android.R.color.holo_green_light)
+                    "#FFD166".toColorInt()
                 else
                     getColor(android.R.color.white)
             )
@@ -243,21 +267,28 @@ class GameActivity : AppCompatActivity() {
         val scores = state.teamScores
 
         if (scores != null) {
-            val team1Label = "Team N/S: ${scores.team1}"
+            val label = "Pontuacao "
+            val team1Label = "${scores.team1}"
             val separator = "  |  "
-            val team2Label = "Team E/W: ${scores.team2}"
-            val scoreText = team1Label + separator + team2Label
+            val team2Label = "${scores.team2}"
+            val scoreText = label + team1Label + separator + team2Label
 
             txtTeamScores.text = SpannableStringBuilder(scoreText).apply {
                 setSpan(
-                    ForegroundColorSpan(getColor(android.R.color.holo_green_light)),
+                    ForegroundColorSpan("#FFFFFF".toColorInt()),
                     0,
-                    team1Label.length,
+                    label.length,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
                 setSpan(
-                    ForegroundColorSpan(getColor(android.R.color.holo_blue_light)),
-                    team1Label.length + separator.length,
+                    ForegroundColorSpan("#FFD166".toColorInt()),
+                    label.length,
+                    label.length + team1Label.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                setSpan(
+                    ForegroundColorSpan("#D7DCE3".toColorInt()),
+                    label.length + team1Label.length + separator.length,
                     scoreText.length,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
@@ -760,9 +791,95 @@ class GameActivity : AppCompatActivity() {
         slot.addView(view)
     }
 
-    private fun addTrumpCardToSlot(card: Card) {
+    private fun updateTrumpOwnerUi(state: GameStatusResponse) {
+        clearTrumpOwnerUi()
+
+        val trumpId = state.trump?.toIntOrNull() ?: return
+        val myPos = state.players.find {
+            (playerId.isNotBlank() && it.id == playerId) || it.name == playerName
+        }?.position
+
+        val ownerAbsolutePos = resolveTrumpOwnerPosition(state, myPos)
+        val ownerRelative = getRelativePosition(ownerAbsolutePos, myPos)
+
+        val trumpCard = Card(
+            trumpId.toString(),
+            CardMapper.getCardSuitName(trumpId),
+            CardMapper.getCardRankName(trumpId)
+        )
+
+        when (ownerRelative) {
+            0 -> {
+                addTrumpCardToSlot(slotTrump, trumpCard)
+                slotTrumpPlayerLabel.visibility = View.VISIBLE
+            }
+
+            1 -> {
+                addTrumpCardToSlot(slotTrumpLeft, trumpCard)
+                slotTrumpLeftLabel.visibility = View.VISIBLE
+            }
+
+            2 -> {
+                addTrumpCardToSlot(slotTrumpPartner, trumpCard)
+                slotTrumpPartnerLabel.visibility = View.VISIBLE
+            }
+
+            3 -> {
+                addTrumpCardToSlot(slotTrumpRight, trumpCard)
+                slotTrumpRightLabel.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun clearTrumpOwnerUi() {
+        slotTrump.removeAllViews()
+        slotTrumpPartner.removeAllViews()
+        slotTrumpLeft.removeAllViews()
+        slotTrumpRight.removeAllViews()
+
+        slotTrumpPlayerLabel.visibility = View.GONE
+        slotTrumpPartnerLabel.visibility = View.GONE
+        slotTrumpLeftLabel.visibility = View.GONE
+        slotTrumpRightLabel.visibility = View.GONE
+    }
+
+    private fun resolveTrumpOwnerPosition(state: GameStatusResponse, myPos: String?): String {
+        val selectorPosition = normalizePosition(state.trumpSelectorPosition)
+        if (selectorPosition.isNotEmpty()) return selectorPosition
+
+        val bySelectorId = state.players.find { it.id != null && it.id == state.trumpSelectorPlayerId }?.position
+        if (!bySelectorId.isNullOrBlank()) return normalizePosition(bySelectorId)
+
+        val bySelectorName = state.players.find { it.name == state.trumpSelectorPlayer }?.position
+        if (!bySelectorName.isNullOrBlank()) return normalizePosition(bySelectorName)
+
+        val byWestId = state.players.find { it.id != null && it.id == state.westPlayerId }?.position
+        if (!byWestId.isNullOrBlank()) return normalizePosition(byWestId)
+
+        val byWestName = state.players.find { it.name == state.westPlayer }?.position
+        if (!byWestName.isNullOrBlank()) return normalizePosition(byWestName)
+
+        if (!myPos.isNullOrBlank() && state.trump != null && myHand.contains(state.trump)) {
+            return normalizePosition(myPos)
+        }
+
+        return "WEST"
+    }
+
+    private fun getRelativePosition(playerPosition: String?, myPosition: String?): Int {
+        if (playerPosition.isNullOrBlank() || myPosition.isNullOrBlank()) return 0
+
+        val positions = listOf("NORTH", "EAST", "SOUTH", "WEST")
+        val myIndex = positions.indexOf(normalizePosition(myPosition))
+        val otherIndex = positions.indexOf(normalizePosition(playerPosition))
+
+        if (myIndex == -1 || otherIndex == -1) return 0
+        return (otherIndex - myIndex + 4) % 4
+    }
+
+    private fun addTrumpCardToSlot(targetSlot: FrameLayout, card: Card) {
         val view = LayoutInflater.from(this)
-            .inflate(R.layout.item_card_mvp, slotTrump, false)
+            .inflate(R.layout.item_card_mvp, targetSlot, false)
 
         val img = view.findViewById<ImageView>(R.id.cardImage)
         img.setImageResource(getCardResource(card))
@@ -772,8 +889,8 @@ class GameActivity : AppCompatActivity() {
         view.scaleY = 0.9f
         view.alpha = 0.85f
 
-        slotTrump.removeAllViews()
-        slotTrump.addView(view)
+        targetSlot.removeAllViews()
+        targetSlot.addView(view)
     }
 
     private fun getCardResource(card: Card): Int {

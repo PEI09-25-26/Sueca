@@ -7,7 +7,6 @@
     android:background="@drawable/background_gradient"
     android:padding="12dp">
 
-    <!-- Back Button -->
     <ImageView
         android:id="@+id/backButton"
         android:layout_width="32dp"
@@ -17,37 +16,65 @@
         app:layout_constraintTop_toTopOf="parent"
         app:tint="@android:color/white" />
 
-    <!-- Game Info Header -->
     <LinearLayout
         android:id="@+id/headerInfo"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="10dp"
+        android:background="#1F000000"
         android:orientation="vertical"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="8dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/backButton"
         app:layout_constraintTop_toTopOf="parent">
 
-        <TextView
-            android:id="@+id/txtPhase"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Waiting for players..."
-            android:textColor="@android:color/white"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/txtPhase"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Sueca Virtual"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtTeamScores"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/score_pill_minimal"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="end|center_vertical"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="Pontuacao N/S: 0 | E/O: 0"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:text="Pontuacao N/S: 63 | E/O: 47"
+                tools:visibility="visible" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/txtRound"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Round: 1/10"
-                android:textColor="@android:color/white"
+                android:text="Ronda: 1/10"
+                android:textColor="#D9FFFFFF"
                 android:textSize="12sp"
                 android:visibility="gone" />
 
@@ -55,34 +82,25 @@
                 android:id="@+id/txtTrump"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:text="Trump: ?"
-                android:textColor="#FFD700"
+                android:layout_marginStart="14dp"
+                android:text="Trunfo: ?"
+                android:textColor="#FFD166"
                 android:textSize="12sp"
                 android:visibility="gone" />
-
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/txtTeamScores"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Team 1: 0 | Team 2: 0"
-            android:textColor="@android:color/white"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
     </LinearLayout>
 
-    <!-- Current Player / Turn Indicator -->
     <TextView
         android:id="@+id/txtCurrentPlayer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Turn: ?"
+        android:layout_marginTop="8dp"
+        android:background="#26000000"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp"
+        android:text="Vez: ?"
         android:textColor="@android:color/white"
-        android:textSize="14sp"
+        android:textSize="13sp"
         android:textStyle="bold"
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
@@ -94,7 +112,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:background="#33FFD700"
+        android:background="#40FFD700"
         android:gravity="center"
         android:padding="10dp"
         android:textColor="@android:color/white"
@@ -104,23 +122,131 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/txtCurrentPlayer"
-        tools:text="TEAM 1 (N/S) WINS\nFinal score: 72 - 48\nMatch points: 2 - 1" />
+        tools:text="TEAM 1 (N/S) WINS&#10;Final score: 72 - 48&#10;Match points: 2 - 1" />
 
-    <!-- Table Area -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/tableContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginVertical="8dp"
-        app:layout_constraintBottom_toTopOf="@+id/txtStatus"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:padding="10dp"
+        app:layout_constraintBottom_toTopOf="@id/txtStatus"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/txtEndBanner">
+        app:layout_constraintTop_toBottomOf="@id/txtEndBanner">
+
+        <LinearLayout
+            android:id="@+id/identityPartner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toTopOf="@id/slotPartner"
+            app:layout_constraintEnd_toEndOf="@id/slotPartner"
+            app:layout_constraintStart_toStartOf="@id/slotPartner"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:id="@+id/slotPartnerAvatar"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="@drawable/profile_avatar_circle"
+                android:clipToOutline="true"
+                android:foreground="@drawable/avatar_glow_gold"
+                android:outlineProvider="background"
+                android:padding="2dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/profile_pic1" />
+
+            <TextView
+                android:id="@+id/slotPartnerName"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textColor="@android:color/white"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:text="Parceiro" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/identityLeft"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toTopOf="@id/slotLeft"
+            tools:layout_editor_absoluteX="-2dp">
+
+            <ImageView
+                android:id="@+id/slotLeftAvatar"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="@drawable/profile_avatar_circle"
+                android:clipToOutline="true"
+                android:foreground="@drawable/avatar_glow_silver"
+                android:outlineProvider="background"
+                android:padding="2dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/profile_pic2" />
+
+            <TextView
+                android:id="@+id/slotLeftName"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@android:color/white"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:text="Esquerda" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/identityRight"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toTopOf="@id/slotRight"
+            app:layout_constraintEnd_toEndOf="@id/slotTrumpRight">
+
+            <TextView
+                android:id="@+id/slotRightName"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                android:ellipsize="end"
+                android:gravity="end"
+                android:maxLines="1"
+                android:textColor="@android:color/white"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:text="Direita" />
+
+            <ImageView
+                android:id="@+id/slotRightAvatar"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="@drawable/profile_avatar_circle"
+                android:clipToOutline="true"
+                android:foreground="@drawable/avatar_glow_silver"
+                android:outlineProvider="background"
+                android:padding="2dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/profile_pic3" />
+        </LinearLayout>
 
         <FrameLayout
             android:id="@+id/slotPartner"
             android:layout_width="70dp"
             android:layout_height="100dp"
+            android:layout_marginTop="70dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
@@ -129,94 +255,191 @@
             android:id="@+id/slotLeft"
             android:layout_width="70dp"
             android:layout_height="100dp"
+            android:layout_marginStart="24dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.6" />
 
         <FrameLayout
             android:id="@+id/slotRight"
             android:layout_width="70dp"
             android:layout_height="100dp"
+            android:layout_marginEnd="24dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-
-        <TextView
-            android:id="@+id/slotLeftName"
-            android:layout_width="70dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:textColor="@android:color/white"
-            android:textSize="10sp"
-            android:maxLines="1"
-            android:ellipsize="end"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/slotLeft" />
-
-        <TextView
-            android:id="@+id/slotRightName"
-            android:layout_width="70dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:textColor="@android:color/white"
-            android:textSize="10sp"
-            android:maxLines="1"
-            android:ellipsize="end"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/slotRight" />
-
-        <TextView
-            android:id="@+id/slotPartnerName"
-            android:layout_width="70dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:textColor="@android:color/white"
-            android:textSize="10sp"
-            android:maxLines="1"
-            android:ellipsize="end"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/slotPartner" />
-
-        <!-- Trump Card in Center -->
-        <FrameLayout
-            android:id="@+id/slotTrump"
-            android:layout_width="70dp"
-            android:layout_height="100dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.6" />
 
         <FrameLayout
             android:id="@+id/slotPlayer"
             android:layout_width="70dp"
             android:layout_height="100dp"
+            android:layout_marginBottom="12dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <FrameLayout
+            android:id="@+id/miniDeckPartner"
+            android:layout_width="36dp"
+            android:layout_height="50dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginBottom="84dp"
+            app:layout_constraintBottom_toBottomOf="@id/slotPartner"
+            app:layout_constraintStart_toEndOf="@id/slotPartner">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="40dp"
+                android:layout_gravity="bottom|start"
+                android:rotation="-7"
+                android:src="@drawable/card_back" />
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="top|end"
+                android:rotation="6"
+                android:src="@drawable/card_back" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/miniDeckRight"
+            android:layout_width="36dp"
+            android:layout_height="50dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginBottom="60dp"
+            app:layout_constraintBottom_toBottomOf="@id/slotRight"
+            app:layout_constraintStart_toEndOf="@id/slotRight">
+
+            <ImageView
+                android:layout_width="30dp"
+                android:layout_height="40dp"
+                android:layout_gravity="bottom|start"
+                android:rotation="-7"
+                android:src="@drawable/card_back" />
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="top|end"
+                android:rotation="6"
+                android:src="@drawable/card_back" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/slotTrumpPartnerLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="0dp"
+            android:text="Trunfo"
+            android:textColor="#FFD166"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/slotTrumpPartner"
+            app:layout_constraintEnd_toEndOf="@id/slotTrumpPartner"
+            app:layout_constraintStart_toStartOf="@id/slotTrumpPartner" />
+
+        <FrameLayout
+            android:id="@+id/slotTrumpPartner"
+            android:layout_width="27dp"
+            android:layout_height="47dp"
+            android:layout_marginTop="24dp"
+            app:layout_constraintBottom_toBottomOf="@id/slotPartner"
+            app:layout_constraintEnd_toEndOf="@id/miniDeckPartner"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="@id/miniDeckPartner"
+            app:layout_constraintTop_toBottomOf="@id/miniDeckPartner"
+            app:layout_constraintVertical_bias="1.0" />
+
+        <TextView
+            android:id="@+id/slotTrumpLeftLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="0dp"
+            android:text="Trunfo"
+            android:textColor="#FFD166"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/slotTrumpLeft"
+            app:layout_constraintEnd_toEndOf="@id/slotTrumpLeft"
+            app:layout_constraintStart_toStartOf="@id/slotTrumpLeft" />
+
+        <FrameLayout
+            android:id="@+id/slotTrumpLeft"
+            android:layout_width="27dp"
+            android:layout_height="47dp"
+            android:layout_marginEnd="10dp"
+            app:layout_constraintBottom_toBottomOf="@id/slotLeft"
+            app:layout_constraintEnd_toStartOf="@id/slotLeft" />
+
+        <TextView
+            android:id="@+id/slotTrumpRightLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="0dp"
+            android:text="Trunfo"
+            android:textColor="#FFD166"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/slotTrumpRight"
+            app:layout_constraintEnd_toEndOf="@id/slotTrumpRight"
+            app:layout_constraintStart_toStartOf="@id/slotTrumpRight" />
+
+        <FrameLayout
+            android:id="@+id/slotTrumpRight"
+            android:layout_width="27dp"
+            android:layout_height="47dp"
+            app:layout_constraintBottom_toBottomOf="@id/slotRight"
+            app:layout_constraintEnd_toEndOf="@id/miniDeckRight"
+            app:layout_constraintEnd_toStartOf="@id/slotRight"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="@id/miniDeckRight"
+            app:layout_constraintTop_toBottomOf="@id/miniDeckRight"
+            app:layout_constraintVertical_bias="1.0" />
+
+        <TextView
+            android:id="@+id/slotTrumpPlayerLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="0dp"
+            android:text="Trunfo"
+            android:textColor="#FFD166"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/slotTrump"
+            app:layout_constraintEnd_toEndOf="@id/slotTrump"
+            app:layout_constraintStart_toStartOf="@id/slotTrump" />
+
+        <FrameLayout
+            android:id="@+id/slotTrump"
+            android:layout_width="27dp"
+            android:layout_height="47dp"
+            android:layout_marginStart="10dp"
+            app:layout_constraintBottom_toBottomOf="@id/slotPlayer"
+            app:layout_constraintStart_toEndOf="@id/slotPlayer" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Status Text -->
     <TextView
         android:id="@+id/txtStatus"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:background="#16000000"
         android:gravity="center"
         android:padding="8dp"
-        android:text="Connecting..."
+        android:text="A ligar..."
         android:textColor="@android:color/white"
-        android:textSize="14sp"
+        android:textSize="13sp"
         app:layout_constraintBottom_toTopOf="@id/layoutActions"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- Action Buttons Container (for deck cutting, trump selection) -->
     <LinearLayout
         android:id="@+id/layoutActions"
         android:layout_width="wrap_content"
@@ -233,23 +456,24 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="4dp"
-        android:text="Your Hand"
-        android:textColor="@android:color/white"
-        android:textSize="14sp"
-        android:textStyle="italic"
+        android:text="A tua mao"
+        android:textColor="#E6FFFFFF"
+        android:textSize="13sp"
+        android:textStyle="bold"
         app:layout_constraintBottom_toTopOf="@+id/playerHandRecyclerView"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- Player Hand: Grid 5x2 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/playerHandRecyclerView"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-        app:spanCount="5"
+        android:layout_height="152dp"
+        android:layout_marginBottom="13dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:paddingTop="32dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         tools:itemCount="10"
         tools:listitem="@layout/item_card_mvp" />

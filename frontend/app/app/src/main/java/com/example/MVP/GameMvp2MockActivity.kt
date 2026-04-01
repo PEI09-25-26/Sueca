@@ -102,19 +102,49 @@ class GameMvp2MockActivity : AppCompatActivity() {
         val slotLeft = findViewById<FrameLayout>(R.id.slotLeft)
         val slotRight = findViewById<FrameLayout>(R.id.slotRight)
         val slotPlayer = findViewById<FrameLayout>(R.id.slotPlayer)
-        val slotTrump = findViewById<FrameLayout>(R.id.slotTrump)
-        val slotTrumpPartner = findViewById<FrameLayout>(R.id.slotTrumpPartner)
-        val slotTrumpLeft = findViewById<FrameLayout>(R.id.slotTrumpLeft)
-        val slotTrumpRight = findViewById<FrameLayout>(R.id.slotTrumpRight)
 
         addCardToSlot(slotPartner, 18) // hearts_7
         addCardToSlot(slotLeft, 36) // spades_7
         addCardToSlot(slotRight, 11) // diamonds_3
         addCardToSlot(slotPlayer, 29) // hearts_ace
-        addTrumpCornerToSlot(slotTrump, 24) // hearts_6 (player-side possibility)
-        addTrumpCornerToSlot(slotTrumpPartner, 24) // partner-side possibility
-        addTrumpCornerToSlot(slotTrumpLeft, 24) // left-side possibility
-        addTrumpCornerToSlot(slotTrumpRight, 24) // right-side possibility
+        showSingleTrumpOwner(ownerRelative = 0, cardId = 24)
+    }
+
+    private fun showSingleTrumpOwner(ownerRelative: Int, cardId: Int) {
+        val slotTrump = findViewById<FrameLayout>(R.id.slotTrump)
+        val slotTrumpPartner = findViewById<FrameLayout>(R.id.slotTrumpPartner)
+        val slotTrumpLeft = findViewById<FrameLayout>(R.id.slotTrumpLeft)
+        val slotTrumpRight = findViewById<FrameLayout>(R.id.slotTrumpRight)
+
+        val labelPlayer = findViewById<TextView>(R.id.slotTrumpPlayerLabel)
+        val labelPartner = findViewById<TextView>(R.id.slotTrumpPartnerLabel)
+        val labelLeft = findViewById<TextView>(R.id.slotTrumpLeftLabel)
+        val labelRight = findViewById<TextView>(R.id.slotTrumpRightLabel)
+
+        listOf(slotTrump, slotTrumpPartner, slotTrumpLeft, slotTrumpRight).forEach { it.removeAllViews() }
+        listOf(labelPlayer, labelPartner, labelLeft, labelRight).forEach { it.visibility = View.GONE }
+
+        when (ownerRelative) {
+            0 -> {
+                addTrumpCornerToSlot(slotTrump, cardId)
+                labelPlayer.visibility = View.VISIBLE
+            }
+
+            1 -> {
+                addTrumpCornerToSlot(slotTrumpLeft, cardId)
+                labelLeft.visibility = View.VISIBLE
+            }
+
+            2 -> {
+                addTrumpCornerToSlot(slotTrumpPartner, cardId)
+                labelPartner.visibility = View.VISIBLE
+            }
+
+            3 -> {
+                addTrumpCornerToSlot(slotTrumpRight, cardId)
+                labelRight.visibility = View.VISIBLE
+            }
+        }
     }
 
     private fun setupMockHand() {

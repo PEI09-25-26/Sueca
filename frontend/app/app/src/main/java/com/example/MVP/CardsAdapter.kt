@@ -12,6 +12,8 @@ class CardsAdapter(
     private val onCardClick: (Card) -> Unit
 ) : RecyclerView.Adapter<CardsAdapter.CardViewHolder>() {
 
+    private var availableWidthPx: Int = 0
+
     var isEnabled: Boolean = true
         set(value) {
             field = value
@@ -32,6 +34,26 @@ class CardsAdapter(
         val card = cards[position]
         val resId = getCardResource(holder.itemView, card)
         holder.cardImage.setImageResource(resId)
+
+        val params = holder.itemView.layoutParams as RecyclerView.LayoutParams
+        val cardWidth = dp(holder.itemView, 60)
+        params.width = cardWidth
+        params.height = dp(holder.itemView, 90)
+        val minOverlap = dp(holder.itemView, 8)
+        val step = if (itemCount > 1 && availableWidthPx > cardWidth) {
+            ((availableWidthPx - cardWidth) / (itemCount - 1)).coerceIn(1, cardWidth - minOverlap)
+        } else {
+            cardWidth - dp(holder.itemView, 30)
+        }
+        val overlap = (cardWidth - step).coerceAtLeast(minOverlap)
+        val startMargin = if (position == 0) 0 else -overlap
+        params.marginStart = startMargin
+        params.leftMargin = startMargin
+        params.marginEnd = 0
+        params.rightMargin = 0
+        params.topMargin = 0
+        params.bottomMargin = 0
+        holder.itemView.layoutParams = params
         
         // Visualmente desativar a carta se não for a vez
         holder.itemView.alpha = if (isEnabled) 1.0f else 0.5f
@@ -50,6 +72,12 @@ class CardsAdapter(
         notifyDataSetChanged()
     }
 
+    fun setAvailableWidth(widthPx: Int) {
+        if (widthPx <= 0) return
+        availableWidthPx = widthPx
+        notifyDataSetChanged()
+    }
+
     fun getCards(): List<Card> = cards
 
     private fun getCardResource(view: View, card: Card): Int {
@@ -65,5 +93,9 @@ class CardsAdapter(
         val identifier = "${suit}_$value"
         val resId = context.resources.getIdentifier(identifier, "drawable", context.packageName)
         return if (resId != 0) resId else R.drawable.card_back
+    }
+
+    private fun dp(view: View, value: Int): Int {
+        return (value * view.resources.displayMetrics.density).toInt()
     }
 }
