@@ -5,6 +5,8 @@ Supports multiple game rooms by game ID.
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from deck import Deck
 from player_flask import Player
 from positions import Positions
@@ -17,14 +19,114 @@ import requests
 import threading
 import uuid
 import time
-from datetime import datetime, timezone
+import secrets
+import bcrypt
+import jwt
+import re
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from firebase.players import BD
+from twilio.email_service import EmailService
+
+PLAYER_COLLECTION = 'players'
+FRIENDS_COLLECTION = 'friends'
+FRIENDS_REQUESTS_COLLECTION = 'friend_requests'
+EMAIL_VERIFICATION_COLLECTION = 'email_verifications'
+
+# Canonical aliases used by friendship endpoints
+FRIENDSHIP_COLLECTION = FRIENDS_COLLECTION
+FRIEND_REQUEST_COLLECTION = FRIENDS_REQUESTS_COLLECTION
+
 
 app = Flask(__name__)
 CORS(app)
+limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+JWT_SECRET = 'your-secret-key-change-in-production'
+JWT_ALGORITHM = 'HS256'
+JWT_EXP_DELTA_SECONDS = 86400  # 24 hours
+VERIFICATION_CODE_TTL_SECONDS = 10 * 60
+VERIFICATION_MAX_ATTEMPTS = 5
+PASSWORD_MIN_LENGTH = 8
+EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+def _hash_password(password: str) -> str:
+    """Hash password using bcrypt."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def _verify_password(password: str, hashed: str) -> bool:
+    """Verify password against bcrypt hash."""
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def _validate_email(email: str) -> bool:
+    """Validate email format."""
+    return re.match(EMAIL_REGEX, email) is not None
+
+def _validate_password(password: str) -> tuple[bool, str]:
+    """Validate password strength."""
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return False, f'Password must be at least {PASSWORD_MIN_LENGTH} characters'
+    if not any(c.isupper() for c in password):
+        return False, 'Password must contain at least one uppercase letter'
+    if not any(c.islower() for c in password):
+        return False, 'Password must contain at least one lowercase letter'
+    if not any(c.isdigit() for c in password):
+        return False, 'Password must contain at least one digit'
+    return True, ''
+
+def _generate_jwt(uid: str) -> str:
+    """Generate JWT token for user session."""
+    payload = {
+        'uid': uid,
+        'exp': datetime.utcnow() + timedelta(seconds=JWT_EXP_DELTA_SECONDS),
+        'iat': datetime.utcnow(),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def _verify_jwt(token: str) -> tuple[bool, dict]:
+    """Verify and decode JWT token."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return True, payload
+    except jwt.ExpiredSignatureError:
+        return False, {'error': 'Token expired'}
+    except jwt.InvalidTokenError:
+        return False, {'error': 'Invalid token'}
+
+def _filter_user_response(user_doc: dict) -> dict:
+    """Remove sensitive fields from user response."""
+    filtered = user_doc.copy()
+    sensitive_fields = ['password']
+    for field in sensitive_fields:
+        filtered.pop(field, None)
+    return filtered
+
+
+_email_service = None
+def _get_email_service():
+    global _email_service
+    if _email_service is None:
+        _email_service = EmailService()
+    return _email_service
+
+
+def _generate_verification_code() -> str:
+    return ''.join(str(secrets.randbelow(10)) for _ in range(6))
+
+
+def _is_verification_expired(expires_at_iso: str | None) -> bool:
+    if not expires_at_iso:
+        return True
+    try:
+        expires_at = datetime.fromisoformat(expires_at_iso)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > expires_at
+    except Exception:
+        return True
 
 
 class GameState:
@@ -774,7 +876,6 @@ manager = GameManager()
 _HYBRID_CV12_ROOT = Path(__file__).resolve().parent.parent / "ComputerVision_1.2"
 hybrid_vision = HybridVisionService(templates_root=None, cv12_root=_HYBRID_CV12_ROOT)
 hybrid_coordinator = HybridGameCoordinator()
-
 
 def _get_game_from_request(data=None):
     game_id = None
@@ -1536,6 +1637,726 @@ def hybrid_confirm_capture():
         'game_state': game.get_state(),
     })
 
+#Player endpoints and firebase integration
+_firebase_db = None
+def _get_firebase_db():
+    global _firebase_db
+    if _firebase_db is None:
+        _firebase_db = BD()
+    return _firebase_db
+
+
+@app.route('/api/auth/register', methods=['POST'])
+@limiter.limit('5 per hour')
+def register_user():
+    data = request.get_json() or {}
+    username = data.get('username', '').strip()
+    email = data.get('email', '').strip()
+    password = data.get('password', '').strip()
+
+    if not username or not email or not password:
+        return jsonify({'success': False, 'message': 'Username, email, and password are required'}), 400
+
+    # Validate email format
+    if not _validate_email(email):
+        return jsonify({'success': False, 'message': 'Invalid email format'}), 400
+
+    # Validate password strength
+    is_valid, msg = _validate_password(password)
+    if not is_valid:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    # Username validation (letters, including accents, numbers, and underscore; 3-20 chars)
+    if not (3 <= len(username) <= 20) or not re.match(r'^\w+$', username, flags=re.UNICODE):
+        return jsonify({'success': False, 'message': 'Username must be 3-20 characters and contain only letters, numbers, or underscore'}), 400
+
+    try:
+        bd = _get_firebase_db()
+
+        username_match = next(
+            bd.db.collection(PLAYER_COLLECTION).where('username', '==', username).limit(1).stream(),
+            None,
+        )
+        if username_match is not None:
+            return jsonify({'success': False, 'message': 'Username already exists'}), 409
+
+        existing_email = next(
+            bd.db.collection(PLAYER_COLLECTION).where('email', '==', email).limit(1).stream(),
+            None,
+        )
+        if existing_email is not None:
+            return jsonify({'success': False, 'message': 'Email already exists'}), 409
+
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        verification_expires_at = (now_dt + timedelta(seconds=VERIFICATION_CODE_TTL_SECONDS)).isoformat()
+        verification_code = _generate_verification_code()
+        hashed_password = _hash_password(password)
+
+        verification_id = uuid.uuid4().hex
+        verification_data = {
+            'id': verification_id,
+            'username': username,
+            'email': email,
+            'password': hashed_password,
+            'createdAt': now,
+            'updatedAt': now,
+            'verificationCode': verification_code,
+            'verificationExpiresAt': verification_expires_at,
+            'verificationAttempts': 0,
+        }
+
+        bd.set_document(EMAIL_VERIFICATION_COLLECTION, verification_id, verification_data)
+
+        email_service = _get_email_service()
+        send_status = email_service.send_verification_code(email, verification_code, username)
+        if send_status is None or send_status >= 400:
+            bd.delete_document(EMAIL_VERIFICATION_COLLECTION, verification_id)
+            return jsonify({'success': False, 'message': 'Failed to send verification email'}), 500
+
+        return jsonify({
+            'success': True,
+            'message': 'Verification code sent to email',
+            'verificationRequired': True,
+            'verificationId': verification_id,
+        }), 200
+    except Exception as exc:
+        logger.exception('Failed to register user')
+        return jsonify({'success': False, 'message': 'Failed to register user'}), 500
+
+
+@app.route('/api/auth/verify-email', methods=['POST'])
+@limiter.limit('20 per hour')
+def verify_email_code():
+    data = request.get_json() or {}
+    verification_id = (data.get('verification_id') or '').strip()
+    code = (data.get('code') or '').strip()
+
+    if not verification_id or not code:
+        return jsonify({'success': False, 'message': 'verification_id and code are required'}), 400
+
+    if not re.match(r'^\d{6}$', code):
+        return jsonify({'success': False, 'message': 'Code must be exactly 6 digits'}), 400
+
+    try:
+        bd = _get_firebase_db()
+        verification_doc = bd.get_document(EMAIL_VERIFICATION_COLLECTION, verification_id)
+        if not verification_doc:
+            return jsonify({'success': False, 'message': 'Verification request not found'}), 404
+
+        if _is_verification_expired(verification_doc.get('verificationExpiresAt')):
+            bd.delete_document(EMAIL_VERIFICATION_COLLECTION, verification_id)
+            return jsonify({'success': False, 'message': 'Verification code expired'}), 400
+
+        attempts = int(verification_doc.get('verificationAttempts', 0))
+        if attempts >= VERIFICATION_MAX_ATTEMPTS:
+            bd.delete_document(EMAIL_VERIFICATION_COLLECTION, verification_id)
+            return jsonify({'success': False, 'message': 'Too many invalid attempts. Please register again'}), 400
+
+        if verification_doc.get('verificationCode') != code:
+            bd.update_document(EMAIL_VERIFICATION_COLLECTION, verification_id, {
+                'verificationAttempts': attempts + 1,
+                'updatedAt': datetime.now(timezone.utc).isoformat(),
+            })
+            return jsonify({'success': False, 'message': 'Invalid verification code'}), 400
+
+        username = verification_doc.get('username', '').strip()
+        email = verification_doc.get('email', '').strip()
+        password_hash = verification_doc.get('password', '')
+
+        username_match = next(
+            bd.db.collection(PLAYER_COLLECTION).where('username', '==', username).limit(1).stream(),
+            None,
+        )
+        if username_match is not None:
+            bd.delete_document(EMAIL_VERIFICATION_COLLECTION, verification_id)
+            return jsonify({'success': False, 'message': 'Username already exists'}), 409
+
+        existing_email = next(
+            bd.db.collection(PLAYER_COLLECTION).where('email', '==', email).limit(1).stream(),
+            None,
+        )
+        if existing_email is not None:
+            bd.delete_document(EMAIL_VERIFICATION_COLLECTION, verification_id)
+            return jsonify({'success': False, 'message': 'Email already exists'}), 409
+
+        uid = uuid.uuid4().hex
+        now = datetime.now(timezone.utc).isoformat()
+        user_data = {
+            'uid': uid,
+            'username': username,
+            'email': email,
+            'password': password_hash,
+            'emailVerified': True,
+            'description': '',
+            'photoURL': '',
+            'bannerURL': '',
+            'createdAt': now,
+            'updatedAt': now,
+            'lastLoginAt': now,
+            'privacy': 'public',
+            'friendsCount': 0,
+            'status': 'online',
+        }
+        bd.set_document(PLAYER_COLLECTION, uid, user_data)
+        bd.delete_document(EMAIL_VERIFICATION_COLLECTION, verification_id)
+
+        return jsonify({
+            'success': True,
+            'message': 'Email verified successfully',
+            'user': _filter_user_response(user_data),
+            'token': _generate_jwt(uid),
+        }), 200
+    except Exception as exc:
+        logger.exception('Failed to verify email')
+        return jsonify({'success': False, 'message': 'Failed to verify email'}), 500
+    
+@app.route('/api/auth/login', methods=['POST'])
+@limiter.limit('10 per hour')
+def login_user():
+    data = request.get_json() or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
+
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'Username and password are required'}), 400
+    
+    try:
+        bd = _get_firebase_db()
+
+        # Find user by username
+        user_match = next(
+            bd.db.collection(PLAYER_COLLECTION).where('username', '==', username).limit(1).stream(),
+            None,
+        )
+        if user_match is None:
+            return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+        
+        user_doc = user_match.to_dict()
+        user_id = user_match.id
+
+        if not user_doc.get('emailVerified', False):
+            return jsonify({'success': False, 'message': 'Please verify your email before login'}), 403
+        
+        # Verify password
+        if not _verify_password(password, user_doc.get('password', '')):
+            return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+        
+        # Update lastLoginAt
+        now = datetime.now(timezone.utc).isoformat()
+        bd.update_document(PLAYER_COLLECTION, user_id, {
+            'lastLoginAt': now,
+            'status': 'online',
+            'updatedAt': now,
+        })
+        user_doc['lastLoginAt'] = now
+        user_doc['status'] = 'online'
+        
+        token = _generate_jwt(user_id)
+        return jsonify({
+            'success': True,
+            'message': 'User logged in successfully',
+            'user': _filter_user_response(user_doc),
+            'token': token,
+        }), 200
+    except Exception as exc:
+        logger.exception('Failed to login user')
+        return jsonify({'success': False, 'message': 'Failed to login user'}), 500
+    
+@app.route('/api/auth/user/<uid>', methods=['GET'])
+@limiter.limit('1800 per hour')
+def get_user(uid):
+    # Check for valid JWT token in Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        is_valid, payload = _verify_jwt(token)
+        if not is_valid:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    try:
+        bd = _get_firebase_db()
+        user_doc = bd.get_document(PLAYER_COLLECTION, uid)
+        if not user_doc:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        user_doc['uid'] = user_doc.get('uid') or user_doc.get('id') or uid
+        return jsonify({'success': True, 'user': _filter_user_response(user_doc)}), 200
+    except Exception as exc:
+        logger.exception('Failed to get user')
+        return jsonify({'success': False, 'message': 'Failed to get user'}), 500
+    
+@app.route('/api/auth/user/<uid>', methods=['PUT'])
+def update_user(uid):
+    # Check for valid JWT token in Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        is_valid, payload = _verify_jwt(token)
+        if not is_valid or payload.get('uid') != uid:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    else:
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+    
+    data = request.get_json() or {}
+    try:
+        bd = _get_firebase_db()
+        user_doc = bd.get_document(PLAYER_COLLECTION, uid)
+        if not user_doc:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        update_data = {}
+        # Allowed fields to update
+        for field in ['description', 'photoURL', 'bannerURL', 'privacy', 'status']:
+            if field in data:
+                update_data[field] = data[field]
+        
+        # Handle password update separately with validation
+        if 'password' in data:
+            new_password = data.get('password', '').strip()
+            is_valid, msg = _validate_password(new_password)
+            if not is_valid:
+                return jsonify({'success': False, 'message': msg}), 400
+            update_data['password'] = _hash_password(new_password)
+        
+        if update_data:
+            update_data['updatedAt'] = datetime.now(timezone.utc).isoformat()
+            bd.update_document(PLAYER_COLLECTION, uid, update_data)
+        
+        user_doc.update(update_data)
+        user_doc['uid'] = user_doc.get('uid') or user_doc.get('id') or uid
+        return jsonify({'success': True, 'message': 'User updated successfully', 'user': _filter_user_response(user_doc)}), 200
+    except Exception as exc:
+        logger.exception('Failed to update user')
+        return jsonify({'success': False, 'message': 'Failed to update user'}), 500
+    
+@app.route('/api/auth/user/<uid>', methods=['DELETE'])
+def delete_user(uid):
+    # Check for valid JWT token in Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        is_valid, payload = _verify_jwt(token)
+        if not is_valid or payload.get('uid') != uid:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    else:
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+    
+    try:
+        bd = _get_firebase_db()
+        user_doc = bd.get_document(PLAYER_COLLECTION, uid)
+        if not user_doc:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        bd.delete_document(PLAYER_COLLECTION, uid)
+        logger.info('User %s deleted their account', uid)
+        return jsonify({'success': True, 'message': 'User deleted successfully'}), 200
+    except Exception as exc:
+        logger.exception('Failed to delete user')
+        return jsonify({'success': False, 'message': 'Failed to delete user'}), 500
+    
+@app.route('/api/auth/logout', methods=['POST'])
+def logout_user():
+    data = request.get_json() or {}
+    uid = data.get('uid')
+    if not uid:
+        return jsonify({'success': False, 'message': 'uid is required'}), 400
+    
+    # Check for valid JWT token in Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        is_valid, payload = _verify_jwt(token)
+        if not is_valid or payload.get('uid') != uid:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    try:
+        bd = _get_firebase_db()
+        user_doc = bd.get_document(PLAYER_COLLECTION, uid)
+        if not user_doc:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        # Update status to offline
+        now = datetime.now(timezone.utc).isoformat()
+        bd.update_document(PLAYER_COLLECTION, uid, {
+            'status': 'offline',
+            'updatedAt': now,
+        })
+        
+        logger.info('User %s logged out', uid)
+        return jsonify({'success': True, 'message': 'User logged out successfully'}), 200
+    except Exception as exc:
+        logger.exception('Failed to logout user')
+        return jsonify({'success': False, 'message': 'Failed to logout user'}), 500
+         
+@app.route('/api/friends/request', methods=['POST'])
+@limiter.limit('10 per hour')
+def send_friend_request():
+    data = request.get_json() or {}
+    from_uid = data.get('from_uid')
+    to_uid = data.get('to_uid')
+
+    if not from_uid or not to_uid:
+        return jsonify({'success': False, 'message': 'from_uid and to_uid are required'}), 400
+    
+    # Prevent self-friendship
+    if from_uid == to_uid:
+        return jsonify({'success': False, 'message': 'Cannot send friend request to yourself'}), 400
+    
+    # Check for valid JWT token in Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        is_valid, payload = _verify_jwt(token)
+        if not is_valid or payload.get('uid') != from_uid:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    else:
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+    
+    try:
+        bd = _get_firebase_db()
+        from_user_doc = bd.get_document(PLAYER_COLLECTION, from_uid)
+        to_user_doc = bd.get_document(PLAYER_COLLECTION, to_uid)
+
+        if not from_user_doc or not to_user_doc:
+            return jsonify({'success': False, 'message': 'Both users must exist'}), 404
+        
+        # Check if they are already friends.
+        # Firestore does not support multiple array_contains filters in the same query,
+        # so fetch candidates by from_uid and filter by to_uid in memory.
+        existing_friendship = next(
+            (
+                friendship
+                for friendship in bd.db.collection(FRIENDSHIP_COLLECTION)
+                    .where('user_ids', 'array_contains', from_uid)
+                    .limit(50)
+                    .stream()
+                if to_uid in (friendship.to_dict().get('user_ids') or [])
+            ),
+            None,
+        )
+        if existing_friendship is not None:
+            return jsonify({'success': False, 'message': 'Users are already friends'}), 409
+        
+        # Check if a friend request already exists
+        existing_request = next(
+            bd.db.collection(FRIEND_REQUEST_COLLECTION)
+                .where('from_uid', '==', from_uid)
+                .where('to_uid', '==', to_uid)
+                .limit(1)
+                .stream(),
+            None,
+        )
+        if existing_request is not None:
+            return jsonify({'success': False, 'message': 'Friend request already sent'}), 409
+        
+        # Create friend request
+        request_id = uuid.uuid4().hex
+        now = datetime.now(timezone.utc).isoformat()
+        friend_request_data = {
+            'id': request_id,
+            'from_uid': from_uid,
+            'to_uid': to_uid,
+            'status': 'pending',
+            'createdAt': now,
+            'updatedAt': now,
+        }
+        bd.set_document(FRIEND_REQUEST_COLLECTION, request_id, friend_request_data)
+        logger.info('User %s sent a friend request to %s', from_uid, to_uid)
+        return jsonify({
+            'success': True,
+            'message': 'Friend request sent successfully',
+            'request': friend_request_data,
+        }), 201
+    except Exception as exc:
+        logger.exception('Failed to send friend request')
+        return jsonify({'success': False, 'message': 'Failed to send friend request'}), 500
+
+@app.route('/api/friends/request-by-username', methods=['POST'])
+@limiter.limit('10 per hour')
+def send_friend_request_by_username():
+    data = request.get_json() or {}
+    from_uid = data.get('from_uid')
+    to_username = (data.get('to_username') or '').strip()
+
+    if not from_uid or not to_username:
+        return jsonify({'success': False, 'message': 'from_uid and to_username are required'}), 400
+
+    # Check for valid JWT token in Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        is_valid, payload = _verify_jwt(token)
+        if not is_valid or payload.get('uid') != from_uid:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    else:
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+
+    try:
+        bd = _get_firebase_db()
+
+        from_user_doc = bd.get_document(PLAYER_COLLECTION, from_uid)
+        if not from_user_doc:
+            return jsonify({'success': False, 'message': 'Source user not found'}), 404
+
+        to_user_match = next(
+            bd.db.collection(PLAYER_COLLECTION).where('username', '==', to_username).limit(1).stream(),
+            None,
+        )
+        if to_user_match is None:
+            return jsonify({'success': False, 'message': 'Target user not found'}), 404
+
+        to_uid = to_user_match.id
+        if from_uid == to_uid:
+            return jsonify({'success': False, 'message': 'Cannot send friend request to yourself'}), 400
+
+        # Check if they are already friends
+        existing_friendship = next(
+            (
+                friendship
+                for friendship in bd.db.collection(FRIENDSHIP_COLLECTION)
+                    .where('user_ids', 'array_contains', from_uid)
+                    .limit(50)
+                    .stream()
+                if to_uid in (friendship.to_dict().get('user_ids') or [])
+            ),
+            None,
+        )
+        if existing_friendship is not None:
+            return jsonify({'success': False, 'message': 'Users are already friends'}), 409
+
+        existing_request = next(
+            bd.db.collection(FRIEND_REQUEST_COLLECTION)
+                .where('from_uid', '==', from_uid)
+                .where('to_uid', '==', to_uid)
+                .where('status', '==', 'pending')
+                .limit(1)
+                .stream(),
+            None,
+        )
+        if existing_request is not None:
+            return jsonify({'success': False, 'message': 'Friend request already sent'}), 409
+
+        request_id = uuid.uuid4().hex
+        now = datetime.now(timezone.utc).isoformat()
+        friend_request_data = {
+            'id': request_id,
+            'from_uid': from_uid,
+            'to_uid': to_uid,
+            'status': 'pending',
+            'createdAt': now,
+            'updatedAt': now,
+        }
+        bd.set_document(FRIEND_REQUEST_COLLECTION, request_id, friend_request_data)
+
+        return jsonify({
+            'success': True,
+            'message': 'Friend request sent successfully',
+            'request': friend_request_data,
+        }), 201
+    except Exception as exc:
+        logger.exception('Failed to send friend request by username')
+        return jsonify({'success': False, 'message': 'Failed to send friend request'}), 500
+    
+@app.route('/api/friends/accept', methods=['POST'])
+@limiter.limit('20 per hour')
+def accept_friend_request():
+    data = request.get_json() or {}
+    request_id = data.get('request_id')
+    if not request_id:
+        return jsonify({'success': False, 'message': 'request_id is required'}), 400
+    
+    # Check for valid JWT token in Authorization header FIRST
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+    
+    token = auth_header[7:]
+    is_valid, payload = _verify_jwt(token)
+    if not is_valid:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    try:
+        bd = _get_firebase_db()
+        request_doc = bd.get_document(FRIEND_REQUEST_COLLECTION, request_id)
+        if not request_doc:
+            return jsonify({'success': False, 'message': 'Friend request not found'}), 404
+        
+        if request_doc['status'] != 'pending':
+            return jsonify({'success': False, 'message': 'Friend request is not pending'}), 409
+        
+        # Verify the accepting user is the recipient
+        if payload.get('uid') != request_doc['to_uid']:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+        # Update friend request status
+        now = datetime.now(timezone.utc).isoformat()
+        bd.update_document(FRIEND_REQUEST_COLLECTION, request_id, {
+            'status': 'accepted',
+            'updatedAt': now,
+        })
+        
+        # Create friendship
+        friendship_id = uuid.uuid4().hex
+        friendship_data = {
+            'id': friendship_id,
+            'user_ids': sorted([request_doc['from_uid'], request_doc['to_uid']]),
+            'createdAt': now,
+        }
+        bd.set_document(FRIENDSHIP_COLLECTION, friendship_id, friendship_data)
+        
+        # Update friendsCount for both users
+        from_user = bd.get_document(PLAYER_COLLECTION, request_doc['from_uid']) or {}
+        to_user = bd.get_document(PLAYER_COLLECTION, request_doc['to_uid']) or {}
+        
+        from_count = from_user.get('friendsCount', 0) + 1
+        to_count = to_user.get('friendsCount', 0) + 1
+        
+        bd.update_document(PLAYER_COLLECTION, request_doc['from_uid'], {'friendsCount': from_count})
+        bd.update_document(PLAYER_COLLECTION, request_doc['to_uid'], {'friendsCount': to_count})
+        
+        logger.info('User %s accepted friend request from %s', request_doc['to_uid'], request_doc['from_uid'])
+        return jsonify({
+            'success': True,
+            'message': 'Friend request accepted successfully',
+            'friendship': friendship_data,
+        }), 200
+    except Exception as exc:
+        logger.exception('Failed to accept friend request')
+        return jsonify({'success': False, 'message': 'Failed to accept friend request'}), 500
+    
+@app.route('/api/friends/decline', methods=['POST'])
+@limiter.limit('20 per hour')
+def decline_friend_request():
+    data = request.get_json() or {}
+    request_id = data.get('request_id')
+    if not request_id:
+        return jsonify({'success': False, 'message': 'request_id is required'}), 400
+    
+    # Check for valid JWT token in Authorization header FIRST
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+    
+    token = auth_header[7:]
+    is_valid, payload = _verify_jwt(token)
+    if not is_valid:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    try:
+        bd = _get_firebase_db()
+        request_doc = bd.get_document(FRIEND_REQUEST_COLLECTION, request_id)
+        if not request_doc:
+            return jsonify({'success': False, 'message': 'Friend request not found'}), 404
+        
+        if request_doc['status'] != 'pending':
+            return jsonify({'success': False, 'message': 'Friend request is not pending'}), 409
+        
+        # Verify the declining user is the recipient
+        if payload.get('uid') != request_doc['to_uid']:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+        # Update friend request status
+        now = datetime.now(timezone.utc).isoformat()
+        bd.update_document(FRIEND_REQUEST_COLLECTION, request_id, {
+            'status': 'declined',
+            'updatedAt': now,
+        })
+        
+        logger.info('User %s declined friend request from %s', request_doc['to_uid'], request_doc['from_uid'])
+        return jsonify({
+            'success': True,
+            'message': 'Friend request declined successfully',
+        }), 200
+    except Exception as exc:
+        logger.exception('Failed to decline friend request')
+        return jsonify({'success': False, 'message': 'Failed to decline friend request'}), 500
+    
+@app.route('/api/friends/list', methods=['GET'])
+@limiter.limit('1200 per hour')
+def list_friends():
+    uid = request.args.get('uid')
+    if not uid:
+        return jsonify({'success': False, 'message': 'uid is required'}), 400
+    
+    # Check for valid JWT token in Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+    
+    token = auth_header[7:]
+    is_valid, payload = _verify_jwt(token)
+    if not is_valid or payload.get('uid') != uid:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    try:
+        bd = _get_firebase_db()
+        friendships = bd.db.collection(FRIENDSHIP_COLLECTION).where('user_ids', 'array_contains', uid).stream()
+        friend_uids = set()
+        for friendship in friendships:
+            data = friendship.to_dict()
+            friend_uids.update(data['user_ids'])
+        friend_uids.discard(uid)  # Remove self from friends list
+        
+        friends = []
+        for friend_uid in sorted(friend_uids):
+            user_doc = bd.get_document(PLAYER_COLLECTION, friend_uid)
+            if user_doc:
+                user_doc['uid'] = user_doc.get('uid') or user_doc.get('id') or friend_uid
+                friends.append(_filter_user_response(user_doc))
+        
+        logger.info('User %s listed friends', uid)
+        return jsonify({
+            'success': True,
+            'friends': friends,
+            'count': len(friends),
+        }), 200
+    except Exception as exc:
+        logger.exception('Failed to list friends')
+        return jsonify({'success': False, 'message': 'Failed to list friends'}), 500
+
+@app.route('/api/friends/requests', methods=['GET'])
+@limiter.limit('1200 per hour')
+def list_pending_friend_requests():
+    uid = request.args.get('uid')
+    if not uid:
+        return jsonify({'success': False, 'message': 'uid is required'}), 400
+
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({'success': False, 'message': 'Missing authorization token'}), 401
+
+    token = auth_header[7:]
+    is_valid, payload = _verify_jwt(token)
+    if not is_valid or payload.get('uid') != uid:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    try:
+        bd = _get_firebase_db()
+        request_stream = (
+            bd.db.collection(FRIEND_REQUEST_COLLECTION)
+            .where('to_uid', '==', uid)
+            .where('status', '==', 'pending')
+            .stream()
+        )
+
+        requests_payload = []
+        for item in request_stream:
+            req = item.to_dict() or {}
+            req['id'] = req.get('id') or item.id
+
+            from_uid = req.get('from_uid')
+            from_user = bd.get_document(PLAYER_COLLECTION, from_uid) if from_uid else None
+            req['from_username'] = (from_user or {}).get('username', '')
+
+            requests_payload.append(req)
+
+        return jsonify({
+            'success': True,
+            'requests': requests_payload,
+            'count': len(requests_payload),
+        }), 200
+    except Exception as exc:
+        logger.exception('Failed to list friend requests')
+        return jsonify({'success': False, 'message': 'Failed to list friend requests'}), 500
 
 if __name__ == '__main__':
     print('=' * 50)

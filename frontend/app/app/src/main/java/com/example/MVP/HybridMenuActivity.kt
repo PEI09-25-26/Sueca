@@ -17,6 +17,7 @@ class HybridMenuActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AuthManager.initialize(applicationContext)
         setContentView(R.layout.activity_hybrid_menu)
 
         val backButton = findViewById<ImageView>(R.id.backButton)
@@ -40,6 +41,8 @@ class HybridMenuActivity : AppCompatActivity() {
 
         inputName.filters = arrayOf(noWhitespaceFilter)
         inputRoomId.filters = arrayOf(noWhitespaceFilter, InputFilter.AllCaps())
+
+        AuthManager.getPlayerDisplayName()?.let { inputName.setText(it) }
 
         btnCreateRoom.setOnClickListener {
             val name = inputName.text.toString().ifBlank { randomName() }

@@ -101,4 +101,14 @@
         android:gravity="center"
         android:layout_marginTop="10dp" />
 
+    <TextView
+        android:id="@+id/anonymousLink"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Entrar como utilizador anónimo"
+        android:textColor="@android:color/white"
+        android:textSize="15sp"
+        android:gravity="center"
+        android:layout_marginTop="8dp" />
+
 </LinearLayout>

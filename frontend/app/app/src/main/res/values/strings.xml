@@ -23,4 +23,9 @@
     <string name="offline">OFFLINE</string>
     <string name="join_room">Entrar na Sala</string>
     <string name="joining_room_toast">Entrando na sala de %1$s</string>
+    <string name="username">Username</string>
+    <string name="email">Email</string>
+    <string name="description">Description</string>
+    <string name="friends_count">Friends: 0</string>
+    <string name="status">Status: Offline</string>
 </resources>

@@ -15,6 +15,7 @@ class OnlineMenuActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AuthManager.initialize(applicationContext)
         setContentView(R.layout.activity_online_menu_mvp)
 
         val inputName = findViewById<EditText>(R.id.inputName)
@@ -40,6 +41,8 @@ class OnlineMenuActivity : AppCompatActivity() {
 
         inputName.filters = arrayOf(noWhitespaceFilter)
         inputRoomId.filters = arrayOf(noWhitespaceFilter, InputFilter.AllCaps())
+
+        AuthManager.getPlayerDisplayName()?.let { inputName.setText(it) }
 
         btnCreateRoom.setOnClickListener {
             val name = inputName.text.toString().ifBlank { randomName() }

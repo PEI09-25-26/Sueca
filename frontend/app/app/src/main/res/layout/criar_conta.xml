@@ -38,18 +38,30 @@
             android:textStyle="bold" />
 
         <EditText
-            android:id="@+id/inputName2"
+            android:id="@+id/usernameEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:layout_marginBottom="12dp"
             android:background="@drawable/edittext_bg"
-            android:hint="Nome"
+            android:hint="Username"
             android:padding="12dp"
             android:textColor="@android:color/white" />
 
         <EditText
-            android:id="@+id/editTextTextPassword"
+            android:id="@+id/emailEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/edittext_bg"
+            android:hint="Email"
+            android:inputType="textEmailAddress"
+            android:padding="12dp"
+            android:textColor="@android:color/white" />
+
+        <EditText
+            android:id="@+id/passwordEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -62,7 +74,7 @@
             android:textColor="@android:color/white" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnVision"
+            android:id="@+id/registerButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="12dp"
@@ -72,19 +84,47 @@
             android:textSize="20sp"
             app:backgroundTint="@color/teal_700"
             app:cornerRadius="12dp" />
+
+        <EditText
+            android:id="@+id/confirmPasswordEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/edittext_bg"
+            android:ems="10"
+            android:hint="Confirmar Password"
+            android:inputType="textPassword"
+            android:padding="12dp"
+            android:textColor="@android:color/white" />
+
+        <ProgressBar
+            android:id="@+id/registerProgressBar"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/registerErrorTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/badge_red"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <TextView
-        android:id="@+id/criarConta"
+        android:id="@+id/loginLink"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-
-        android:text="Entrar como convidado"
+        android:text="Já tem conta? Login"
         android:textColor="@android:color/white"
         android:textSize="16sp"
         android:textStyle="bold"
         android:gravity="center"
-        android:layout_marginTop="10dp"
-        />
+        android:layout_marginTop="10dp" />
 
 </LinearLayout>
