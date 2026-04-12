@@ -31,23 +31,68 @@ class DecisionMaker:
     def choose_lead_card(self, legal_plays):
         non_trumps = [c for c in legal_plays if CardMapper.get_card_suit(c) != self.state.trump_suit]
         trumps = [c for c in legal_plays if CardMapper.get_card_suit(c) == self.state.trump_suit]
+        danger_suits = set()
+        for suit in CardMapper.SUITS:
+            for opp in self.state.opponents:
+                if self.state.is_player_void(opp, suit):
+                    danger_suits.add(suit)
+        safe_non_trumps = [c for c in non_trumps if CardMapper.get_card_suit(c) not in danger_suits]
+        danger_non_trumps = [c for c in non_trumps if CardMapper.get_card_suit(c) in danger_suits]
+        partner_safe_non_trumps = [c for c in safe_non_trumps if not self.state.is_player_void(self.state.partner_id, CardMapper.get_card_suit(c))]
+        preferred_cards = partner_safe_non_trumps if partner_safe_non_trumps else safe_non_trumps
         if self.state.current_round <= 4:
-            for card in legal_plays:
-                if (CardMapper.get_card_rank(card) == "A" and CardMapper.get_card_suit(card) != self.state.trump_suit):
-                    return card
+            ace = self.find_safe_ace(preferred_cards)
+            if ace:
+                return ace
         if self.state.current_round >= 8:
-            return CardAnalyzer.get_highest_card(legal_plays, self.state.trump_suit, self.state.lead_suit,)
-        if non_trumps:
+            if preferred_cards:
+                high = CardAnalyzer.get_highest_card(
+                    preferred_cards,
+                    self.state.trump_suit,
+                    self.state.lead_suit,
+                )
+                if CardMapper.get_card_points(high) > 0:
+                    return high
+            else:
+                high = CardAnalyzer.get_highest_card(
+                    safe_non_trumps if safe_non_trumps else non_trumps,
+                    self.state.trump_suit,
+                    self.state.lead_suit,
+                )
+                if CardMapper.get_card_points(high) > 0:
+                    return high
+        if preferred_cards:
+            for card in preferred_cards:
+                suit = CardMapper.get_card_suit(card)
+                rank = CardMapper.get_card_rank(card)
+                
+                if rank == "7" and self.state.is_ace_gone(suit):
+                    return card
+            ace = self.find_safe_ace(preferred_cards)
+            if ace:
+                return ace
             sorted_cards = sorted(
-                non_trumps,
+                preferred_cards,
                 key=lambda card: CardAnalyzer.get_card_strength(card, self.state.trump_suit, self.state.lead_suit),
             )
+            zero_point_cards = [c for c in sorted_cards if CardMapper.get_card_points(c) == 0]
+            if zero_point_cards:
+                return zero_point_cards[len(zero_point_cards) // 2]
             return sorted_cards[len(sorted_cards) // 2]
+        elif danger_non_trumps:
+            return CardAnalyzer.get_lowest_card(danger_non_trumps)
         return CardAnalyzer.get_lowest_card(trumps)
 
     def choose_middle_card(self, legal_plays):
         non_trumps = [c for c in legal_plays if CardMapper.get_card_suit(c) != self.state.trump_suit]
         trick_points = self.state.get_trick_points()
+        for p in self.state.get_players_after_self():
+            if p in self.state.opponents:
+                opp = p
+        danger_suits = []
+        for suit in CardMapper.SUITS:
+            if self.state.is_player_void(opp, suit) and suit not in danger_suits:
+                danger_suits.append(suit)
         if self.state.is_partner_winning():
             if non_trumps:
                 return CardAnalyzer.get_lowest_card(non_trumps)
@@ -123,3 +168,9 @@ class DecisionMaker:
 
     def choose_deck_cut(self):
         return random.randint(1, 40)
+
+    def find_safe_ace(cards):
+        for c in cards:
+            if CardMapper.get_card_rank(c) == "A":
+                return c
+        return None
