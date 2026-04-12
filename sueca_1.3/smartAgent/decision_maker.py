@@ -139,7 +139,48 @@ class DecisionMaker:
         return CardAnalyzer.get_lowest_card(legal_plays)
 
     def choose_middle_third(self, legal_plays, trumps, non_trumps, trick_points, danger_suits):
-        pass
+        current_winner = self.state.get_current_trick_winner()
+
+        if current_winner == self.state.partner_id:
+            winning_card = CardAnalyzer.get_lowest_winning_card(
+                legal_plays,
+                self.state.current_trick,
+                self.state.trump_suit,
+                self.state.lead_suit,
+            )
+            if winning_card:
+                win_suit = CardMapper.get_card_suit(winning_card)
+                dangerous = (
+                    win_suit in danger_suits or
+                    (win_suit != self.state.trump_suit and self.state.trump_suit in danger_suits)
+                )
+                if not dangerous or trick_points >= 7:
+                    return winning_card
+            if non_trumps:
+                return CardAnalyzer.get_lowest_card(non_trumps)
+            return CardAnalyzer.get_lowest_card(legal_plays)
+
+        winning_card = CardAnalyzer.get_lowest_winning_card(
+            legal_plays,
+            self.state.current_trick,
+            self.state.trump_suit,
+            self.state.lead_suit,
+        )
+
+        if winning_card:
+            win_suit = CardMapper.get_card_suit(winning_card)
+            dangerous = (
+                win_suit in danger_suits or
+                (win_suit != self.state.trump_suit and self.state.trump_suit in danger_suits)
+            )
+            if not dangerous or trick_points >= 8:
+                return winning_card
+        zero_cards = [c for c in non_trumps if CardMapper.get_card_points(c) == 0]
+        if zero_cards:
+            return CardAnalyzer.get_lowest_card(zero_cards)
+        if non_trumps:
+            return CardAnalyzer.get_lowest_card(non_trumps)
+        return CardAnalyzer.get_lowest_card(legal_plays)
 
     def choose_last_card(self, legal_plays):
         trick_points = self.state.get_trick_points()
