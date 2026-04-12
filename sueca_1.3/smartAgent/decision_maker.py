@@ -130,38 +130,61 @@ class DecisionMaker:
     def choose_last_card(self, legal_plays):
         trick_points = self.state.get_trick_points()
         non_trumps = [c for c in legal_plays if CardMapper.get_card_suit(c) != self.state.trump_suit]
-        if trick_points >= 10:
-            if self.state.is_partner_winning():
-                if non_trumps:
-                    return CardAnalyzer.get_highest_card(non_trumps)
-                return CardAnalyzer.get_highest_card(legal_plays)
+        pool = non_trumps if non_trumps else legal_plays
+        if self.state.is_partner_winning():
+            if trick_points < 10:
+                zero_cards = [c for c in non_trumps if CardMapper.get_card_points(c) == 0]
+                if zero_cards:
+                    return CardAnalyzer.get_lowest_card(zero_cards)
+                return CardAnalyzer.get_lowest_card(pool)
             else:
-                if non_trumps:
-                    winning_card = winning_card = CardAnalyzer.get_highest_winning_card(
-                        non_trumps,
-                        self.state.current_trick,
-                        self.state.trump_suit,
-                        self.state.lead_suit,
-                    )
-                    if winning_card:
-                        return winning_card
-                winning_card = CardAnalyzer.get_highest_winning_card(
+                point_cards = [c for c in non_trumps if CardMapper.get_card_points(c) > 0]
+                if point_cards:
+                    return CardAnalyzer.get_highest_card(point_cards)
+                return CardAnalyzer.get_lowest_card(pool)
+        else:
+            if trick_points >= 10:
+                winning_card = CardAnalyzer.get_lowest_winning_card(
                     legal_plays,
                     self.state.current_trick,
                     self.state.trump_suit,
                     self.state.lead_suit,
                 )
                 if winning_card:
+                    if CardMapper.get_card_rank(winning_card) in ["A", "7"]:
+                        non_key_wins = [
+                            c for c in legal_plays
+                            if c != winning_card and CardAnalyzer.can_win_trick(c, self.state.current_trick,
+                                                                        self.state.trump_suit,
+                                                                        self.state.lead_suit)
+                        ]
+                        if non_key_wins:
+                            return CardAnalyzer.get_lowest_card(non_key_wins)
                     return winning_card
                 else:
-                    if non_trumps:
-                        return CardAnalyzer.get_lowest_card(non_trumps)
-        elif trick_points >= 5:
-            if self.state.is_partner_winning():
-                if non_trumps:
-                    return CardAnalyzer.get_lowest_card(non_trumps)
-                return CardAnalyzer.get_lowest_card(legal_plays)
-        return CardAnalyzer.get_lowest_card(legal_plays)
+                    zero_cards = [c for c in legal_plays if CardMapper.get_card_points(c) == 0]
+                    if zero_cards:
+                        return CardAnalyzer.get_lowest_card(zero_cards)
+                    return CardAnalyzer.get_lowest_card(pool)
+            else:
+                zero_cards = [c for c in legal_plays if CardMapper.get_card_points(c) == 0]
+                if zero_cards:
+                    return CardAnalyzer.get_lowest_card(zero_cards)
+                winning_card = CardAnalyzer.get_lowest_winning_card(
+                    legal_plays,
+                    self.state.current_trick,
+                    self.state.trump_suit,
+                    self.state.lead_suit,
+                )
+                if winning_card:
+                    if CardMapper.get_card_rank(winning_card) in ["A", "7"]:
+                        non_key = [c for c in legal_plays if c != winning_card and
+                            CardAnalyzer.can_win_trick(c, self.state.current_trick, self.state.trump_suit, self.state.lead_suit,)
+                            and CardMapper.get_card_points(c) == 0]
+                        if non_key:
+                            return CardAnalyzer.get_lowest_card(non_key)
+                    return winning_card
+        return CardAnalyzer.get_lowest_card(pool)
 
     def choose_trump_selection(self):
         return random.choice(["top", "bottom"])
