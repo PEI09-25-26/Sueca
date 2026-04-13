@@ -821,7 +821,7 @@ class BotFactory:
 class GameManager:
     def __init__(self):
         self.games = {}
-        self.default_game_id = 'default'
+        self.default_game_id = self.normalize_game_id('default')
         self._lock = threading.Lock()
         self.games[self.default_game_id] = GameState(self.default_game_id)
 
