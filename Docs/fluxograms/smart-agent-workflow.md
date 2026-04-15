@@ -1,3 +1,4 @@
+# MAIN FLUXOGRAM FOR THE OVERALL WORKFLOW OF THE SMART AGENT
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
 flowchart TD
@@ -68,9 +69,8 @@ P --> F
 R --> F
 U --> F
 ```
-
 ---
-
+## SECONDARY FLUXOGRAM WITH THE DETAILS OF CARD PICKING DECISION MAKING FOR THIS MODEL
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
 flowchart TD

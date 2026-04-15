@@ -1,3 +1,4 @@
+# MAIN FLUXOGRAM FOR THE OVERALL WORKFLOW OF THE AVERAGE AGENT
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
 flowchart TD
@@ -73,6 +74,7 @@ R --> F
 U --> F
 ```
 ---
+## SECONDARY FLUXOGRAM WITH THE DETAILS OF CARD PICKING DECISION MAKING FOR THIS MODEL
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 30}}}%%
 flowchart TD

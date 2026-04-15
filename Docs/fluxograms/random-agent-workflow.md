@@ -1,4 +1,4 @@
-# MAIN FLUXOGRAM FOR THE OVERALL WORKFLOW OF THE WEAK AGENT
+# MAIN FLUXOGRAM FOR THE OVERALL WORKFLOW OF THE RANDOM AGENT
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
 flowchart TD
@@ -76,82 +76,18 @@ U --> F
 ---
 ## SECONDARY FLUXOGRAM WITH THE DETAILS OF CARD PICKING DECISION MAKING FOR THIS MODEL
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 30}}}%%
 flowchart TD
 
-A([Start Decision]) --> B{Hand Empty?}
-B -->|Yes| R0([Return None])
-B -->|No| C[Get Legal Plays]
+subgraph DECISION_MAKER_RANDOM [Random Decision Maker]
 
-C --> D{Only 1 Legal Play?}
-D -->|Yes| R1([Return That Card])
-D -->|No| E[Count Cards in Trick]
+DC_START([Choose Card Called])
 
-E --> F{Position in Trick?}
+DC_1{Hand Empty?}
+DC_1 -->|Yes| DC_NULL([Return None])
+DC_1 -->|No| DC_2[Get Legal Plays]
 
-F -->|Lead| G[Lead Logic]
-F -->|Middle| H[Middle Logic]
-F -->|Last| I[Last Logic]
+DC_2 --> DC_3[Random Choice]
 
-%% ---------------- LEAD ----------------
-G --> G1{Round >= 8?}
-
-G1 -->|Yes| G2[Play Highest Card]
-G1 -->|No| G3[Split Trumps / Non-Trumps]
-
-G3 --> G4{Has Non-Trumps?}
-G4 -->|Yes| G5[Play Medium Strength Card]
-G4 -->|No| G6[Play Lowest Trump]
-
-G2 --> END
-G5 --> END
-G6 --> END
-
-%% ---------------- MIDDLE ----------------
-H --> H1{Partner Winning?}
-
-H1 -->|Yes| H2[Play Lowest Card]
-H1 -->|No| H3[Check Trick Points]
-
-H3 --> H4{Points >= 10?}
-
-H4 -->|Yes| H5[Try Lowest Winning Card]
-H5 --> H6{Winning Card Exists?}
-
-H6 -->|Yes| H7[Play Winning Card]
-H6 -->|No| H8[Play Lowest Card]
-
-H4 -->|No| H9[Play Lowest Card]
-
-H2 --> END
-H7 --> END
-H8 --> END
-H9 --> END
-
-%% ---------------- LAST ----------------
-I --> I1{Partner Winning?}
-
-I1 -->|Yes| I2[Play Lowest Card]
-I1 -->|No| I3[Check Trick Points]
-
-I3 --> I4{Points >= 10?}
-
-I4 -->|Yes| I5[Try Lowest Winning Card]
-I5 --> I6{Winning Card Exists?}
-
-I6 -->|Yes| I7[Play Winning Card]
-I6 -->|No| I8[Play Lowest Card]
-
-I4 -->|No| I9[Play Lowest Card]
-
-I2 --> END
-I7 --> END
-I8 --> END
-I9 --> END
-
-%% ---------------- END ----------------
-END([Return Card])
-R0 --> END
-R1 --> END
+DC_3 --> DC_END([Return Selected Card])
 ```
---- 
+---
