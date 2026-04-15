@@ -70,9 +70,7 @@ P --> F
 R --> F
 U --> F
 ```
-
 ---
-
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 30}}}%%
 flowchart TD
@@ -83,7 +81,7 @@ B -->|No| C[Get Legal Plays]
 
 C --> D{Only 1 Legal Play?}
 D -->|Yes| R1([Return That Card])
-D -->|No| E[Count Cards in Trick]
+D -->|No| E[Check Trick Position]
 
 E --> F{Position in Trick?}
 
@@ -91,65 +89,88 @@ F -->|Lead| G[Lead Logic]
 F -->|Middle| H[Middle Logic]
 F -->|Last| I[Last Logic]
 
-%% ---------------- LEAD ----------------
-G --> G1{Round >= 8?}
+%% ================= LEAD =================
+G --> G1{Round <= 4?}
 
-G1 -->|Yes| G2[Play Highest Card]
-G1 -->|No| G3[Split Trumps / Non-Trumps]
+G1 -->|Yes| G2[Try Play Non-Trump Ace]
+G2 --> G3{Found Ace?}
+G3 -->|Yes| END
+G3 -->|No| G4[Continue Rules]
 
-G3 --> G4{Has Non-Trumps?}
-G4 -->|Yes| G5[Play Medium Strength Card]
-G4 -->|No| G6[Play Lowest Trump]
+G1 -->|No| G4
 
-G2 --> END
-G5 --> END
+G4 --> G5{Round >= 8?}
+G5 -->|Yes| G6[Play Highest Card]
+G5 -->|No| G7[Play Medium Non-Trump]
+
+G7 --> G8{Non-Trumps Exist?}
+G8 -->|Yes| END
+G8 -->|No| G9[Play Lowest Trump]
+
 G6 --> END
+G9 --> END
 
-%% ---------------- MIDDLE ----------------
+%% ================= MIDDLE =================
 H --> H1{Partner Winning?}
 
-H1 -->|Yes| H2[Play Lowest Card]
+H1 -->|Yes| H2[Play Lowest Non-Trump]
+H2 --> END
+
 H1 -->|No| H3[Check Trick Points]
 
 H3 --> H4{Points >= 10?}
 
-H4 -->|Yes| H5[Try Lowest Winning Card]
-H5 --> H6{Winning Card Exists?}
+H4 -->|No| H5[Play Lowest Card]
+H5 --> END
 
-H6 -->|Yes| H7[Play Winning Card]
-H6 -->|No| H8[Play Lowest Card]
+H4 -->|Yes| H6[Try Lowest Winning Card]
 
-H4 -->|No| H9[Play Lowest Card]
+H6 --> H7{Winning Card Exists?}
 
-H2 --> END
-H7 --> END
+H7 -->|Yes| H8[Play Winning Card]
+H7 -->|No| H9[Try Any Winning Card]
+
+H9 --> H10{Winning Card Exists?}
+H10 -->|Yes| H8
+H10 -->|No| H5
+
 H8 --> END
-H9 --> END
 
-%% ---------------- LAST ----------------
-I --> I1{Partner Winning?}
+%% ================= LAST =================
+I --> I1{Points >= 10?}
 
-I1 -->|Yes| I2[Play Lowest Card]
-I1 -->|No| I3[Check Trick Points]
+I1 -->|No| I2{Partner Winning?}
+I2 -->|Yes| I3[Play Lowest Non-Trump]
+I2 -->|No| I4[Play Lowest Card]
 
-I3 --> I4{Points >= 10?}
+I3 --> END
+I4 --> END
 
-I4 -->|Yes| I5[Try Lowest Winning Card]
-I5 --> I6{Winning Card Exists?}
+I1 -->|Yes| I5{Partner Winning?}
 
-I6 -->|Yes| I7[Play Winning Card]
-I6 -->|No| I8[Play Lowest Card]
+I5 -->|Yes| I6[Handle Scoring Cards]
+I6 --> I7{Few Scoring Cards?}
 
-I4 -->|No| I9[Play Lowest Card]
+I7 -->|Yes| I8[Play Highest Scoring Card]
+I7 -->|No| I9[Play Mid-Value Scoring Card]
 
-I2 --> END
-I7 --> END
 I8 --> END
 I9 --> END
 
-%% ---------------- END ----------------
+I5 -->|No| I10[Try Win Trick]
+
+I10 --> I11{Winning Card Exists?}
+
+I11 -->|Yes| I12[Play Winning Card]
+I11 -->|No| I13[Play Lowest Non-Trump]
+
+I12 --> END
+I13 --> END
+
+%% ================= END =================
 END([Return Card])
+
 R0 --> END
 R1 --> END
 ```
---- 
+---
