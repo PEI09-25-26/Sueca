@@ -48,7 +48,7 @@ H1 -->|Yes| K1
 H1 -->|No| L
 
 %% Decision Maker connection
-K1 --> DC_ENTRY
+K1 --> L1
 
 %% Return from Decision Maker
 DC_S_RETURN --> L1
@@ -76,7 +76,17 @@ P --> F
 R --> F
 U --> F
 
+```
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
+flowchart TD
+
 subgraph DECISION_MAKER_SMART [Choose Card Logic]
+
+DC_ENTRY([Start Decision])
+DC_EXIT([Return Card])
+
+DC_ENTRY --> DC_S_1
 
 DC_S_1{Hand Empty?}
 DC_S_1 -->|Yes| DC_S_NULL[Return None]
@@ -129,21 +139,21 @@ DC_S_LS5 -->|Yes| DC_S_LS6[Try Win]
 DC_S_LS5 -->|No| DC_S_LS7[Play Lowest]
 
 %% RETURN
-DC_S_ONE --> DC_S_RETURN
-DC_S_L5 --> DC_S_RETURN
-DC_S_L7 --> DC_S_RETURN
-DC_S_L8 --> DC_S_RETURN
-DC_S_M4 --> DC_S_RETURN
-DC_S_M5 --> DC_S_RETURN
-DC_S_M7 --> DC_S_RETURN
-DC_S_M9 --> DC_S_RETURN
-DC_S_LS3 --> DC_S_RETURN
-DC_S_LS4 --> DC_S_RETURN
-DC_S_LS6 --> DC_S_RETURN
-DC_S_LS7 --> DC_S_RETURN
+DC_S_ONE --> DC_EXIT
+DC_S_L5 --> DC_EXIT
+DC_S_L7 --> DC_EXIT
+DC_S_L8 --> DC_EXIT
+DC_S_M4 --> DC_EXIT
+DC_S_M5 --> DC_EXIT
+DC_S_M7 --> DC_EXIT
+DC_S_M9 --> DC_EXIT
+DC_S_LS3 --> DC_EXIT
+DC_S_LS4 --> DC_EXIT
+DC_S_LS6 --> DC_EXIT
+DC_S_LS7 --> DC_EXIT
+DC_S_NULL --> DC_EXIT
 
 end
 ```
-
 --- 
 
