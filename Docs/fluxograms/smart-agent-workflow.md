@@ -42,7 +42,7 @@ G1 --> L
 L -->|Playing| R[Handle Playing]
 R --> H1{Is It My Turn & Do I Have Cards?}
 
-H1 -->|Yes| K1[Call DecisionMaker (see diagram below)]
+H1 -->|Yes| K1["Call DecisionMaker\n(see diagram below)"]
 H1 -->|No| L
 
 %% Decision Maker output (FROM second diagram conceptually)
