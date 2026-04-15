@@ -48,18 +48,20 @@ R --> H1{Is It My Turn & Do I Have Cards?}
 H1 -->|Yes| K1["Call DecisionMaker\n(see diagram below)"]
 H1 -->|No| L
 
-I1 --> K1[Choose Card]
-K1 --> L1{Is Card None?}
-L1 -->|Yes|K1
-L1 -->|No|N1[Convert To String]
-N1 -->O1[Send Play Card]
-O1 -->P1{Was Play Successful?}
-P1 -->|Yes|Q1[Get Card Display]
-Q1 -->R1[Print Agent Played X]
-R1 -->F
-P1 -->|No|T1[Print Error Message]
-T1 -->R
 
+%% Decision Maker output (FROM second diagram conceptually)
+K1 --> L1{Card Returned?}
+
+L1 -->|None| K1
+L1 -->|Valid Card| N1[Convert To String]
+
+N1 --> O1[Send Play Card]
+O1 --> P1{Was Play Successful?}
+P1 -->|Yes| Q1[Get Card Display]
+Q1 --> R1[Print Agent Played X]
+R1 --> F
+P1 -->|No| T1[Print Error Message]
+T1 --> R
 
 L -->|Finished| T[Print Final Scores]
 T --> S3(End)
