@@ -1,5 +1,3 @@
-
-```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
 flowchart TD
 
@@ -21,7 +19,7 @@ K --> L{Current Phase?}
 L -->|Cut Deck| M[Handle Cut Deck]
 M --> N{Am I North?}
 N -->|Yes| O[Choose Deck Cut]
-O --> W[Send Cut Deck Index]
+O --> W[Send Deck Cut]
 W --> X{Was Cut Successful?}
 X -->|Yes| Y[Print Cut Success]
 Y --> F
@@ -31,33 +29,26 @@ N -->|No| L
 
 L -->|Select Trump| P[Handle Select Trump]
 P --> A1{Am I West?}
-A1 --> |Yes| C1[Choose Trump Selection]
-A1 --> |No| L
+A1 -->|Yes| C1[Choose Trump Selection]
+A1 -->|No| L
 C1 --> D1[Select Trump]
 D1 --> E1{Was Selection Successful?}
-E1 --> |Yes| F1[Print Select Success]
+E1 -->|Yes| F1[Print Select Success]
+E1 -->|No| G1[Print Error]
 F1 --> F
-E1 --> |No| G1[Print Error]
 G1 --> L
 
 L -->|Playing| R[Handle Playing]
 R --> H1{Is It My Turn & Do I Have Cards?}
 
-%% FIXED LOGIC HERE
-H1 -->|Yes| K1
+H1 -->|Yes| K1[Call DecisionMaker (see diagram below)]
 H1 -->|No| L
 
-%% Decision Maker connection
-K1 --> L1
+%% Decision Maker output (FROM second diagram conceptually)
+K1 --> L1{Card Returned?}
 
-%% Return from Decision Maker
-DC_S_RETURN --> L1
-DC_S_NULL --> L1
-
-%% Continue flow
-L1{Is Card None?}
-L1 -->|Yes| K1
-L1 -->|No| N1[Convert To String]
+L1 -->|None| K1
+L1 -->|Valid Card| N1[Convert To String]
 
 N1 --> O1[Send Play Card]
 O1 --> P1{Was Play Successful?}
@@ -75,85 +66,86 @@ M --> F
 P --> F
 R --> F
 U --> F
-
 ```
+
+---
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
 flowchart TD
 
 subgraph DECISION_MAKER_SMART [Choose Card Logic]
 
-DC_ENTRY([Start Decision])
-DC_EXIT([Return Card])
+DC_START([Start Decision])
 
-DC_ENTRY --> DC_S_1
+DC_1{Hand Empty?}
+DC_1 -->|Yes| DC_NULL([Return None])
+DC_1 -->|No| DC_2[Get Legal Plays]
 
-DC_S_1{Hand Empty?}
-DC_S_1 -->|Yes| DC_S_NULL[Return None]
-DC_S_1 -->|No| DC_S_2[Get Legal Plays]
+DC_2 --> DC_3{Only One Legal Play?}
+DC_3 -->|Yes| DC_ONE([Return That Card])
+DC_3 -->|No| DC_4[Count Cards in Trick]
 
-DC_S_2 --> DC_S_3{Only One Legal Play?}
-DC_S_3 -->|Yes| DC_S_ONE[Play That Card]
-DC_S_3 -->|No| DC_S_4[Count Cards in Trick]
+DC_4 --> DC_5{Position in Trick}
 
-DC_S_4 --> DC_S_5{Position in Trick}
-
-DC_S_5 -->|0 cards| DC_S_LEAD[Lead Logic]
-DC_S_5 -->|1 or 2 cards| DC_S_MIDDLE[Middle Logic]
-DC_S_5 -->|3 cards| DC_S_LAST[Last Logic]
+DC_5 -->|Lead| DC_LEAD[Lead Logic]
+DC_5 -->|Middle| DC_MIDDLE[Middle Logic]
+DC_5 -->|Last| DC_LAST[Last Logic]
 
 %% LEAD
-DC_S_LEAD --> DC_S_L1[Split into Trumps / Non-Trumps]
-DC_S_L1 --> DC_S_L2[Detect Danger Suits]
-DC_S_L2 --> DC_S_L3[Filter Safe Cards]
-DC_S_L3 --> DC_S_L4{Early Game? (round ≤ 4)}
+DC_LEAD --> L1[Split Trumps / Non-Trumps]
+L1 --> L2[Detect Danger Suits]
+L2 --> L3[Filter Safe Cards]
+L3 --> L4{Early Game?}
 
-DC_S_L4 -->|Yes| DC_S_L5[Play Safe Ace]
-DC_S_L4 -->|No| DC_S_L6{Late Game? (round ≥ 8)}
+L4 -->|Yes| L5[Play Safe Ace]
+L4 -->|No| L6{Late Game?}
 
-DC_S_L6 -->|Yes| DC_S_L7[Play High Point Card]
-DC_S_L6 -->|No| DC_S_L8[Play Medium/Low Card]
+L6 -->|Yes| L7[Play High Value Card]
+L6 -->|No| L8[Play Medium/Low Card]
 
 %% MIDDLE
-DC_S_MIDDLE --> DC_S_M1{Second or Third Player?}
+DC_MIDDLE --> M1{Second or Third Player?}
 
-DC_S_M1 -->|Second| DC_S_M2[Analyze First Card]
-DC_S_M2 --> DC_S_M3{First Card Strong?}
-DC_S_M3 -->|Yes| DC_S_M4[Try Win / Trump]
-DC_S_M3 -->|No| DC_S_M5[Play Low / Zero]
+M1 -->|Second| M2[Analyze First Card]
+M2 --> M3{First Card Strong?}
+M3 -->|Yes| M4[Try Win / Trump]
+M3 -->|No| M5[Play Low / Safe]
 
-DC_S_M1 -->|Third| DC_S_M6{Partner Winning?}
-DC_S_M6 -->|Yes| DC_S_M7[Dump Low]
-DC_S_M6 -->|No| DC_S_M8[Try Win if Safe]
-DC_S_M8 --> DC_S_M9[Else Play Lowest]
+M1 -->|Third| M6{Partner Winning?}
+M6 -->|Yes| M7[Dump Low Card]
+M6 -->|No| M8[Try Win if Safe]
+M8 --> M9[Else Lowest Card]
 
 %% LAST
-DC_S_LAST --> DC_S_LS1{Partner Winning?}
+DC_LAST --> LS1{Partner Winning?}
 
-DC_S_LS1 -->|Yes| DC_S_LS2{Low Points?}
-DC_S_LS2 -->|Yes| DC_S_LS3[Dump Zero]
-DC_S_LS2 -->|No| DC_S_LS4[Add Points]
+LS1 -->|Yes| LS2{High Points Trick?}
+LS2 -->|Yes| LS3[Take Trick / Win]
+LS2 -->|No| LS4[Dump Low]
 
-DC_S_LS1 -->|No| DC_S_LS5{High Points?}
-DC_S_LS5 -->|Yes| DC_S_LS6[Try Win]
-DC_S_LS5 -->|No| DC_S_LS7[Play Lowest]
+LS1 -->|No| LS5{Can Win?}
+LS5 -->|Yes| LS6[Try Win]
+LS5 -->|No| LS7[Play Lowest Card]
 
-%% RETURN
-DC_S_ONE --> DC_EXIT
-DC_S_L5 --> DC_EXIT
-DC_S_L7 --> DC_EXIT
-DC_S_L8 --> DC_EXIT
-DC_S_M4 --> DC_EXIT
-DC_S_M5 --> DC_EXIT
-DC_S_M7 --> DC_EXIT
-DC_S_M9 --> DC_EXIT
-DC_S_LS3 --> DC_EXIT
-DC_S_LS4 --> DC_EXIT
-DC_S_LS6 --> DC_EXIT
-DC_S_LS7 --> DC_EXIT
-DC_S_NULL --> DC_EXIT
+%% RETURNS
+DC_NULL --> DC_END([Return Card])
+DC_ONE --> DC_END
 
-end
+L5 --> DC_END
+L7 --> DC_END
+L8 --> DC_END
+
+M4 --> DC_END
+M5 --> DC_END
+M7 --> DC_END
+M9 --> DC_END
+
+LS3 --> DC_END
+LS4 --> DC_END
+LS6 --> DC_END
+LS7 --> DC_END
+
 ```
 --- 
 
