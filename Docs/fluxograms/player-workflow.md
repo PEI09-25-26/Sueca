@@ -1,5 +1,4 @@
-
-
+# MAIN FLUXOGRAM FOR THE OVERALL (SIMULATED) WORKFLOW OF A HUMAN PLAYER
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 25}}}%%
 flowchart TD
