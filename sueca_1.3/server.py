@@ -40,7 +40,7 @@ FRIEND_REQUEST_COLLECTION = FRIENDS_REQUESTS_COLLECTION
 
 app = Flask(__name__)
 CORS(app)
-limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
+limiter = Limiter(app=app, key_func=get_remote_address)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
