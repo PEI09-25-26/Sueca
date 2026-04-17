@@ -1,0 +1,11 @@
+game_number,game_id,match_number,rounds_played,winner_team,winner_label,team1_score,team2_score,trump_card,trump_suit,phase,finished_at
+1,65B661,3,10,team1,Team 1 (N/S),65,55,2,♣,finished,2026-04-17T16:57:22.821102+00:00
+2,AE1C9F,1,10,team1,Team 1 (N/S),85,35,21,♥,finished,2026-04-17T16:59:14.945975+00:00
+3,9F4AE9,3,10,,draw,60,60,8,♣,finished,2026-04-17T17:01:28.459729+00:00
+4,DDFF7B,1,10,team2,Team 2 (E/W),43,77,5,♣,finished,2026-04-17T17:04:00.061251+00:00
+5,146214,1,10,team2,Team 2 (E/W),57,63,20,♥,finished,2026-04-17T17:05:57.964199+00:00
+6,CADF37,1,10,team2,Team 2 (E/W),48,72,24,♥,finished,2026-04-17T17:08:22.245145+00:00
+7,3FA260,1,10,team1,Team 1 (N/S),73,47,20,♥,finished,2026-04-17T17:11:03.618374+00:00
+8,C760EF,1,10,team2,Team 2 (E/W),57,63,4,♣,finished,2026-04-17T17:13:48.026808+00:00
+9,4413DC,1,10,team2,Team 2 (E/W),34,86,9,♣,finished,2026-04-17T17:16:27.593717+00:00
+10,13DE05,1,10,team2,Team 2 (E/W),10,110,38,♠,finished,2026-04-17T17:18:59.954813+00:00

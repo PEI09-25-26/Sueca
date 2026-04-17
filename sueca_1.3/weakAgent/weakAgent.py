@@ -5,6 +5,7 @@ from client import GameClient
 from game_state_tracker import GameStateTracker
 from card_mapper import CardMapper
 from .decision_maker import DecisionMaker
+import os
 import random
 import time
 
@@ -21,7 +22,10 @@ class WeakAgent(GameClient):
         self.state_tracker = GameStateTracker()
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
-        self.think_time = 1.0
+        self.think_time = float(os.getenv("SUECA_BOT_THINK_TIME", "0.0"))
+        self.loop_sleep_min = float(os.getenv("SUECA_BOT_LOOP_SLEEP_MIN", "0.05"))
+        self.loop_sleep_max = float(os.getenv("SUECA_BOT_LOOP_SLEEP_MAX", "0.10"))
+        self.error_sleep = float(os.getenv("SUECA_BOT_ERROR_SLEEP", "0.1"))
         self.player_id = None
         self.game_id = game_id
         self.position = position
@@ -78,7 +82,7 @@ class WeakAgent(GameClient):
             try:
                 state = self.get_status()
                 if state is None:
-                    time.sleep(1)
+                    time.sleep(self.error_sleep)
                     continue
 
                 self._maybe_handle_match_transition(state)
@@ -86,9 +90,16 @@ class WeakAgent(GameClient):
                 # Update state tracker
                 self.state_tracker.update_from_state(state, self.player_name)
 
-                # Update hand
-                hand = self.get_hand()
-                self.state_tracker.update_my_hand(hand)
+                # Fetch hand only when it can affect a move to avoid flooding the server.
+                if state.get("phase") == "playing":
+                    current_player_name = state.get("current_player_name") or state.get("current_player")
+                    is_my_turn = (
+                        state.get("current_player_id") == self.player_id
+                        or current_player_name == self.player_name
+                    )
+                    if is_my_turn:
+                        hand = self.get_hand()
+                        self.state_tracker.update_my_hand(hand)
 
                 # Handle deck cutting
                 if state["phase"] == "deck_cutting":
@@ -112,9 +123,9 @@ class WeakAgent(GameClient):
                         self._finished_announced_key = finished_key
             except Exception as error:
                 print(f"[ERROR] WeakAgent loop error: {error}")
-                time.sleep(1)
+                time.sleep(self.error_sleep)
 
-            time.sleep(random.uniform(0.5, 1.0))
+            time.sleep(random.uniform(self.loop_sleep_min, self.loop_sleep_max))
     
     def _handle_deck_cutting(self, state):
         """

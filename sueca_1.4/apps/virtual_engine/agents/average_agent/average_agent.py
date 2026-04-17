@@ -24,6 +24,7 @@ class AverageAgent(GameClient):
         self.position = position
         self._last_phase = None
         self._last_finished_match = None
+        
 
     def run(self):
         success, message, player_id = self.join_game(self.agent_name, self.game_id, self.position)

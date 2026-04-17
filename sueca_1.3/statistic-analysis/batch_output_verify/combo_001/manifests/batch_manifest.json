@@ -1,0 +1,132 @@
+[
+  {
+    "game_number": 1,
+    "game_id": "65B661",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "final_scores": {
+      "team1": 65,
+      "team2": 55
+    },
+    "redis_key": "sueca:game:65B661"
+  },
+  {
+    "game_number": 2,
+    "game_id": "AE1C9F",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "final_scores": {
+      "team1": 85,
+      "team2": 35
+    },
+    "redis_key": "sueca:game:AE1C9F"
+  },
+  {
+    "game_number": 3,
+    "game_id": "9F4AE9",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": null,
+    "winner_label": "draw",
+    "final_scores": {
+      "team1": 60,
+      "team2": 60
+    },
+    "redis_key": "sueca:game:9F4AE9"
+  },
+  {
+    "game_number": 4,
+    "game_id": "DDFF7B",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 43,
+      "team2": 77
+    },
+    "redis_key": "sueca:game:DDFF7B"
+  },
+  {
+    "game_number": 5,
+    "game_id": "146214",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 57,
+      "team2": 63
+    },
+    "redis_key": "sueca:game:146214"
+  },
+  {
+    "game_number": 6,
+    "game_id": "CADF37",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 48,
+      "team2": 72
+    },
+    "redis_key": "sueca:game:CADF37"
+  },
+  {
+    "game_number": 7,
+    "game_id": "3FA260",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "final_scores": {
+      "team1": 73,
+      "team2": 47
+    },
+    "redis_key": "sueca:game:3FA260"
+  },
+  {
+    "game_number": 8,
+    "game_id": "C760EF",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 57,
+      "team2": 63
+    },
+    "redis_key": "sueca:game:C760EF"
+  },
+  {
+    "game_number": 9,
+    "game_id": "4413DC",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 34,
+      "team2": 86
+    },
+    "redis_key": "sueca:game:4413DC"
+  },
+  {
+    "game_number": 10,
+    "game_id": "13DE05",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 10,
+      "team2": 110
+    },
+    "redis_key": "sueca:game:13DE05"
+  }
+]

@@ -576,7 +576,9 @@ class GameClient:
         print()
 
         print('Connecting to server...')
-        if not self.get_status():
+        try:
+            requests.get(f'{SERVER_URL}/api/status', timeout=1)
+        except Exception:
             print('[ERROR] Cannot connect to server!')
             print('        Make sure the server is running: python3 server.py')
             return

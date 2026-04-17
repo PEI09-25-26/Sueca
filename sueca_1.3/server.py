@@ -904,6 +904,8 @@ def create_game():
     return jsonify({'success': success, 'message': message, 'game_id': game_id, 'player_id': player_id})
 
 
+    room = manager.create_room()
+
 @app.route('/api/join', methods=['POST'])
 def join_game():
     data = request.get_json() or {}
@@ -1042,6 +1044,120 @@ def add_bot():
             'game_id': game_id,
             'player_id': None
         })
+
+
+@app.route('/api/create_bot_match', methods=['POST'])
+@app.route('/app/create_bot_match', methods=['POST'])
+def create_bot_match():
+    """Create a fresh room and populate it with 4 bots (N/E/S/W)."""
+    data = request.get_json(silent=True) or {}
+
+    default_bots = [
+        {'name': 'BotNorth', 'position': 'NORTH', 'difficulty': 'random'},
+        {'name': 'BotEast', 'position': 'EAST', 'difficulty': 'weak'},
+        {'name': 'BotSouth', 'position': 'SOUTH', 'difficulty': 'average'},
+        {'name': 'BotWest', 'position': 'WEST', 'difficulty': 'random'},
+    ]
+
+    bot_specs = data.get('bots', default_bots)
+    if not isinstance(bot_specs, list) or len(bot_specs) != 4:
+        return jsonify({
+            'success': False,
+            'message': 'bots must be a list with exactly 4 entries',
+        }), 400
+
+    available_difficulties = set(BotFactory.get_available_bots())
+    required_positions = {'NORTH', 'EAST', 'SOUTH', 'WEST'}
+    normalized_specs = []
+    seen_names = set()
+    seen_positions = set()
+
+    for index, spec in enumerate(bot_specs, start=1):
+        if not isinstance(spec, dict):
+            return jsonify({
+                'success': False,
+                'message': f'Bot entry #{index} must be an object',
+            }), 400
+
+        name = str(spec.get('name', f'Bot{index}')).strip()
+        position = str(spec.get('position', '')).strip().upper()
+        difficulty = str(spec.get('difficulty', 'random')).strip().lower()
+
+        if not name:
+            return jsonify({'success': False, 'message': f'Bot entry #{index} has empty name'}), 400
+        if name in seen_names:
+            return jsonify({'success': False, 'message': f'Duplicate bot name: {name}'}), 400
+        if position not in required_positions:
+            return jsonify({
+                'success': False,
+                'message': f'Invalid position for {name}. Use NORTH, EAST, SOUTH, WEST',
+            }), 400
+        if position in seen_positions:
+            return jsonify({'success': False, 'message': f'Duplicate position: {position}'}), 400
+        if difficulty not in available_difficulties:
+            return jsonify({
+                'success': False,
+                'message': f'Invalid difficulty for {name}. Available: {", ".join(sorted(available_difficulties))}',
+            }), 400
+
+        seen_names.add(name)
+        seen_positions.add(position)
+        normalized_specs.append({'name': name, 'position': position, 'difficulty': difficulty})
+
+    if seen_positions != required_positions:
+        missing_positions = sorted(required_positions - seen_positions)
+        return jsonify({
+            'success': False,
+            'message': f'Missing positions: {", ".join(missing_positions)}',
+        }), 400
+
+    game_id = manager.create_room()
+    game = manager.get_game(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': 'Failed to create room'}), 500
+
+    for spec in normalized_specs:
+        agent = BotFactory.create_bot(
+            spec['name'],
+            spec['position'],
+            game_id,
+            spec['difficulty'],
+        )
+        if not agent:
+            return jsonify({'success': False, 'message': f"Could not create bot {spec['name']}"}), 500
+        threading.Thread(target=agent.run, daemon=True).start()
+
+    join_timeout_sec = data.get('join_timeout_sec', 6.0)
+    try:
+        join_timeout_sec = max(0.1, float(join_timeout_sec))
+    except (TypeError, ValueError):
+        join_timeout_sec = 6.0
+
+    deadline = time.time() + join_timeout_sec
+    expected_names = {spec['name'] for spec in normalized_specs}
+    joined_names = set()
+
+    while time.time() < deadline:
+        joined_names = {p.player_name for p in game.players}
+        if expected_names.issubset(joined_names) and len(game.players) == 4:
+            break
+        time.sleep(0.1)
+
+    joined_names = {p.player_name for p in game.players}
+    missing_names = sorted(expected_names - joined_names)
+    success = not missing_names and len(game.players) == 4
+
+    status_code = 200 if success else 202
+    return jsonify({
+        'success': success,
+        'message': '4-bot match created' if success else 'Bots are still joining',
+        'game_id': game_id,
+        'player_count': len(game.players),
+        'joined_bots': sorted(joined_names),
+        'missing_bots': missing_names,
+        'bots': normalized_specs,
+        'state': game.get_state(),
+    }), status_code
 
 
 @app.route('/api/start', methods=['POST'])
