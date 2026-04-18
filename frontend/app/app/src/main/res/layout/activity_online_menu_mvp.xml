@@ -1,99 +1,307 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:orientation="vertical"
-    android:background="@drawable/background_gradient"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp">
+    android:background="@drawable/background_gradient"
+    android:fitsSystemWindows="true">
 
     <LinearLayout
-        android:id="@+id/createRoomContainer"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/section_outline"
-        android:padding="16dp">
+        android:paddingStart="16dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="42dp">
 
-        <TextView
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Criar sala"
-            android:textColor="@android:color/white"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="12dp"/>
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCreateRoom"
+            <ImageView
+                android:id="@+id/backButton"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:contentDescription="Voltar"
+                android:src="@drawable/ic_back_arrow" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCreateRoom"
+                android:layout_width="wrap_content"
+                android:layout_height="46dp"
+                android:layout_marginStart="10dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:text="+ Criar Sala"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                app:backgroundTint="@color/orange"
+                app:cornerRadius="23dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/roomsContainer"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:text="Criar sala"
-            android:textAllCaps="false"
-            app:backgroundTint="@color/orange"
-            android:textColor="@android:color/white"
-            app:cornerRadius="12dp" />
+            android:layout_height="0dp"
+            android:layout_marginTop="24dp"
+            android:layout_weight="1"
+            android:background="@drawable/section_outline"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:scrollbars="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/roomItem129837"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:background="@drawable/room_item_bg"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="62dp"
+                        android:orientation="horizontal"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Mesa Nº 129837"
+                            android:textColor="@android:color/white"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="3/4"
+                            android:textColor="#CCE7F4FF"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/roomItem138373"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:background="@drawable/room_item_bg"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="62dp"
+                        android:orientation="horizontal"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Mesa Nº 138373"
+                            android:textColor="@android:color/white"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="1/4"
+                            android:textColor="#CCE7F4FF"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/roomItem671319"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:background="@drawable/room_item_bg"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="62dp"
+                        android:orientation="horizontal"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Mesa Nº 671319"
+                            android:textColor="@android:color/white"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="2/4"
+                            android:textColor="#CCE7F4FF"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/roomItem180080"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:background="@drawable/room_item_bg"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="62dp"
+                        android:orientation="horizontal"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Mesa Nº 180080"
+                            android:textColor="@android:color/white"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="3/4"
+                            android:textColor="#CCE7F4FF"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/roomItem142069"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:background="@drawable/room_item_bg"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="62dp"
+                        android:orientation="horizontal"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Mesa Nº 142069"
+                            android:textColor="@android:color/white"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="1/4"
+                            android:textColor="#CCE7F4FF"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/joinRoomContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/section_outline"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <EditText
+                android:id="@+id/inputRoomId"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/edittext_bg"
+                android:hint="ID da sala"
+                android:imeOptions="actionDone"
+                android:inputType="textCapCharacters|textVisiblePassword"
+                android:maxLines="1"
+                android:padding="12dp"
+                android:singleLine="true"
+                android:textColor="@android:color/white"
+                android:textColorHint="#D5E2EC" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnJoinRoom"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:text="Entrar na Sala"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                app:backgroundTint="@color/orange"
+                app:cornerRadius="12dp" />
+        </LinearLayout>
     </LinearLayout>
 
-    <EditText
-        android:id="@+id/inputName"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp"
-        android:background="@drawable/edittext_bg"
-        android:hint="Nome"
-        android:imeOptions="actionDone"
-        android:inputType="textVisiblePassword"
-        android:maxLines="1"
-        android:padding="12dp"
-        android:singleLine="true"
-        android:textColor="@android:color/white" />
+    <FrameLayout
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="30dp"
+        android:layout_marginEnd="110dp">
 
-    <LinearLayout
-        android:id="@+id/joinRoomContainer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/section_outline"
-        android:padding="16dp">
+        <ImageView
+            android:id="@+id/image_friends"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="Abrir amigos"
+            android:padding="0dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_friends" />
 
         <TextView
+            android:id="@+id/friend_requests_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Entrar sala"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="-4dp"
+            android:layout_marginEnd="-6dp"
+            android:background="@drawable/friend_requests_badge_bg"
+            android:gravity="center"
+            android:minWidth="18dp"
+            android:minHeight="18dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:text="0"
             android:textColor="@android:color/white"
-            android:textSize="20sp"
+            android:textSize="10sp"
             android:textStyle="bold"
-            android:layout_marginBottom="12dp"/>
+            android:visibility="gone" />
+    </FrameLayout>
 
-        <EditText
-            android:id="@+id/inputRoomId"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="ID da sala"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/edittext_bg"
-            android:padding="12dp"
-            android:textColor="@android:color/white"
-            android:inputType="textCapCharacters|textVisiblePassword"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:imeOptions="actionDone"/>
+    <ImageView
+        android:id="@+id/image_profile2"
+        android:layout_width="67dp"
+        android:layout_height="67dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/profile_avatar_circle"
+        android:clipToOutline="true"
+        android:contentDescription="Abrir perfil"
+        android:outlineProvider="background"
+        android:scaleType="centerCrop"
+        android:src="@drawable/profile_pic1" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnJoinRoom"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:text="Entrar na sala"
-            android:textAllCaps="false"
-            app:backgroundTint="@color/teal_700"
-            android:textColor="@android:color/white"
-            app:cornerRadius="12dp" />
-    </LinearLayout>
-
-</LinearLayout>
+</FrameLayout>

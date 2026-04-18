@@ -1,11 +1,15 @@
 package com.example.MVP
 
 import android.content.Intent
-import android.text.InputFilter
 import android.os.Bundle
+import android.text.InputFilter
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.network.RetrofitClient
@@ -13,17 +17,32 @@ import kotlinx.coroutines.launch
 
 class OnlineMenuActivity : AppCompatActivity() {
 
+    private lateinit var friendRequestsBadge: TextView
+    private lateinit var profileIcon: ImageView
+    private var lastBadgeRefreshAt: Long = 0L
+    private var lastProfileRefreshAt: Long = 0L
+
+    companion object {
+        private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
+        private const val PROFILE_REFRESH_INTERVAL_MS = 10_000L
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AuthManager.initialize(applicationContext)
         setContentView(R.layout.activity_online_menu_mvp)
 
-        val inputName = findViewById<EditText>(R.id.inputName)
+        val backButton = findViewById<ImageView>(R.id.backButton)
         val inputRoomId = findViewById<EditText>(R.id.inputRoomId)
         val btnCreateRoom = findViewById<Button>(R.id.btnCreateRoom)
         val btnJoinRoom = findViewById<Button>(R.id.btnJoinRoom)
+        val friendsIcon = findViewById<ImageView>(R.id.image_friends)
+        profileIcon = findViewById(R.id.image_profile2)
+        friendRequestsBadge = findViewById(R.id.friend_requests_badge)
 
-        // Block spaces/newlines in both inputs.
+        backButton.setOnClickListener { finish() }
+
+        // Block spaces/newlines in room input.
         val noWhitespaceFilter = InputFilter { source, start, end, _, _, _ ->
             val filtered = StringBuilder()
             for (i in start until end) {
@@ -39,13 +58,12 @@ class OnlineMenuActivity : AppCompatActivity() {
             }
         }
 
-        inputName.filters = arrayOf(noWhitespaceFilter)
         inputRoomId.filters = arrayOf(noWhitespaceFilter, InputFilter.AllCaps())
 
-        AuthManager.getPlayerDisplayName()?.let { inputName.setText(it) }
+        setupRoomQuickPick(inputRoomId)
 
         btnCreateRoom.setOnClickListener {
-            val name = inputName.text.toString().ifBlank { randomName() }
+            val name = AuthManager.getPlayerDisplayName() ?: randomName()
 
             lifecycleScope.launch {
                 try {
@@ -68,25 +86,167 @@ class OnlineMenuActivity : AppCompatActivity() {
         }
 
         btnJoinRoom.setOnClickListener {
-            val name = inputName.text.toString().ifBlank { randomName() }
-            val roomId = inputRoomId.text.toString().trim()
+            val roomId = inputRoomId.text.toString().trim().uppercase()
 
             if (roomId.isBlank()) {
                 Toast.makeText(this@OnlineMenuActivity, "Insere o ID da sala.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            lifecycleScope.launch {
-                try {
-                    // Validate room existence before entering lobby.
-                    RetrofitClient.api.getStatus(roomId)
-                    goToRoom(roomId = roomId, playerName = name, playerId = "")
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    Toast.makeText(this@OnlineMenuActivity, "Sala nao encontrada ou servidor offline.", Toast.LENGTH_LONG).show()
-                }
+            joinRoomById(roomId)
+        }
+
+        friendsIcon.setOnClickListener {
+            if (!AuthManager.isLoggedIn()) {
+                showCreateAccountPrompt("Para usar Amigos precisas de criar/iniciar conta.")
+                return@setOnClickListener
+            }
+            val intent = Intent(this, FriendsActivity::class.java)
+            startActivity(intent)
+        }
+
+        profileIcon.setOnClickListener {
+            if (!AuthManager.isLoggedIn()) {
+                showCreateAccountPrompt("Para aceder ao Perfil precisas de criar/iniciar conta.")
+                return@setOnClickListener
+            }
+            val intent = Intent(this, ProfileActivity::class.java)
+            startActivity(intent)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        maybeRefreshFriendRequestsBadge()
+        maybeRefreshProfileIcon()
+    }
+
+    private fun setupRoomQuickPick(inputRoomId: EditText) {
+        val quickRooms = mapOf(
+            R.id.roomItem129837 to "129837",
+            R.id.roomItem138373 to "138373",
+            R.id.roomItem671319 to "671319",
+            R.id.roomItem180080 to "180080",
+            R.id.roomItem142069 to "142069"
+        )
+
+        quickRooms.forEach { (viewId, roomId) ->
+            findViewById<View>(viewId).setOnClickListener {
+                inputRoomId.setText(roomId)
+                inputRoomId.setSelection(roomId.length)
+                joinRoomById(roomId)
             }
         }
+    }
+
+    private fun joinRoomById(roomId: String) {
+        val normalizedRoomId = roomId.trim().uppercase()
+        val playerName = AuthManager.getPlayerDisplayName() ?: randomName()
+
+        lifecycleScope.launch {
+            try {
+                // Validate room existence before entering lobby.
+                RetrofitClient.api.getStatus(normalizedRoomId)
+                goToRoom(roomId = normalizedRoomId, playerName = playerName, playerId = "")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(this@OnlineMenuActivity, "Sala nao encontrada ou servidor offline.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun maybeRefreshProfileIcon() {
+        val now = System.currentTimeMillis()
+        if ((now - lastProfileRefreshAt) < PROFILE_REFRESH_INTERVAL_MS) {
+            return
+        }
+        lastProfileRefreshAt = now
+        refreshProfileIcon()
+    }
+
+    private fun maybeRefreshFriendRequestsBadge() {
+        val now = System.currentTimeMillis()
+        if ((now - lastBadgeRefreshAt) < BADGE_REFRESH_INTERVAL_MS) {
+            return
+        }
+        lastBadgeRefreshAt = now
+        refreshFriendRequestsBadge()
+    }
+
+    private fun refreshProfileIcon() {
+        if (!AuthManager.isLoggedIn()) {
+            profileIcon.setImageResource(R.drawable.profile_pic1)
+            return
+        }
+
+        val uid = AuthManager.getUid() ?: run {
+            profileIcon.setImageResource(R.drawable.profile_pic1)
+            return
+        }
+
+        lifecycleScope.launch {
+            AuthManager.getUser(uid)
+                .onSuccess { user ->
+                    applyProfileIcon(user.photoURL)
+                }
+                .onFailure {
+                    profileIcon.setImageResource(R.drawable.profile_pic1)
+                }
+        }
+    }
+
+    private fun applyProfileIcon(photoKey: String?) {
+        when (photoKey) {
+            "profile_pic1" -> profileIcon.setImageResource(R.drawable.profile_pic1)
+            "profile_pic2" -> profileIcon.setImageResource(R.drawable.profile_pic2)
+            "profile_pic3" -> profileIcon.setImageResource(R.drawable.profile_pic3)
+            "profile_pic4" -> profileIcon.setImageResource(R.drawable.profile_pic4)
+            "profile_pic5" -> profileIcon.setImageResource(R.drawable.profile_pic5)
+            else -> profileIcon.setImageResource(R.drawable.profile_pic1)
+        }
+    }
+
+    private fun refreshFriendRequestsBadge() {
+        if (!AuthManager.isLoggedIn()) {
+            friendRequestsBadge.visibility = View.GONE
+            return
+        }
+
+        val uid = AuthManager.getUid() ?: run {
+            friendRequestsBadge.visibility = View.GONE
+            return
+        }
+
+        lifecycleScope.launch {
+            FriendsManager.listIncomingFriendRequests(uid)
+                .onSuccess { requests ->
+                    val count = requests.size
+                    if (count > 0) {
+                        friendRequestsBadge.visibility = View.VISIBLE
+                        friendRequestsBadge.text = if (count > 99) "99+" else count.toString()
+                    } else {
+                        friendRequestsBadge.visibility = View.GONE
+                    }
+                }
+                .onFailure {
+                    friendRequestsBadge.visibility = View.GONE
+                }
+        }
+    }
+
+    private fun showCreateAccountPrompt(message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Criar conta")
+            .setMessage(message)
+            .setPositiveButton("Registar") { _, _ ->
+                startActivity(Intent(this, RegisterActivity::class.java))
+            }
+            .setNegativeButton("Login") { _, _ ->
+                startActivity(Intent(this, LoginActivity::class.java))
+                finish()
+            }
+            .setNeutralButton("Cancelar", null)
+            .show()
     }
 
     private fun goToRoom(roomId: String, playerName: String, playerId: String) {

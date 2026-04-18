@@ -48,7 +48,7 @@ class MainMenuActivity : AppCompatActivity() {
         }
 
         btnVirtual.setOnClickListener {
-            showVirtualModeDialog()
+            openOnlineMenu()
         }
 
         btnPresential.setOnClickListener {
@@ -175,15 +175,6 @@ class MainMenuActivity : AppCompatActivity() {
     private fun togglePlayOptions(show: Boolean) {
         btnPlay.visibility = if (show) View.GONE else View.VISIBLE
         playOptionsContainer.visibility = if (show) View.VISIBLE else View.GONE
-    }
-
-    private fun showVirtualModeDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Jogo Virtual")
-            .setItems(arrayOf("Entrar numa sala", "Criar uma sala")) { _, _ ->
-                openOnlineMenu()
-            }
-            .show()
     }
 
     private fun launchPresentialVisionGame() {
