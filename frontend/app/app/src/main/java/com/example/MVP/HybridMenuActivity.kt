@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputFilter
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -24,23 +23,93 @@ class HybridMenuActivity : AppCompatActivity() {
     companion object {
         private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
         private const val PROFILE_REFRESH_INTERVAL_MS = 10_000L
+        private const val MOCK_HYBRID_BASE_OCCUPANCY = 3
+        private const val MOCK_HYBRID_MAX_OCCUPANCY = 4
+        private const val MOCK_HYBRID_REMOTE_SLOTS = 1
         private val guestNameRegex = Regex("^Guest\\s+\\d+$")
+
+        private data class MockHybridRoomState(
+            var isPublic: Boolean = true,
+            var creatorName: String = ""
+        )
+
         private val mockRoomRegistry = linkedSetOf<String>()
         private val mockRoomPlayers = linkedMapOf<String, MutableSet<String>>()
+        private val mockRoomStates = linkedMapOf<String, MockHybridRoomState>()
+
+        fun createMockRoom(roomId: String, creatorName: String) {
+            val normalizedRoomId = normalizeMockRoomId(roomId)
+            if (normalizedRoomId.isBlank()) {
+                return
+            }
+
+            val normalizedCreatorName = creatorName.trim().ifBlank { "Criador" }
+            mockRoomRegistry.add(normalizedRoomId)
+            mockRoomStates[normalizedRoomId] = MockHybridRoomState(
+                isPublic = true,
+                creatorName = normalizedCreatorName
+            )
+        }
+
+        fun hasMockRoom(roomId: String): Boolean {
+            val normalizedRoomId = normalizeMockRoomId(roomId)
+            return normalizedRoomId.isNotBlank() && mockRoomRegistry.contains(normalizedRoomId)
+        }
+
+        fun canMockRoomAcceptPlayer(roomId: String, playerName: String): Boolean {
+            val normalizedRoomId = normalizeMockRoomId(roomId)
+            val normalizedPlayerName = playerName.trim()
+
+            if (normalizedRoomId.isBlank() || normalizedPlayerName.isBlank()) {
+                return false
+            }
+
+            if (!mockRoomRegistry.contains(normalizedRoomId)) {
+                return false
+            }
+
+            val players = mockRoomPlayers[normalizedRoomId] ?: return true
+            return players.contains(normalizedPlayerName) || players.size < MOCK_HYBRID_REMOTE_SLOTS
+        }
+
+        fun setMockRoomVisibility(roomId: String, isPublic: Boolean): Boolean {
+            val normalizedRoomId = normalizeMockRoomId(roomId)
+            val roomState = mockRoomStates[normalizedRoomId] ?: return false
+            roomState.isPublic = isPublic
+            return true
+        }
+
+        fun isMockRoomPublic(roomId: String): Boolean {
+            val normalizedRoomId = normalizeMockRoomId(roomId)
+            return mockRoomStates[normalizedRoomId]?.isPublic ?: true
+        }
+
+        fun getMockRoomCreatorName(roomId: String): String {
+            val normalizedRoomId = normalizeMockRoomId(roomId)
+            val creatorName = mockRoomStates[normalizedRoomId]?.creatorName?.trim().orEmpty()
+            return creatorName.ifBlank { "Criador" }
+        }
 
         fun registerMockRoomPlayer(roomId: String, playerName: String) {
-            val normalizedRoomId = roomId.trim().uppercase()
+            val normalizedRoomId = normalizeMockRoomId(roomId)
             val normalizedPlayerName = playerName.trim()
             if (normalizedRoomId.isBlank() || normalizedPlayerName.isBlank()) {
                 return
             }
 
             mockRoomRegistry.add(normalizedRoomId)
-            mockRoomPlayers.getOrPut(normalizedRoomId) { linkedSetOf() }.add(normalizedPlayerName)
+            if (!mockRoomStates.containsKey(normalizedRoomId)) {
+                mockRoomStates[normalizedRoomId] = MockHybridRoomState(isPublic = true)
+            }
+
+            val players = mockRoomPlayers.getOrPut(normalizedRoomId) { linkedSetOf() }
+            if (players.contains(normalizedPlayerName) || players.size < MOCK_HYBRID_REMOTE_SLOTS) {
+                players.add(normalizedPlayerName)
+            }
         }
 
         fun unregisterMockRoomPlayer(roomId: String, playerName: String) {
-            val normalizedRoomId = roomId.trim().uppercase()
+            val normalizedRoomId = normalizeMockRoomId(roomId)
             val normalizedPlayerName = playerName.trim()
             if (normalizedRoomId.isBlank() || normalizedPlayerName.isBlank()) {
                 return
@@ -55,8 +124,35 @@ class HybridMenuActivity : AppCompatActivity() {
         }
 
         fun getRegisteredMockRoomPlayers(roomId: String): List<String> {
-            val normalizedRoomId = roomId.trim().uppercase()
+            val normalizedRoomId = normalizeMockRoomId(roomId)
             return mockRoomPlayers[normalizedRoomId]?.toList().orEmpty()
+        }
+
+        fun getMockRoomOccupancy(roomId: String): Int {
+            val normalizedRoomId = normalizeMockRoomId(roomId)
+            val remotePlayers = mockRoomPlayers[normalizedRoomId]
+                ?.size
+                ?.coerceAtMost(MOCK_HYBRID_REMOTE_SLOTS)
+                ?: 0
+
+            return (MOCK_HYBRID_BASE_OCCUPANCY + remotePlayers)
+                .coerceAtMost(MOCK_HYBRID_MAX_OCCUPANCY)
+        }
+
+        fun getMockRoomDisplayPlayers(roomId: String): List<String> {
+            val names = mutableListOf(
+                "Jogador Mesa 1",
+                "Jogador Mesa 2",
+                "Jogador Mesa 3"
+            )
+
+            val remotePlayer = getRegisteredMockRoomPlayers(roomId).firstOrNull()
+            names.add(remotePlayer ?: "Waiting for player...")
+            return names
+        }
+
+        private fun normalizeMockRoomId(roomId: String): String {
+            return roomId.trim().uppercase()
         }
     }
 
@@ -122,7 +218,7 @@ class HybridMenuActivity : AppCompatActivity() {
         btnCreateRoom.setOnClickListener {
             val name = displayedPlayerName
             val roomId = generateMockRoomId()
-            mockRoomRegistry.add(roomId)
+            createMockRoom(roomId, name)
             renderMockRooms(inputRoomId)
             Toast.makeText(this, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
             openHybridRoom(roomId = roomId, playerName = name, isHost = true)
@@ -137,8 +233,13 @@ class HybridMenuActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (!mockRoomRegistry.contains(roomId)) {
+            if (!hasMockRoom(roomId)) {
                 Toast.makeText(this, "Sala mock nao encontrada.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (!canMockRoomAcceptPlayer(roomId, name)) {
+                Toast.makeText(this, "Sala hibrida cheia (4/4).", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -159,16 +260,29 @@ class HybridMenuActivity : AppCompatActivity() {
 
     private fun renderMockRooms(inputRoomId: EditText) {
         roomsListContainer.removeAllViews()
+        txtHybridRoomsEmpty.text = "Cria uma sala para aparecer aqui."
 
         if (mockRoomRegistry.isEmpty()) {
             txtHybridRoomsEmpty.visibility = View.VISIBLE
             return
         }
 
+        val visibleRooms = mockRoomRegistry.filter { roomId ->
+            val occupancy = getMockRoomOccupancy(roomId)
+            isMockRoomPublic(roomId) && occupancy in 1 until MOCK_HYBRID_MAX_OCCUPANCY
+        }
+
+        if (visibleRooms.isEmpty()) {
+            txtHybridRoomsEmpty.text = "Sem mesas publicas disponiveis."
+            txtHybridRoomsEmpty.visibility = View.VISIBLE
+            return
+        }
+
         txtHybridRoomsEmpty.visibility = View.GONE
 
-        mockRoomRegistry.forEach { roomId ->
-            val players = getRegisteredMockRoomPlayers(roomId)
+        visibleRooms.forEach { roomId ->
+            val occupancy = getMockRoomOccupancy(roomId)
+            val creatorName = getMockRoomCreatorName(roomId)
 
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -210,29 +324,27 @@ class HybridMenuActivity : AppCompatActivity() {
             }
 
             val roomCount = TextView(this).apply {
-                text = "${players.size}/4"
+                text = "$occupancy/4"
                 setTextColor(Color.parseColor("#CCE7F4FF"))
                 textSize = 13f
             }
 
-            val playersText = TextView(this).apply {
+            val roomCreator = TextView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    topMargin = dp(4)
+                    topMargin = dp(2)
                 }
-                text = if (players.isEmpty()) "Sem jogadores na sala" else players.joinToString(", ")
-                setTextColor(Color.parseColor("#D5E2EC"))
+                text = "Mesa de $creatorName"
+                setTextColor(Color.parseColor("#CCE7F4FF"))
                 textSize = 12f
-                maxLines = 2
-                ellipsize = TextUtils.TruncateAt.END
             }
 
             topRow.addView(roomTitle)
             topRow.addView(roomCount)
             card.addView(topRow)
-            card.addView(playersText)
+            card.addView(roomCreator)
             roomsListContainer.addView(card)
         }
     }

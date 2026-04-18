@@ -26,10 +26,15 @@ class RoomHybridActivity : AppCompatActivity() {
     private lateinit var txtSeatSouthPlayer: TextView
     private lateinit var txtSeatWestPlayer: TextView
 
+    private lateinit var roomVisibilityContainer: View
+    private lateinit var imgRoomVisibilityLock: ImageView
+    private lateinit var txtRoomVisibilityHint: TextView
+
     private lateinit var txtSeatHint: TextView
     private lateinit var btnStartHybridGame: Button
     private var isRegisteredInRoom: Boolean = false
     private var gameStarted: Boolean = false
+    private var roomIsPublic: Boolean = true
 
     private val occupiedByBots = mutableMapOf(
         "NORTH" to "Jogador Mesa 1",
@@ -58,12 +63,19 @@ class RoomHybridActivity : AppCompatActivity() {
         txtSeatSouthPlayer = findViewById(R.id.txtSeatSouthPlayer)
         txtSeatWestPlayer = findViewById(R.id.txtSeatWestPlayer)
 
+        roomVisibilityContainer = findViewById(R.id.roomVisibilityContainer)
+        imgRoomVisibilityLock = findViewById(R.id.imgRoomVisibilityLock)
+        txtRoomVisibilityHint = findViewById(R.id.txtRoomVisibilityHint)
+
         txtSeatHint = findViewById(R.id.txtSeatHint)
         btnStartHybridGame = findViewById(R.id.btnStartHybridGame)
 
         txtRoom.text = "Sala hibrida: $roomId"
+        roomIsPublic = HybridMenuActivity.isMockRoomPublic(roomId)
 
         btnBack.setOnClickListener { finish() }
+        imgRoomVisibilityLock.setOnClickListener { toggleRoomVisibility() }
+        updateRoomVisibilityUi(canToggle = isHost)
         wireSeatSelection()
 
         btnStartHybridGame.setOnClickListener {
@@ -92,6 +104,16 @@ class RoomHybridActivity : AppCompatActivity() {
     }
 
     private fun selectSeat(seat: String) {
+        if (isHost) {
+            Toast.makeText(this, "O criador da mesa nao ocupa o lugar SOUTH.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (seat != "SOUTH") {
+            Toast.makeText(this, "No hibrido remoto, o lugar disponivel e SOUTH.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val currentlyOccupiedByBot = occupiedByBots.containsKey(seat)
 
         if (currentlyOccupiedByBot) {
@@ -105,10 +127,7 @@ class RoomHybridActivity : AppCompatActivity() {
             isRegisteredInRoom = true
         }
         txtSeatHint.text = "Lugar escolhido: $seat"
-        txtSeatSouthPlayer.text = if (seat == "SOUTH") "Tu ($playerName)" else txtSeatSouthPlayer.text
-        txtSeatNorthPlayer.text = if (seat == "NORTH") "Tu ($playerName)" else txtSeatNorthPlayer.text
-        txtSeatEastPlayer.text = if (seat == "EAST") "Tu ($playerName)" else txtSeatEastPlayer.text
-        txtSeatWestPlayer.text = if (seat == "WEST") "Tu ($playerName)" else txtSeatWestPlayer.text
+        txtSeatSouthPlayer.text = "Tu ($playerName)"
 
         hideAllSeatButtons()
         btnStartHybridGame.visibility = View.VISIBLE
@@ -118,7 +137,14 @@ class RoomHybridActivity : AppCompatActivity() {
         txtSeatNorthPlayer.text = occupiedByBots["NORTH"] ?: "Livre"
         txtSeatEastPlayer.text = occupiedByBots["EAST"] ?: "Livre"
         txtSeatWestPlayer.text = occupiedByBots["WEST"] ?: "Livre"
-        txtSeatSouthPlayer.text = if (occupiedByBots.containsKey("SOUTH")) occupiedByBots["SOUTH"] else "Livre"
+        txtSeatSouthPlayer.text = if (isRegisteredInRoom) "Tu ($playerName)" else "Waiting for player..."
+
+        if (isHost) {
+            hideAllSeatButtons()
+            btnStartHybridGame.visibility = View.GONE
+            txtSeatHint.text = "Aguardando por jogador"
+            return
+        }
 
         renderSeatButton(btnSeatNorth, !occupiedByBots.containsKey("NORTH"))
         renderSeatButton(btnSeatEast, !occupiedByBots.containsKey("EAST"))
@@ -131,6 +157,45 @@ class RoomHybridActivity : AppCompatActivity() {
     private fun renderSeatButton(button: Button, available: Boolean) {
         button.visibility = if (available) View.VISIBLE else View.GONE
         button.isEnabled = available
+    }
+
+    private fun toggleRoomVisibility() {
+        if (!isHost) {
+            Toast.makeText(this, "So o criador da sala pode alterar a visibilidade.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val newVisibility = !roomIsPublic
+        val updated = HybridMenuActivity.setMockRoomVisibility(roomId, newVisibility)
+        if (!updated) {
+            Toast.makeText(this, "Nao foi possivel alterar a visibilidade da sala.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        roomIsPublic = newVisibility
+        updateRoomVisibilityUi(canToggle = true)
+
+        val feedback = if (roomIsPublic) {
+            "Sala publica no menu hibrido."
+        } else {
+            "Sala privada. Entrada apenas por codigo."
+        }
+        Toast.makeText(this, feedback, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateRoomVisibilityUi(canToggle: Boolean) {
+        roomVisibilityContainer.visibility = View.VISIBLE
+        imgRoomVisibilityLock.setImageResource(
+            if (roomIsPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed
+        )
+        txtRoomVisibilityHint.text = if (roomIsPublic) {
+            "Qualquer pessoa pode entrar"
+        } else {
+            "Necessario codigo para entrar"
+        }
+
+        imgRoomVisibilityLock.isEnabled = canToggle
+        imgRoomVisibilityLock.alpha = if (canToggle) 1f else 0.55f
     }
 
     private fun hideAllSeatButtons() {
