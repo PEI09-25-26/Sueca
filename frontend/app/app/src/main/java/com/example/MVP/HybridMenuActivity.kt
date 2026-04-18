@@ -4,10 +4,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
-import android.text.Editable
 import android.text.InputFilter
 import android.text.TextUtils
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -26,14 +24,48 @@ class HybridMenuActivity : AppCompatActivity() {
     companion object {
         private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
         private const val PROFILE_REFRESH_INTERVAL_MS = 10_000L
+        private val guestNameRegex = Regex("^Guest\\s+\\d+$")
         private val mockRoomRegistry = linkedSetOf<String>()
         private val mockRoomPlayers = linkedMapOf<String, MutableSet<String>>()
+
+        fun registerMockRoomPlayer(roomId: String, playerName: String) {
+            val normalizedRoomId = roomId.trim().uppercase()
+            val normalizedPlayerName = playerName.trim()
+            if (normalizedRoomId.isBlank() || normalizedPlayerName.isBlank()) {
+                return
+            }
+
+            mockRoomRegistry.add(normalizedRoomId)
+            mockRoomPlayers.getOrPut(normalizedRoomId) { linkedSetOf() }.add(normalizedPlayerName)
+        }
+
+        fun unregisterMockRoomPlayer(roomId: String, playerName: String) {
+            val normalizedRoomId = roomId.trim().uppercase()
+            val normalizedPlayerName = playerName.trim()
+            if (normalizedRoomId.isBlank() || normalizedPlayerName.isBlank()) {
+                return
+            }
+
+            val players = mockRoomPlayers[normalizedRoomId] ?: return
+            players.remove(normalizedPlayerName)
+
+            if (players.isEmpty()) {
+                mockRoomPlayers.remove(normalizedRoomId)
+            }
+        }
+
+        fun getRegisteredMockRoomPlayers(roomId: String): List<String> {
+            val normalizedRoomId = roomId.trim().uppercase()
+            return mockRoomPlayers[normalizedRoomId]?.toList().orEmpty()
+        }
     }
 
     private lateinit var friendRequestsBadge: TextView
     private lateinit var profileIcon: ImageView
+    private lateinit var inputRoomId: EditText
     private lateinit var roomsListContainer: LinearLayout
     private lateinit var txtHybridRoomsEmpty: TextView
+    private var displayedPlayerName: String = ""
     private var lastBadgeRefreshAt: Long = 0L
     private var lastProfileRefreshAt: Long = 0L
 
@@ -43,9 +75,8 @@ class HybridMenuActivity : AppCompatActivity() {
         setContentView(R.layout.activity_hybrid_menu)
 
         val backButton = findViewById<ImageView>(R.id.backButton)
-        val inputName = findViewById<EditText>(R.id.inputName)
         val txtDisplayedName = findViewById<TextView>(R.id.txtDisplayedName)
-        val inputRoomId = findViewById<EditText>(R.id.inputRoomId)
+        inputRoomId = findViewById(R.id.inputRoomId)
         val btnCreateRoom = findViewById<Button>(R.id.btnCreateRoom)
         val btnJoinRoom = findViewById<Button>(R.id.btnJoinRoom)
         val friendsIcon = findViewById<ImageView>(R.id.image_friends)
@@ -67,27 +98,10 @@ class HybridMenuActivity : AppCompatActivity() {
             if (filtered.length == end - start) null else filtered.toString()
         }
 
-        inputName.filters = arrayOf(noWhitespaceFilter)
         inputRoomId.filters = arrayOf(noWhitespaceFilter, InputFilter.AllCaps())
 
-        val profileName = AuthManager.getPlayerDisplayName()?.takeIf { it.isNotBlank() }
-        val fallbackName = randomName()
-        profileName?.let { inputName.setText(it) }
-
-        fun resolveDisplayedNameFromInput(): String {
-            return inputName.text.toString().ifBlank { profileName ?: fallbackName }
-        }
-
-        txtDisplayedName.text = "Nome exibido: ${resolveDisplayedNameFromInput()}"
-        inputName.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                txtDisplayedName.text = "Nome exibido: ${resolveDisplayedNameFromInput()}"
-            }
-
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
+        displayedPlayerName = resolveDisplayedPlayerName()
+        txtDisplayedName.text = "Nome exibido: $displayedPlayerName"
 
         friendsIcon.setOnClickListener {
             if (!AuthManager.isLoggedIn()) {
@@ -106,17 +120,16 @@ class HybridMenuActivity : AppCompatActivity() {
         }
 
         btnCreateRoom.setOnClickListener {
-            val name = resolveDisplayedNameFromInput()
+            val name = displayedPlayerName
             val roomId = generateMockRoomId()
             mockRoomRegistry.add(roomId)
-            mockRoomPlayers.getOrPut(roomId) { linkedSetOf() }.add(name)
             renderMockRooms(inputRoomId)
             Toast.makeText(this, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
             openHybridRoom(roomId = roomId, playerName = name, isHost = true)
         }
 
         btnJoinRoom.setOnClickListener {
-            val name = resolveDisplayedNameFromInput()
+            val name = displayedPlayerName
             val roomId = inputRoomId.text.toString().trim().uppercase()
 
             if (roomId.isBlank()) {
@@ -129,7 +142,6 @@ class HybridMenuActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            mockRoomPlayers.getOrPut(roomId) { linkedSetOf() }.add(name)
             renderMockRooms(inputRoomId)
             Toast.makeText(this, "Entraste na sala mock: $roomId", Toast.LENGTH_SHORT).show()
             openHybridRoom(roomId = roomId, playerName = name, isHost = false)
@@ -140,6 +152,7 @@ class HybridMenuActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        renderMockRooms(inputRoomId)
         maybeRefreshFriendRequestsBadge()
         maybeRefreshProfileIcon()
     }
@@ -155,7 +168,7 @@ class HybridMenuActivity : AppCompatActivity() {
         txtHybridRoomsEmpty.visibility = View.GONE
 
         mockRoomRegistry.forEach { roomId ->
-            val players = mockRoomPlayers[roomId]?.toList().orEmpty()
+            val players = getRegisteredMockRoomPlayers(roomId)
 
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -326,8 +339,24 @@ class HybridMenuActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun randomName(): String {
-        return "Player${(1000..9999).random()}"
+    private fun resolveDisplayedPlayerName(): String {
+        if (AuthManager.isLoggedIn()) {
+            return AuthManager.getUsername()?.takeIf { it.isNotBlank() } ?: "Conta"
+        }
+
+        val anonymousName = AuthManager.getAnonymousName()?.trim()
+        val guestName = if (!anonymousName.isNullOrBlank() && guestNameRegex.matches(anonymousName)) {
+            anonymousName
+        } else {
+            randomGuestName()
+        }
+
+        AuthManager.startAnonymousSession(guestName)
+        return guestName
+    }
+
+    private fun randomGuestName(): String {
+        return "Guest ${(1000..9999).random()}"
     }
 
     private fun generateMockRoomId(): String {

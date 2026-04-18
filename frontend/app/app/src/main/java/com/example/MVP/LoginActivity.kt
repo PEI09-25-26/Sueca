@@ -54,8 +54,7 @@ class LoginActivity : AppCompatActivity() {
         }
 
         anonymousLink.setOnClickListener {
-            val name = usernameEditText.text.toString().trim()
-            AuthManager.startAnonymousSession(name)
+            AuthManager.startAnonymousSession()
             Toast.makeText(this, "Entraste como anónimo", Toast.LENGTH_SHORT).show()
             startActivity(Intent(this, MainMenuActivity::class.java))
             finish()

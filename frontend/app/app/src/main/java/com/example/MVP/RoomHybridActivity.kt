@@ -28,6 +28,8 @@ class RoomHybridActivity : AppCompatActivity() {
 
     private lateinit var txtSeatHint: TextView
     private lateinit var btnStartHybridGame: Button
+    private var isRegisteredInRoom: Boolean = false
+    private var gameStarted: Boolean = false
 
     private val occupiedByBots = mutableMapOf(
         "NORTH" to "Jogador Mesa 1",
@@ -75,6 +77,13 @@ class RoomHybridActivity : AppCompatActivity() {
         renderInitialState()
     }
 
+    override fun onDestroy() {
+        if (isFinishing && isRegisteredInRoom && !gameStarted) {
+            HybridMenuActivity.unregisterMockRoomPlayer(roomId, playerName)
+        }
+        super.onDestroy()
+    }
+
     private fun wireSeatSelection() {
         btnSeatNorth.setOnClickListener { selectSeat("NORTH") }
         btnSeatEast.setOnClickListener { selectSeat("EAST") }
@@ -91,6 +100,10 @@ class RoomHybridActivity : AppCompatActivity() {
         }
 
         selectedSeat = seat
+        if (!isRegisteredInRoom) {
+            HybridMenuActivity.registerMockRoomPlayer(roomId, playerName)
+            isRegisteredInRoom = true
+        }
         txtSeatHint.text = "Lugar escolhido: $seat"
         txtSeatSouthPlayer.text = if (seat == "SOUTH") "Tu ($playerName)" else txtSeatSouthPlayer.text
         txtSeatNorthPlayer.text = if (seat == "NORTH") "Tu ($playerName)" else txtSeatNorthPlayer.text
@@ -128,6 +141,7 @@ class RoomHybridActivity : AppCompatActivity() {
     }
 
     private fun goToHybridGame() {
+        gameStarted = true
         val intent = Intent(this, HybridActivity::class.java)
         intent.putExtra("roomId", roomId)
         intent.putExtra("playerName", playerName)
