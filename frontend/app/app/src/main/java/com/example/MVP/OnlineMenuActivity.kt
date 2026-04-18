@@ -191,15 +191,22 @@ class OnlineMenuActivity : AppCompatActivity() {
             .distinctBy { it.gameId }
             .sortedBy { it.gameId }
 
-        if (normalizedRooms.isEmpty()) {
+        val publicRooms = normalizedRooms.filter { room ->
+            val players = room.players.filter { it.isNotBlank() }
+            val count = room.playerCount.coerceAtLeast(players.size)
+            val maxPlayers = room.maxPlayers.coerceAtLeast(1)
+            count in 1 until maxPlayers
+        }
+
+        if (publicRooms.isEmpty()) {
             txtOnlineRoomsEmpty.visibility = View.VISIBLE
-            txtOnlineRoomsEmpty.text = "Cria uma sala para aparecer aqui."
+            txtOnlineRoomsEmpty.text = "Sem salas publicas disponiveis."
             return
         }
 
         txtOnlineRoomsEmpty.visibility = View.GONE
 
-        normalizedRooms.forEach { room ->
+        publicRooms.forEach { room ->
             val players = room.players.filter { it.isNotBlank() }
             val count = room.playerCount.coerceAtLeast(players.size)
             val maxPlayers = room.maxPlayers.coerceAtLeast(1)

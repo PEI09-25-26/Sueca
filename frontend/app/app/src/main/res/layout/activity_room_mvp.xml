@@ -79,9 +79,14 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="46dp"
         android:background="@drawable/section_outline"
-        android:padding="16dp">
+        android:padding="16dp"
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="30dp">
 
         <TextView
             android:id="@+id/seatNorthLabel"
@@ -90,6 +95,7 @@
             android:layout_centerHorizontal="true"
             android:text="N"
             android:textColor="@android:color/white"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
@@ -111,9 +117,9 @@
             android:id="@+id/txtSeatNorthPlayer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@+id/seatNorthLabel"
+            android:layout_below="@+id/btnSeatNorth"
             android:layout_centerHorizontal="true"
-            android:layout_marginTop="57dp"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxWidth="120dp"
             android:singleLine="true"
@@ -151,6 +157,7 @@
             android:layout_centerHorizontal="true"
             android:text="S"
             android:textColor="@android:color/white"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
@@ -172,9 +179,9 @@
             android:id="@+id/txtSeatSouthPlayer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_above="@+id/seatSouthLabel"
+            android:layout_above="@+id/btnSeatSouth"
             android:layout_centerHorizontal="true"
-            android:layout_marginBottom="57dp"
+            android:layout_marginBottom="4dp"
             android:ellipsize="end"
             android:maxWidth="120dp"
             android:singleLine="true"
@@ -210,8 +217,10 @@
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
             android:layout_centerVertical="true"
+            android:layout_marginStart="16dp"
             android:text="W"
             android:textColor="@android:color/white"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
@@ -219,7 +228,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_centerVertical="true"
-            android:layout_marginStart="12dp"
+            android:layout_marginStart="30dp"
             android:layout_toEndOf="@id/seatWestLabel"
             android:text="+"
             android:textAllCaps="false"
@@ -231,11 +240,12 @@
 
         <TextView
             android:id="@+id/txtSeatWestPlayer"
-            android:layout_width="72dp"
+            android:layout_width="63dp"
             android:layout_height="wrap_content"
             android:layout_below="@+id/seatWestLabel"
-            android:layout_marginStart="0dp"
-            android:layout_marginTop="14dp"
+            android:layout_alignStart="@+id/seatWestLabel"
+            android:layout_marginStart="-15dp"
+            android:layout_marginTop="6dp"
             android:layout_toEndOf="@id/seatWestLabel"
             android:ellipsize="end"
             android:gravity="center"
@@ -272,8 +282,10 @@
             android:layout_height="wrap_content"
             android:layout_alignParentEnd="true"
             android:layout_centerVertical="true"
+            android:layout_marginEnd="16dp"
             android:text="E"
             android:textColor="@android:color/white"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
@@ -281,7 +293,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_centerVertical="true"
-            android:layout_marginEnd="12dp"
+            android:layout_marginEnd="30dp"
             android:layout_toStartOf="@id/seatEastLabel"
             android:text="+"
             android:textAllCaps="false"
@@ -293,12 +305,12 @@
 
         <TextView
             android:id="@+id/txtSeatEastPlayer"
-            android:layout_width="72dp"
+            android:layout_width="63dp"
             android:layout_height="wrap_content"
             android:layout_below="@+id/seatEastLabel"
-            android:layout_marginTop="14dp"
-            android:layout_marginEnd="0dp"
-            android:layout_toStartOf="@id/seatEastLabel"
+            android:layout_alignEnd="@+id/seatEastLabel"
+            android:layout_marginTop="9dp"
+            android:layout_marginEnd="-18dp"
             android:ellipsize="end"
             android:gravity="center"
             android:maxLines="2"

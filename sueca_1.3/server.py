@@ -870,7 +870,7 @@ class GameManager:
             self.games[game_id] = game
             return True, message, game_id, player_id
 
-    def list_rooms(self, include_default=False):
+    def list_rooms(self, include_default=False, include_empty=False, include_full=False):
         with self._lock:
             snapshot = list(self.games.items())
             default_game_id = self.default_game_id
@@ -894,10 +894,18 @@ class GameManager:
             ]
             players = [name for name in players if name]
 
+            player_count = state.get('player_count', len(players))
+            max_players = game.max_players
+
+            if not include_empty and player_count <= 0:
+                continue
+            if not include_full and player_count >= max_players:
+                continue
+
             rooms.append({
                 'game_id': normalized_game_id,
-                'player_count': state.get('player_count', len(players)),
-                'max_players': game.max_players,
+                'player_count': player_count,
+                'max_players': max_players,
                 'players': players,
                 'phase': state.get('phase'),
                 'game_started': bool(state.get('game_started', False)),
@@ -949,7 +957,13 @@ def get_status():
 @app.route('/api/rooms', methods=['GET'])
 def list_rooms():
     include_default = str(request.args.get('include_default', 'false')).strip().lower() in {'1', 'true', 'yes'}
-    rooms = manager.list_rooms(include_default=include_default)
+    include_empty = str(request.args.get('include_empty', 'false')).strip().lower() in {'1', 'true', 'yes'}
+    include_full = str(request.args.get('include_full', 'false')).strip().lower() in {'1', 'true', 'yes'}
+    rooms = manager.list_rooms(
+        include_default=include_default,
+        include_empty=include_empty,
+        include_full=include_full,
+    )
     return jsonify({
         'success': True,
         'rooms': rooms,
