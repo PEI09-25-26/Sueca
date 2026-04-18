@@ -17,8 +17,17 @@ import kotlinx.coroutines.launch
 
 class OnlineMenuActivity : AppCompatActivity() {
 
+    private data class RoomPreviewConfig(
+        val roomId: String,
+        val itemViewId: Int,
+        val countViewId: Int,
+        val playersViewId: Int
+    )
+
+    private lateinit var txtDisplayedName: TextView
     private lateinit var friendRequestsBadge: TextView
     private lateinit var profileIcon: ImageView
+    private var fallbackDisplayName: String? = null
     private var lastBadgeRefreshAt: Long = 0L
     private var lastProfileRefreshAt: Long = 0L
 
@@ -26,6 +35,14 @@ class OnlineMenuActivity : AppCompatActivity() {
         private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
         private const val PROFILE_REFRESH_INTERVAL_MS = 10_000L
     }
+
+    private val roomPreviews = listOf(
+        RoomPreviewConfig("129837", R.id.roomItem129837, R.id.txtRoomCount129837, R.id.txtRoomPlayers129837),
+        RoomPreviewConfig("138373", R.id.roomItem138373, R.id.txtRoomCount138373, R.id.txtRoomPlayers138373),
+        RoomPreviewConfig("671319", R.id.roomItem671319, R.id.txtRoomCount671319, R.id.txtRoomPlayers671319),
+        RoomPreviewConfig("180080", R.id.roomItem180080, R.id.txtRoomCount180080, R.id.txtRoomPlayers180080),
+        RoomPreviewConfig("142069", R.id.roomItem142069, R.id.txtRoomCount142069, R.id.txtRoomPlayers142069)
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,8 +54,10 @@ class OnlineMenuActivity : AppCompatActivity() {
         val btnCreateRoom = findViewById<Button>(R.id.btnCreateRoom)
         val btnJoinRoom = findViewById<Button>(R.id.btnJoinRoom)
         val friendsIcon = findViewById<ImageView>(R.id.image_friends)
+        txtDisplayedName = findViewById(R.id.txtDisplayedName)
         profileIcon = findViewById(R.id.image_profile2)
         friendRequestsBadge = findViewById(R.id.friend_requests_badge)
+        txtDisplayedName.text = "Nome exibido: ${resolveDisplayedName()}"
 
         backButton.setOnClickListener { finish() }
 
@@ -61,9 +80,10 @@ class OnlineMenuActivity : AppCompatActivity() {
         inputRoomId.filters = arrayOf(noWhitespaceFilter, InputFilter.AllCaps())
 
         setupRoomQuickPick(inputRoomId)
+        refreshRoomPreviews()
 
         btnCreateRoom.setOnClickListener {
-            val name = AuthManager.getPlayerDisplayName() ?: randomName()
+            val name = resolveDisplayedName()
 
             lifecycleScope.launch {
                 try {
@@ -117,31 +137,51 @@ class OnlineMenuActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        txtDisplayedName.text = "Nome exibido: ${resolveDisplayedName()}"
+        refreshRoomPreviews()
         maybeRefreshFriendRequestsBadge()
         maybeRefreshProfileIcon()
     }
 
     private fun setupRoomQuickPick(inputRoomId: EditText) {
-        val quickRooms = mapOf(
-            R.id.roomItem129837 to "129837",
-            R.id.roomItem138373 to "138373",
-            R.id.roomItem671319 to "671319",
-            R.id.roomItem180080 to "180080",
-            R.id.roomItem142069 to "142069"
-        )
+        roomPreviews.forEach { preview ->
+            findViewById<View>(preview.itemViewId).setOnClickListener {
+                inputRoomId.setText(preview.roomId)
+                inputRoomId.setSelection(preview.roomId.length)
+                joinRoomById(preview.roomId)
+            }
+        }
+    }
 
-        quickRooms.forEach { (viewId, roomId) ->
-            findViewById<View>(viewId).setOnClickListener {
-                inputRoomId.setText(roomId)
-                inputRoomId.setSelection(roomId.length)
-                joinRoomById(roomId)
+    private fun refreshRoomPreviews() {
+        lifecycleScope.launch {
+            roomPreviews.forEach { preview ->
+                val countView = findViewById<TextView>(preview.countViewId)
+                val playersView = findViewById<TextView>(preview.playersViewId)
+
+                try {
+                    val state = RetrofitClient.api.getStatus(preview.roomId)
+                    val players = state.players
+                        .map { it.name }
+                        .filter { it.isNotBlank() }
+
+                    countView.text = "${players.size}/4"
+                    playersView.text = if (players.isEmpty()) {
+                        "Sem jogadores na sala"
+                    } else {
+                        players.joinToString(", ")
+                    }
+                } catch (e: Exception) {
+                    countView.text = "--/4"
+                    playersView.text = "Sem dados de jogadores"
+                }
             }
         }
     }
 
     private fun joinRoomById(roomId: String) {
         val normalizedRoomId = roomId.trim().uppercase()
-        val playerName = AuthManager.getPlayerDisplayName() ?: randomName()
+        val playerName = resolveDisplayedName()
 
         lifecycleScope.launch {
             try {
@@ -259,5 +299,21 @@ class OnlineMenuActivity : AppCompatActivity() {
 
     private fun randomName(): String {
         return "Player${(1000..9999).random()}"
+    }
+
+    private fun resolveDisplayedName(): String {
+        val authName = AuthManager.getPlayerDisplayName()?.takeIf { it.isNotBlank() }
+        if (!authName.isNullOrBlank()) {
+            return authName
+        }
+
+        val existingFallback = fallbackDisplayName
+        if (!existingFallback.isNullOrBlank()) {
+            return existingFallback
+        }
+
+        val newFallback = randomName()
+        fallbackDisplayName = newFallback
+        return newFallback
     }
 }
