@@ -268,6 +268,22 @@ data class CreateRoomResponse(
     val message: String? = null
 )
 
+data class RoomSummary(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("player_count") val playerCount: Int,
+    @SerializedName("max_players") val maxPlayers: Int,
+    val players: List<String> = emptyList(),
+    val phase: String? = null,
+    @SerializedName("game_started") val gameStarted: Boolean = false
+)
+
+data class RoomsResponse(
+    val success: Boolean,
+    val rooms: List<RoomSummary>? = null,
+    @SerializedName("total_rooms") val totalRooms: Int = 0,
+    val message: String? = null
+)
+
 data class JoinRoomRequest(
     val playerName: String,
     val roomId: String

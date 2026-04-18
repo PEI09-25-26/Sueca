@@ -1,48 +1,46 @@
 package com.example.MVP
 
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputFilter
+import android.text.TextUtils
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.MVP.models.RoomSummary
 import com.example.MVP.network.RetrofitClient
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class OnlineMenuActivity : AppCompatActivity() {
 
-    private data class RoomPreviewConfig(
-        val roomId: String,
-        val itemViewId: Int,
-        val countViewId: Int,
-        val playersViewId: Int
-    )
-
     private lateinit var txtDisplayedName: TextView
     private lateinit var friendRequestsBadge: TextView
     private lateinit var profileIcon: ImageView
+    private lateinit var inputRoomId: EditText
+    private lateinit var roomsListContainer: LinearLayout
+    private lateinit var txtOnlineRoomsEmpty: TextView
     private var fallbackDisplayName: String? = null
+    private var roomsPollingJob: Job? = null
     private var lastBadgeRefreshAt: Long = 0L
     private var lastProfileRefreshAt: Long = 0L
 
     companion object {
         private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
         private const val PROFILE_REFRESH_INTERVAL_MS = 10_000L
+        private const val ROOM_LIST_REFRESH_INTERVAL_MS = 2_000L
     }
-
-    private val roomPreviews = listOf(
-        RoomPreviewConfig("129837", R.id.roomItem129837, R.id.txtRoomCount129837, R.id.txtRoomPlayers129837),
-        RoomPreviewConfig("138373", R.id.roomItem138373, R.id.txtRoomCount138373, R.id.txtRoomPlayers138373),
-        RoomPreviewConfig("671319", R.id.roomItem671319, R.id.txtRoomCount671319, R.id.txtRoomPlayers671319),
-        RoomPreviewConfig("180080", R.id.roomItem180080, R.id.txtRoomCount180080, R.id.txtRoomPlayers180080),
-        RoomPreviewConfig("142069", R.id.roomItem142069, R.id.txtRoomCount142069, R.id.txtRoomPlayers142069)
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,13 +48,15 @@ class OnlineMenuActivity : AppCompatActivity() {
         setContentView(R.layout.activity_online_menu_mvp)
 
         val backButton = findViewById<ImageView>(R.id.backButton)
-        val inputRoomId = findViewById<EditText>(R.id.inputRoomId)
+        inputRoomId = findViewById(R.id.inputRoomId)
         val btnCreateRoom = findViewById<Button>(R.id.btnCreateRoom)
         val btnJoinRoom = findViewById<Button>(R.id.btnJoinRoom)
         val friendsIcon = findViewById<ImageView>(R.id.image_friends)
         txtDisplayedName = findViewById(R.id.txtDisplayedName)
         profileIcon = findViewById(R.id.image_profile2)
         friendRequestsBadge = findViewById(R.id.friend_requests_badge)
+        roomsListContainer = findViewById(R.id.onlineRoomsListContainer)
+        txtOnlineRoomsEmpty = findViewById(R.id.txtOnlineRoomsEmpty)
         txtDisplayedName.text = "Nome exibido: ${resolveDisplayedName()}"
 
         backButton.setOnClickListener { finish() }
@@ -79,9 +79,6 @@ class OnlineMenuActivity : AppCompatActivity() {
 
         inputRoomId.filters = arrayOf(noWhitespaceFilter, InputFilter.AllCaps())
 
-        setupRoomQuickPick(inputRoomId)
-        refreshRoomPreviews()
-
         btnCreateRoom.setOnClickListener {
             val name = resolveDisplayedName()
 
@@ -93,6 +90,7 @@ class OnlineMenuActivity : AppCompatActivity() {
                         if (roomId.isNullOrBlank()) {
                             Toast.makeText(this@OnlineMenuActivity, "Resposta invalida ao criar sala.", Toast.LENGTH_SHORT).show()
                         } else {
+                            refreshRoomsOnce()
                             goToRoom(roomId = roomId, playerName = name, playerId = "")
                         }
                     } else {
@@ -138,44 +136,138 @@ class OnlineMenuActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         txtDisplayedName.text = "Nome exibido: ${resolveDisplayedName()}"
-        refreshRoomPreviews()
+        startRoomsPolling()
         maybeRefreshFriendRequestsBadge()
         maybeRefreshProfileIcon()
     }
 
-    private fun setupRoomQuickPick(inputRoomId: EditText) {
-        roomPreviews.forEach { preview ->
-            findViewById<View>(preview.itemViewId).setOnClickListener {
-                inputRoomId.setText(preview.roomId)
-                inputRoomId.setSelection(preview.roomId.length)
-                joinRoomById(preview.roomId)
+    override fun onPause() {
+        roomsPollingJob?.cancel()
+        super.onPause()
+    }
+
+    private fun startRoomsPolling() {
+        roomsPollingJob?.cancel()
+        roomsPollingJob = lifecycleScope.launch {
+            while (true) {
+                refreshRoomsOnce()
+                delay(ROOM_LIST_REFRESH_INTERVAL_MS)
             }
         }
     }
 
-    private fun refreshRoomPreviews() {
-        lifecycleScope.launch {
-            roomPreviews.forEach { preview ->
-                val countView = findViewById<TextView>(preview.countViewId)
-                val playersView = findViewById<TextView>(preview.playersViewId)
+    private suspend fun refreshRoomsOnce() {
+        try {
+            val response = RetrofitClient.api.getRooms()
+            if (!response.success) {
+                if (roomsListContainer.childCount == 0) {
+                    txtOnlineRoomsEmpty.visibility = View.VISIBLE
+                    txtOnlineRoomsEmpty.text = response.message ?: "Nao foi possivel obter salas."
+                }
+                return
+            }
 
-                try {
-                    val state = RetrofitClient.api.getStatus(preview.roomId)
-                    val players = state.players
-                        .map { it.name }
-                        .filter { it.isNotBlank() }
+            renderOnlineRooms(response.rooms.orEmpty())
+        } catch (_: Exception) {
+            if (roomsListContainer.childCount == 0) {
+                txtOnlineRoomsEmpty.visibility = View.VISIBLE
+                txtOnlineRoomsEmpty.text = "Nao foi possivel atualizar salas."
+            }
+        }
+    }
 
-                    countView.text = "${players.size}/4"
-                    playersView.text = if (players.isEmpty()) {
-                        "Sem jogadores na sala"
-                    } else {
-                        players.joinToString(", ")
-                    }
-                } catch (e: Exception) {
-                    countView.text = "--/4"
-                    playersView.text = "Sem dados de jogadores"
+    private fun renderOnlineRooms(rooms: List<RoomSummary>) {
+        roomsListContainer.removeAllViews()
+
+        val normalizedRooms = rooms
+            .mapNotNull { room ->
+                val normalizedId = room.gameId.trim().uppercase()
+                if (normalizedId.isBlank()) {
+                    null
+                } else {
+                    room.copy(gameId = normalizedId)
                 }
             }
+            .distinctBy { it.gameId }
+            .sortedBy { it.gameId }
+
+        if (normalizedRooms.isEmpty()) {
+            txtOnlineRoomsEmpty.visibility = View.VISIBLE
+            txtOnlineRoomsEmpty.text = "Cria uma sala para aparecer aqui."
+            return
+        }
+
+        txtOnlineRoomsEmpty.visibility = View.GONE
+
+        normalizedRooms.forEach { room ->
+            val players = room.players.filter { it.isNotBlank() }
+            val count = room.playerCount.coerceAtLeast(players.size)
+            val maxPlayers = room.maxPlayers.coerceAtLeast(1)
+
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.room_item_bg)
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dp(10)
+                }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    inputRoomId.setText(room.gameId)
+                    inputRoomId.setSelection(room.gameId.length)
+                }
+            }
+
+            val topRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            val roomTitle = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f
+                )
+                text = "Mesa Nº ${room.gameId}"
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
+                textSize = 17f
+            }
+
+            val roomCount = TextView(this).apply {
+                text = "$count/$maxPlayers"
+                setTextColor(Color.parseColor("#CCE7F4FF"))
+                textSize = 13f
+            }
+
+            val playersText = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = dp(4)
+                }
+                text = if (players.isEmpty()) "Sem jogadores na sala" else players.joinToString(", ")
+                setTextColor(Color.parseColor("#D5E2EC"))
+                textSize = 12f
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
+            }
+
+            topRow.addView(roomTitle)
+            topRow.addView(roomCount)
+            card.addView(topRow)
+            card.addView(playersText)
+            roomsListContainer.addView(card)
         }
     }
 
@@ -315,5 +407,9 @@ class OnlineMenuActivity : AppCompatActivity() {
         val newFallback = randomName()
         fallbackDisplayName = newFallback
         return newFallback
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }

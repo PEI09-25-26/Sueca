@@ -870,6 +870,42 @@ class GameManager:
             self.games[game_id] = game
             return True, message, game_id, player_id
 
+    def list_rooms(self, include_default=False):
+        with self._lock:
+            snapshot = list(self.games.items())
+            default_game_id = self.default_game_id
+
+        rooms = []
+        for game_id, game in snapshot:
+            normalized_game_id = self.normalize_game_id(game_id) or str(game_id).strip()
+            if not include_default and normalized_game_id == default_game_id:
+                continue
+
+            try:
+                state = game.get_state()
+            except Exception:
+                logger.exception('Failed to read state for room %s', normalized_game_id)
+                continue
+
+            players = [
+                (player.get('name') or '').strip()
+                for player in state.get('players', [])
+                if isinstance(player, dict)
+            ]
+            players = [name for name in players if name]
+
+            rooms.append({
+                'game_id': normalized_game_id,
+                'player_count': state.get('player_count', len(players)),
+                'max_players': game.max_players,
+                'players': players,
+                'phase': state.get('phase'),
+                'game_started': bool(state.get('game_started', False)),
+            })
+
+        rooms.sort(key=lambda room: room['game_id'])
+        return rooms
+
 manager = GameManager()
 
 # Shared hybrid recognition sessions by game_id.
@@ -908,6 +944,17 @@ def get_status():
     if not game:
         return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
     return jsonify(game.get_state())
+
+
+@app.route('/api/rooms', methods=['GET'])
+def list_rooms():
+    include_default = str(request.args.get('include_default', 'false')).strip().lower() in {'1', 'true', 'yes'}
+    rooms = manager.list_rooms(include_default=include_default)
+    return jsonify({
+        'success': True,
+        'rooms': rooms,
+        'total_rooms': len(rooms),
+    })
 
 
 @app.route('/api/room/<game_id>/lobby', methods=['GET'])

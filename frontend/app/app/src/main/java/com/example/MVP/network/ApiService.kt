@@ -93,6 +93,9 @@ interface ApiService {
     @POST("/api/create_room")
     suspend fun createRoomV2(): CreateRoomResponse
 
+    @GET("/api/rooms")
+    suspend fun getRooms(): RoomsResponse
+
     @GET("/api/hand/{playerId}")
     suspend fun getHand(
         @Path("playerId") playerId: String,
