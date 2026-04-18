@@ -226,6 +226,7 @@ class OnlineMenuActivity : AppCompatActivity() {
                 setOnClickListener {
                     inputRoomId.setText(room.gameId)
                     inputRoomId.setSelection(room.gameId.length)
+                    joinRoomById(room.gameId)
                 }
             }
 

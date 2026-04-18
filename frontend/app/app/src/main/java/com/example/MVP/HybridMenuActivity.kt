@@ -225,27 +225,7 @@ class HybridMenuActivity : AppCompatActivity() {
         }
 
         btnJoinRoom.setOnClickListener {
-            val name = displayedPlayerName
-            val roomId = inputRoomId.text.toString().trim().uppercase()
-
-            if (roomId.isBlank()) {
-                Toast.makeText(this, "Insere o ID da sala.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            if (!hasMockRoom(roomId)) {
-                Toast.makeText(this, "Sala mock nao encontrada.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            if (!canMockRoomAcceptPlayer(roomId, name)) {
-                Toast.makeText(this, "Sala hibrida cheia (4/4).", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            renderMockRooms(inputRoomId)
-            Toast.makeText(this, "Entraste na sala mock: $roomId", Toast.LENGTH_SHORT).show()
-            openHybridRoom(roomId = roomId, playerName = name, isHost = false)
+            joinHybridRoomById(inputRoomId.text.toString())
         }
 
         renderMockRooms(inputRoomId)
@@ -297,8 +277,7 @@ class HybridMenuActivity : AppCompatActivity() {
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
-                    inputRoomId.setText(roomId)
-                    inputRoomId.setSelection(roomId.length)
+                    joinHybridRoomById(roomId)
                 }
             }
 
@@ -441,6 +420,34 @@ class HybridMenuActivity : AppCompatActivity() {
             }
             .setNeutralButton("Cancelar", null)
             .show()
+    }
+
+    private fun joinHybridRoomById(roomId: String) {
+        val normalizedRoomId = roomId.trim().uppercase()
+        val name = displayedPlayerName
+
+        if (normalizedRoomId.isBlank()) {
+            Toast.makeText(this, "Insere o ID da sala.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (!hasMockRoom(normalizedRoomId)) {
+            Toast.makeText(this, "Sala mock nao encontrada.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val isCreator = getMockRoomCreatorName(normalizedRoomId).equals(name, ignoreCase = false)
+        if (!isCreator && !canMockRoomAcceptPlayer(normalizedRoomId, name)) {
+            Toast.makeText(this, "Sala hibrida cheia (4/4).", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        inputRoomId.setText(normalizedRoomId)
+        inputRoomId.setSelection(normalizedRoomId.length)
+        renderMockRooms(inputRoomId)
+
+        Toast.makeText(this, "Entraste na sala mock: $normalizedRoomId", Toast.LENGTH_SHORT).show()
+        openHybridRoom(roomId = normalizedRoomId, playerName = name, isHost = isCreator)
     }
 
     private fun openHybridRoom(roomId: String, playerName: String, isHost: Boolean) {
