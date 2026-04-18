@@ -142,6 +142,8 @@ class GameState:
         self.players = []
         self.max_players = 4
         self.creator_id = None  # Track who created/owns the room
+        if not hasattr(self, 'is_public'):
+            self.is_public = True
         self.trump_card = None
         self.trump_suit = None
         self.teams = [[], []]
@@ -724,6 +726,8 @@ class GameState:
             'player_count': len(self.players),
             'game_started': self.game_started,
             'phase': self.phase,
+            'creator_id': self.creator_id,
+            'is_public': bool(getattr(self, 'is_public', True)),
             # Backward-compatible keys consumed by existing clients.
             'north_player': cutter_player_name,
             'north_player_id': cutter_player_id,
@@ -856,6 +860,7 @@ class GameManager:
         with self._lock:
             game_id = self._generate_game_id()
             self.games[game_id] = GameState(game_id)
+            self.games[game_id].is_public = True
             return game_id
 
     def create_game(self, creator_name, position_choice):
@@ -870,7 +875,7 @@ class GameManager:
             self.games[game_id] = game
             return True, message, game_id, player_id
 
-    def list_rooms(self, include_default=False, include_empty=False, include_full=False):
+    def list_rooms(self, include_default=False, include_empty=False, include_full=False, include_private=False):
         with self._lock:
             snapshot = list(self.games.items())
             default_game_id = self.default_game_id
@@ -885,6 +890,10 @@ class GameManager:
                 state = game.get_state()
             except Exception:
                 logger.exception('Failed to read state for room %s', normalized_game_id)
+                continue
+
+            is_public = bool(state.get('is_public', getattr(game, 'is_public', True)))
+            if not include_private and not is_public:
                 continue
 
             players = [
@@ -908,6 +917,7 @@ class GameManager:
                 'max_players': max_players,
                 'players': players,
                 'phase': state.get('phase'),
+                'is_public': is_public,
                 'game_started': bool(state.get('game_started', False)),
             })
 
@@ -959,10 +969,12 @@ def list_rooms():
     include_default = str(request.args.get('include_default', 'false')).strip().lower() in {'1', 'true', 'yes'}
     include_empty = str(request.args.get('include_empty', 'false')).strip().lower() in {'1', 'true', 'yes'}
     include_full = str(request.args.get('include_full', 'false')).strip().lower() in {'1', 'true', 'yes'}
+    include_private = str(request.args.get('include_private', 'false')).strip().lower() in {'1', 'true', 'yes'}
     rooms = manager.list_rooms(
         include_default=include_default,
         include_empty=include_empty,
         include_full=include_full,
+        include_private=include_private,
     )
     return jsonify({
         'success': True,
@@ -1084,6 +1096,46 @@ def join_game():
     if success and game.creator_id is None:
         game.creator_id = player_id
     return jsonify({'success': success, 'message': message, 'game_id': game_id, 'player_id': player_id})
+
+
+@app.route('/api/room_visibility', methods=['POST'])
+def update_room_visibility():
+    data = request.get_json() or {}
+    game, game_id = _get_game_from_request(data)
+    if not game:
+        return jsonify({'success': False, 'message': f'Game {game_id} not found'}), 404
+
+    actor_id = data.get('player_id') or data.get('actor_id')
+    if not actor_id:
+        return jsonify({'success': False, 'message': 'player_id required'}), 400
+    if not game.creator_id or game.creator_id != actor_id:
+        return jsonify({'success': False, 'message': 'Only room creator can change room visibility'}), 403
+
+    if 'is_public' not in data:
+        return jsonify({'success': False, 'message': 'is_public required'}), 400
+
+    raw_visibility = data.get('is_public')
+    if isinstance(raw_visibility, bool):
+        is_public = raw_visibility
+    else:
+        visibility_value = str(raw_visibility).strip().lower()
+        if visibility_value in {'1', 'true', 'yes', 'public'}:
+            is_public = True
+        elif visibility_value in {'0', 'false', 'no', 'private'}:
+            is_public = False
+        else:
+            return jsonify({'success': False, 'message': 'Invalid is_public value'}), 400
+
+    game.is_public = is_public
+    game._push_state('room_visibility_changed')
+
+    message = 'Room is now public' if is_public else 'Room is now private'
+    return jsonify({
+        'success': True,
+        'message': message,
+        'game_id': game_id,
+        'is_public': is_public,
+    })
 
 @app.route('/api/change_position', methods=['POST'])
 def change_position():

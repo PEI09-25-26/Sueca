@@ -13,10 +13,12 @@ import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.JoinGameRequest
 import com.example.MVP.models.AddBotRequest
 import com.example.MVP.models.RemoveParticipantRequest
+import com.example.MVP.models.RoomVisibilityRequest
 import com.example.MVP.network.RetrofitClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.util.Locale
 
 class RoomActivity : AppCompatActivity() {
@@ -37,6 +39,9 @@ class RoomActivity : AppCompatActivity() {
     private lateinit var txtSeatWestPlayer: TextView
 
     private lateinit var txtSeatHint: TextView
+    private lateinit var roomVisibilityContainer: View
+    private lateinit var imgRoomVisibilityLock: ImageView
+    private lateinit var txtRoomVisibilityHint: TextView
     private lateinit var btnAddRandomBot: Button
     private lateinit var btnAddAgent1Bot: Button
     private lateinit var btnAddAgent2Bot: Button
@@ -49,6 +54,8 @@ class RoomActivity : AppCompatActivity() {
     private lateinit var btnRemoveWest: Button
 
     private var isHost: Boolean = false
+    private var roomIsPublic: Boolean = true
+    private var roomCreatorId: String = ""
     private var botPlacementMode: Boolean = false
     private var pendingBotDifficulty: String? = null
     private var pendingBotNamePrefix: String? = null
@@ -73,6 +80,9 @@ class RoomActivity : AppCompatActivity() {
         txtSeatSouthPlayer = findViewById(R.id.txtSeatSouthPlayer)
         txtSeatWestPlayer = findViewById(R.id.txtSeatWestPlayer)
         txtSeatHint = findViewById(R.id.txtSeatHint)
+        roomVisibilityContainer = findViewById(R.id.roomVisibilityContainer)
+        imgRoomVisibilityLock = findViewById(R.id.imgRoomVisibilityLock)
+        txtRoomVisibilityHint = findViewById(R.id.txtRoomVisibilityHint)
         btnAddRandomBot = findViewById(R.id.btnAddRandomBot)
         btnAddAgent1Bot = findViewById(R.id.btnAddAgent1Bot)
         btnAddAgent2Bot = findViewById(R.id.btnAddAgent2Bot)
@@ -91,6 +101,7 @@ class RoomActivity : AppCompatActivity() {
         if (roomId == "SALA_LOCAL") {
             hideAllSeatButtons()
             botActionsContainer.visibility = View.GONE
+            roomVisibilityContainer.visibility = View.GONE
             txtSeatNorthPlayer.text = "Parceiro Bot"
             txtSeatSouthPlayer.text = "Tu (Local)"
             txtSeatEastPlayer.text = "Adversario 1"
@@ -100,6 +111,9 @@ class RoomActivity : AppCompatActivity() {
             if (playerName.isBlank()) {
                 playerName = "Player${(1000..9999).random()}"
             }
+            roomVisibilityContainer.visibility = View.VISIBLE
+            imgRoomVisibilityLock.setOnClickListener { toggleRoomVisibility() }
+            updateRoomVisibilityUi(canToggle = false)
             wireSeatSelection()
             wireBotActions()
         }
@@ -162,8 +176,24 @@ class RoomActivity : AppCompatActivity() {
         val mySeat = normalizePosition(me?.position)
         val hasSelectedSeat = mySeat.isNotBlank()
 
-        isHost = state.players.firstOrNull()?.id?.let { it == playerId } == true ||
-            state.players.firstOrNull()?.name == playerName
+        if (playerId.isBlank() && !me?.id.isNullOrBlank()) {
+            playerId = me?.id.orEmpty()
+        }
+
+        if (!state.creatorId.isNullOrBlank()) {
+            roomCreatorId = state.creatorId
+        }
+        roomIsPublic = state.isPublic ?: true
+
+        isHost = if (roomCreatorId.isNotBlank() && playerId.isNotBlank()) {
+            roomCreatorId == playerId
+        } else {
+            state.players.firstOrNull()?.id?.let { it == playerId } == true ||
+                state.players.firstOrNull()?.name == playerName
+        }
+
+        val canToggleVisibility = roomId != "SALA_LOCAL" && isHost && playerId.isNotBlank()
+        updateRoomVisibilityUi(canToggleVisibility)
 
         val canUseBotActions = state.phase == "waiting" && isHost && available.isNotEmpty()
         val canRemovePlayers = state.phase == "waiting" && isHost && !botPlacementMode
@@ -475,6 +505,115 @@ class RoomActivity : AppCompatActivity() {
                 Toast.makeText(this@RoomActivity, "Erro ao remover participante.", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun toggleRoomVisibility() {
+        if (roomId == "SALA_LOCAL") {
+            return
+        }
+
+        if (!isHost || playerId.isBlank()) {
+            Toast.makeText(this, "So o criador da sala pode alterar a visibilidade.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val newVisibility = !roomIsPublic
+        lifecycleScope.launch {
+            try {
+                val response = RetrofitClient.api.setRoomVisibility(
+                    RoomVisibilityRequest(
+                        playerId = playerId,
+                        gameId = roomId,
+                        isPublic = newVisibility
+                    )
+                )
+
+                if (!response.isSuccessful) {
+                    val rawError = response.errorBody()?.string()
+                    val errorMessage = parseServerMessage(rawError)
+                        ?: buildHttpErrorMessage(response.code(), response.message(), rawError)
+                    Toast.makeText(this@RoomActivity, errorMessage, Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
+                val payload = response.body()
+                if (payload?.success != true) {
+                    Toast.makeText(
+                        this@RoomActivity,
+                        payload?.message ?: "Nao foi possivel alterar a visibilidade da sala.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                roomIsPublic = newVisibility
+                updateRoomVisibilityUi(canToggle = true)
+
+                payload.message?.takeIf { it.isNotBlank() }?.let {
+                    Toast.makeText(this@RoomActivity, it, Toast.LENGTH_SHORT).show()
+                }
+
+                try {
+                    val state = RetrofitClient.api.getStatus(roomId)
+                    updateUI(state)
+                } catch (_: Exception) {
+                    // Keep current UI state if status refresh fails temporarily.
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@RoomActivity, "Erro ao alterar visibilidade da sala.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun updateRoomVisibilityUi(canToggle: Boolean) {
+        if (roomId == "SALA_LOCAL") {
+            roomVisibilityContainer.visibility = View.GONE
+            return
+        }
+
+        roomVisibilityContainer.visibility = View.VISIBLE
+        imgRoomVisibilityLock.setImageResource(
+            if (roomIsPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed
+        )
+        txtRoomVisibilityHint.text = if (roomIsPublic) {
+            "Qualquer pessoa pode entrar"
+        } else {
+            "Necessário código para entrar"
+        }
+
+        imgRoomVisibilityLock.isEnabled = canToggle
+        imgRoomVisibilityLock.alpha = if (canToggle) 1f else 0.55f
+    }
+
+    private fun parseServerMessage(rawBody: String?): String? {
+        if (rawBody.isNullOrBlank()) {
+            return null
+        }
+
+        return try {
+            JSONObject(rawBody).optString("message").takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun buildHttpErrorMessage(statusCode: Int, statusMessage: String?, rawBody: String?): String {
+        val normalizedBody = rawBody?.trim().orEmpty()
+
+        if (statusCode == 404) {
+            return "Endpoint de visibilidade nao encontrado no servidor (404). Reinicia o backend atualizado."
+        }
+
+        if (normalizedBody.isNotBlank() && !normalizedBody.startsWith("<")) {
+            return normalizedBody.take(140)
+        }
+
+        val httpLabel = if (!statusMessage.isNullOrBlank()) {
+            "HTTP $statusCode: $statusMessage"
+        } else {
+            "HTTP $statusCode"
+        }
+        return "Nao foi possivel alterar a visibilidade da sala ($httpLabel)."
     }
 
     private fun hideAllSeatButtons() {
