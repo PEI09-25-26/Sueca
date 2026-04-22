@@ -5,6 +5,7 @@ Supports room creation/join by game ID and manual position selection.
 
 import requests
 import os
+import json
 import time
 from threading import Thread, Lock
 from card_mapper import CardMapper
@@ -46,6 +47,16 @@ class GameClient:
             return response.json() if response.status_code == 200 else None
         except Exception:
             return None
+        
+    def log_action(self, action):
+        try:
+            os.makedirs("logs", exist_ok=True)
+
+            with self.log_lock:
+                with open(self.log_file, "a") as f:
+                    f.write(json.dumps(action) + "\n")
+        except Exception as e:
+            print(f"[LOG ERROR] {e}")
 
     def create_game(self, name, position):
         try:
@@ -55,6 +66,8 @@ class GameClient:
                 timeout=2,
             )
             data = response.json()
+            self.log_file = f"logs/games/game_{self.game_id or 'unknown'}.jsonl"
+            self.log_lock = Lock()
             return data.get('success', False), data.get('message', 'Unknown error'), data.get('game_id'), data.get('player_id')
         except Exception as e:
             return False, f'Error: {e}', None, None
@@ -67,6 +80,8 @@ class GameClient:
                 timeout=2,
             )
             data = response.json()
+            self.log_file = f"logs/games/game_{self.game_id or 'unknown'}.jsonl"
+            self.log_lock = Lock()
             return data.get('success', False), data.get('message', 'Unknown error'), data.get('player_id')
         except Exception as e:
             return False, f'Error: {e}', None

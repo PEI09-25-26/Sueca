@@ -8,6 +8,8 @@ from card_mapper import CardMapper
 from client import GameClient
 from game_state_tracker import GameStateTracker
 from .decision_maker import DecisionMaker
+from card_analyzer import CardAnalyzer
+
 
 
 class SmartAgent(GameClient):
@@ -109,10 +111,28 @@ class SmartAgent(GameClient):
             return
 
         time.sleep(self.think_time)
+        
+        hand_before = list(self.state_tracker.my_hand)
+        legal_moves = CardAnalyzer.get_legal_plays(
+            hand_before,
+            self.state_tracker.lead_suit
+        )
 
         card = self.decision_maker.choose_card(self.state_tracker.my_hand)
         if card is None:
             return
+        
+        self.log_action({
+            "player": self.player_name,
+            "position": self.position,
+            "hand_before": hand_before,
+            "legal_moves": legal_moves,
+            "chosen_card": card,
+            "cards_in_trick": list(self.state_tracker.round_plays),
+            "position_in_trick": len(self.state_tracker.round_plays),
+            "lead_suit": self.state_tracker.lead_suit,
+            "trump": self.state_tracker.trump,
+        })
 
         success, message = self.play_card(str(card))
         if success:

@@ -98,6 +98,9 @@ class DataGatherer:
         self.poll_interval = float(poll_interval)
         self.capture_timeline = bool(capture_timeline)
         self.game_id = None
+        self.action_data = []
+        self._last_round_plays_len = 0
+        self._last_hands_by_player_id = {}
 
         self.game_data = {
             "game_number": game_number,
@@ -214,6 +217,57 @@ class DataGatherer:
         response.raise_for_status()
         return response.json()
 
+    @staticmethod
+    def _to_int_card(card):
+        try:
+            return int(card)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _card_suit(card):
+        card_id = DataGatherer._to_int_card(card)
+        if card_id is None or card_id < 0:
+            return None
+        suits = ["♣", "♦", "♥", "♠"]
+        suit_index = card_id // 10
+        if 0 <= suit_index < len(suits):
+            return suits[suit_index]
+        return None
+
+    @staticmethod
+    def _compute_legal_moves(hand_before, lead_suit):
+        hand_before = list(hand_before or [])
+        if not hand_before or not lead_suit:
+            return hand_before
+
+        suited_cards = [card for card in hand_before if DataGatherer._card_suit(card) == lead_suit]
+        return suited_cards if suited_cards else hand_before
+
+    def _fetch_hands_snapshot(self, state):
+        players = state.get("players") or []
+        game_id = self.game_id
+        if not game_id:
+            return {}
+
+        snapshot = {}
+        for player in players:
+            player_id = player.get("id") if isinstance(player, dict) else None
+            if not player_id:
+                continue
+            try:
+                payload = self._request("GET", f"/api/hand/{player_id}?game_id={game_id}")
+                hand = payload.get("hand") or []
+                snapshot[player_id] = [
+                    card_id
+                    for card_id in (self._to_int_card(card) for card in hand)
+                    if card_id is not None
+                ]
+            except Exception:
+                # Keep batch collection resilient when hand endpoint is unavailable.
+                continue
+        return snapshot
+
     def create_bot_match(self, bots=None, join_timeout_sec=8.0):
         payload = {"join_timeout_sec": join_timeout_sec}
         if bots is not None:
@@ -263,15 +317,108 @@ class DataGatherer:
             }
         )
 
-    def _ingest_state(self, state):
+    def save_actions_csv(self, output_path):
+        if not self.action_data:
+            return None
+
+        fieldnames = list(self.action_data[0].keys())
+
+        with open(output_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(self.action_data)
+
+        return output_path
+    
+    def _extract_action(self, state, play, position_in_trick, hand_before=None, legal_moves=None, lead_suit=None):
+        try:
+            cards = deepcopy(state.get("round_plays", []))
+
+            # remove the last play (current one)
+            cards_before = cards[:-1] if cards else []
+            return {
+                "game_id": self.game_id,
+                "round": state.get("current_round"),
+
+                "player": play.get("player_name"),
+                "position": play.get("position"),
+                "card_played": play.get("card"),
+
+                # 🔥 CONTEXT
+                "cards_in_trick": cards_before,
+                "position_in_trick": position_in_trick,
+
+                "lead_suit": lead_suit if lead_suit is not None else state.get("round_suit"),
+                "trump": state.get("trump_suit"),
+
+                "team_scores": deepcopy(state.get("team_scores")),
+
+                "hand_before": deepcopy(hand_before) if hand_before is not None else None,
+                "legal_moves": deepcopy(legal_moves) if legal_moves is not None else None,
+            }
+        except Exception:
+            return None
+
+    def _ingest_state(self, state, current_hands_by_player_id=None):
         phase = state.get("phase")
         round_number = state.get("current_round")
         team_scores = deepcopy(state.get("team_scores", {}))
         round_plays = deepcopy(state.get("round_plays", []))
+        players = state.get("players") or []
+        id_by_name = {
+            p.get("name"): p.get("id")
+            for p in players
+            if isinstance(p, dict) and p.get("name") and p.get("id")
+        }
+        hands_working = {
+            player_id: list(hand)
+            for player_id, hand in (self._last_hands_by_player_id or {}).items()
+        }
+
+        if isinstance(round_number, int) and round_number > 0:
+            new_plays = round_plays[self._last_round_plays_len:]
+            trick_offset = len(round_plays) - len(new_plays)
+
+            for idx, play in enumerate(new_plays):
+                position_in_trick = trick_offset + idx
+                lead_suit = None
+                if position_in_trick > 0 and round_plays:
+                    lead_suit = self._card_suit(round_plays[0].get("card"))
+
+                player_id = play.get("player_id") or id_by_name.get(play.get("player_name"))
+                hand_before = None
+                legal_moves = None
+                if player_id in hands_working:
+                    hand_before = list(hands_working[player_id])
+                    legal_moves = self._compute_legal_moves(hand_before, lead_suit)
+                    played_card_id = self._to_int_card(play.get("card"))
+                    if played_card_id in hands_working[player_id]:
+                        hands_working[player_id].remove(played_card_id)
+
+                action = self._extract_action(
+                    state,
+                    play,
+                    position_in_trick,
+                    hand_before=hand_before,
+                    legal_moves=legal_moves,
+                    lead_suit=lead_suit,
+                )
+                if action:
+                    self.action_data.append(action)
+
+            self._last_round_plays_len = len(round_plays)
+
+        if current_hands_by_player_id:
+            self._last_hands_by_player_id = {
+                player_id: list(hand)
+                for player_id, hand in current_hands_by_player_id.items()
+            }
+        elif hands_working:
+            self._last_hands_by_player_id = hands_working
 
         self.game_data["phase"] = phase
         self.game_data["matches_played"] = state.get("matches_played", 0)
-        self.game_data["player_names"] = [p.get("name") for p in state.get("players", [])]
+        self.game_data["player_names"] = [p.get("name") for p in players]
         self.game_data["team_map"] = deepcopy(state.get("teams", {}))
         self.game_data["trump_card"] = state.get("trump")
         self.game_data["trump_card_suit"] = state.get("trump_suit")
@@ -362,7 +509,8 @@ class DataGatherer:
                 break
             state = self.get_status(target_game_id)
             last_state = state
-            self._ingest_state(state)
+            hands_snapshot = self._fetch_hands_snapshot(state)
+            self._ingest_state(state, current_hands_by_player_id=hands_snapshot)
 
             if self._is_finished_state(state):
                 history_payload = self.get_history(target_game_id)
@@ -768,6 +916,11 @@ class DataGatherer:
             if redis_client is not None:
                 redis_key = gatherer.save_to_redis(redis_client, key_prefix=redis_key_prefix)
 
+            actions_csv_path = None
+            if save_game_files:
+                actions_csv_path = games_dir / f"actions_{i:03d}_{game_id}.csv"
+                gatherer.save_actions_csv(str(actions_csv_path))
+
             return {
                 "game_number": i,
                 "game_id": game_id,
@@ -779,6 +932,7 @@ class DataGatherer:
                 "redis_key": redis_key,
                 "summary_row": gatherer._summary_row_compact(),
                 "round_rows": gatherer._round_rows_compact(),
+                "actions_csv": str(actions_csv_path) if actions_csv_path else None,
             }
 
         def _run_single_match_with_retries(i):
