@@ -1,0 +1,11 @@
+game_number,game_id,round_number,round_points,round_winner_team,team1_before,team2_before,team1_after,team2_after,cards_played_count,cards_played
+1,5CF1B0,1,6,team2,0,0,0,6,4,Ava:SOUTH:35 | Alyssa:EAST:30 | Rita:NORTH:32 | Serana:WEST:37
+1,5CF1B0,2,17,team1,0,6,17,6,4,Serana:WEST:17 | Ava:SOUTH:14 | Alyssa:EAST:16 | Rita:NORTH:18
+1,5CF1B0,3,0,,17,6,17,6,4,Rita:NORTH:22 | Serana:WEST:23 | Ava:SOUTH:21 | Alyssa:EAST:20
+1,5CF1B0,4,4,team2,17,6,17,10,4,Serana:WEST:7 | Ava:SOUTH:34 | Alyssa:EAST:2 | Rita:NORTH:4
+1,5CF1B0,5,13,team2,17,10,17,23,4,Serana:WEST:12 | Ava:SOUTH:15 | Alyssa:EAST:24 | Rita:NORTH:19
+1,5CF1B0,6,15,team1,17,23,32,23,4,Alyssa:EAST:9 | Rita:NORTH:1 | Serana:WEST:3 | Ava:SOUTH:27
+1,5CF1B0,7,21,team2,32,23,32,44,4,Ava:SOUTH:38 | Alyssa:EAST:39 | Rita:NORTH:33 | Serana:WEST:31
+1,5CF1B0,8,15,team1,32,44,47,44,4,Alyssa:EAST:25 | Rita:NORTH:11 | Serana:WEST:26 | Ava:SOUTH:28
+1,5CF1B0,9,13,team1,47,44,60,44,4,Ava:SOUTH:29 | Alyssa:EAST:5 | Rita:NORTH:0 | Serana:WEST:10
+1,5CF1B0,10,16,team1,60,44,76,44,4,Ava:SOUTH:36 | Alyssa:EAST:8 | Rita:NORTH:13 | Serana:WEST:6

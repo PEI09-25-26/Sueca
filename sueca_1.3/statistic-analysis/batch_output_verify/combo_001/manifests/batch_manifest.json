@@ -1,59 +1,46 @@
 [
   {
     "game_number": 1,
-    "game_id": "65B661",
+    "game_id": "FF6365",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team1",
     "winner_label": "Team 1 (N/S)",
     "final_scores": {
-      "team1": 65,
-      "team2": 55
+      "team1": 113,
+      "team2": 7
     },
-    "redis_key": "sueca:game:65B661"
+    "redis_key": "sueca:game:FF6365"
   },
   {
     "game_number": 2,
-    "game_id": "AE1C9F",
+    "game_id": "588560",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team1",
     "winner_label": "Team 1 (N/S)",
     "final_scores": {
-      "team1": 85,
-      "team2": 35
+      "team1": 62,
+      "team2": 58
     },
-    "redis_key": "sueca:game:AE1C9F"
+    "redis_key": "sueca:game:588560"
   },
   {
     "game_number": 3,
-    "game_id": "9F4AE9",
-    "json_path": null,
-    "csv_path": null,
-    "winner_team": null,
-    "winner_label": "draw",
-    "final_scores": {
-      "team1": 60,
-      "team2": 60
-    },
-    "redis_key": "sueca:game:9F4AE9"
-  },
-  {
-    "game_number": 4,
-    "game_id": "DDFF7B",
+    "game_id": "31ABCE",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team2",
     "winner_label": "Team 2 (E/W)",
     "final_scores": {
-      "team1": 43,
-      "team2": 77
+      "team1": 27,
+      "team2": 93
     },
-    "redis_key": "sueca:game:DDFF7B"
+    "redis_key": "sueca:game:31ABCE"
   },
   {
-    "game_number": 5,
-    "game_id": "146214",
+    "game_number": 4,
+    "game_id": "BACE09",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team2",
@@ -62,71 +49,180 @@
       "team1": 57,
       "team2": 63
     },
-    "redis_key": "sueca:game:146214"
+    "redis_key": "sueca:game:BACE09"
   },
   {
-    "game_number": 6,
-    "game_id": "CADF37",
+    "game_number": 5,
+    "game_id": "1AE77F",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team2",
     "winner_label": "Team 2 (E/W)",
     "final_scores": {
-      "team1": 48,
-      "team2": 72
+      "team1": 58,
+      "team2": 62
     },
-    "redis_key": "sueca:game:CADF37"
+    "redis_key": "sueca:game:1AE77F"
+  },
+  {
+    "game_number": 6,
+    "game_id": "524A4A",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 39,
+      "team2": 81
+    },
+    "redis_key": "sueca:game:524A4A"
   },
   {
     "game_number": 7,
-    "game_id": "3FA260",
+    "game_id": "791C67",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team1",
     "winner_label": "Team 1 (N/S)",
     "final_scores": {
-      "team1": 73,
-      "team2": 47
+      "team1": 101,
+      "team2": 19
     },
-    "redis_key": "sueca:game:3FA260"
+    "redis_key": "sueca:game:791C67"
   },
   {
     "game_number": 8,
-    "game_id": "C760EF",
+    "game_id": "83A0F0",
     "json_path": null,
     "csv_path": null,
-    "winner_team": "team2",
-    "winner_label": "Team 2 (E/W)",
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
     "final_scores": {
-      "team1": 57,
-      "team2": 63
+      "team1": 97,
+      "team2": 23
     },
-    "redis_key": "sueca:game:C760EF"
+    "redis_key": "sueca:game:83A0F0"
   },
   {
     "game_number": 9,
-    "game_id": "4413DC",
+    "game_id": "E3967A",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team2",
     "winner_label": "Team 2 (E/W)",
     "final_scores": {
-      "team1": 34,
-      "team2": 86
+      "team1": 55,
+      "team2": 65
     },
-    "redis_key": "sueca:game:4413DC"
+    "redis_key": "sueca:game:E3967A"
   },
   {
     "game_number": 10,
-    "game_id": "13DE05",
+    "game_id": "C66282",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "final_scores": {
+      "team1": 83,
+      "team2": 37
+    },
+    "redis_key": "sueca:game:C66282"
+  },
+  {
+    "game_number": 11,
+    "game_id": "D3C9CB",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "final_scores": {
+      "team1": 84,
+      "team2": 36
+    },
+    "redis_key": "sueca:game:D3C9CB"
+  },
+  {
+    "game_number": 12,
+    "game_id": "951E4E",
     "json_path": null,
     "csv_path": null,
     "winner_team": "team2",
     "winner_label": "Team 2 (E/W)",
     "final_scores": {
-      "team1": 10,
-      "team2": 110
+      "team1": 58,
+      "team2": 62
     },
-    "redis_key": "sueca:game:13DE05"
+    "redis_key": "sueca:game:951E4E"
+  },
+  {
+    "game_number": 13,
+    "game_id": "C75585",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "final_scores": {
+      "team1": 105,
+      "team2": 15
+    },
+    "redis_key": "sueca:game:C75585"
+  },
+  {
+    "game_number": 14,
+    "game_id": "17CFC5",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "final_scores": {
+      "team1": 75,
+      "team2": 45
+    },
+    "redis_key": "sueca:game:17CFC5"
+  },
+  {
+    "game_number": 15,
+    "game_id": "EF8FE5",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 17,
+      "team2": 103
+    },
+    "redis_key": "sueca:game:EF8FE5"
+  },
+  {
+    "game_number": 16,
+    "game_id": "1A0C45",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 26,
+      "team2": 94
+    },
+    "redis_key": "sueca:game:1A0C45"
+  },
+  {
+    "game_number": 17,
+    "game_id": "2C065D",
+    "json_path": null,
+    "csv_path": null,
+    "winner_team": "team2",
+    "winner_label": "Team 2 (E/W)",
+    "final_scores": {
+      "team1": 41,
+      "team2": 79
+    },
+    "redis_key": "sueca:game:2C065D"
+  },
+  {
+    "batch_aborted": true,
+    "reason": "user_interrupt",
+    "stopped_after_game": 18
   }
 ]

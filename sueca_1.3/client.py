@@ -50,11 +50,23 @@ class GameClient:
         
     def log_action(self, action):
         try:
-            os.makedirs("logs", exist_ok=True)
+            # Create directory for log file
+            log_dir = os.path.dirname(self.log_file)
+            os.makedirs(log_dir, exist_ok=True)
 
             with self.log_lock:
                 with open(self.log_file, "a") as f:
                     f.write(json.dumps(action) + "\n")
+            
+            # Also POST to server for statistics collection
+            if self.game_id:
+                try:
+                    payload = {'game_id': self.game_id, **action}
+                    response = requests.post(f'{SERVER_URL}/api/log_action', json=payload, timeout=2)
+                    if response.status_code != 200:
+                        print(f"[DEBUG] Action POST failed: {response.status_code}")
+                except Exception as e:
+                    print(f"[DEBUG] Action POST error: {e}")
         except Exception as e:
             print(f"[LOG ERROR] {e}")
 

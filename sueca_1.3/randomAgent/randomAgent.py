@@ -177,15 +177,16 @@ class RandomAgent(GameClient):
             return
         
         self.log_action({
+            "round_number": self.state_tracker.current_round,
             "player": self.player_name,
             "position": self.position,
             "hand_before": hand_before,
             "legal_moves": legal_moves,
             "chosen_card": card,
-            "cards_in_trick": list(self.state_tracker.round_plays),
-            "position_in_trick": len(self.state_tracker.round_plays),
+            "cards_in_trick": list(self.state_tracker.current_trick),
+            "position_in_trick": len(self.state_tracker.current_trick),
             "lead_suit": self.state_tracker.lead_suit,
-            "trump": self.state_tracker.trump,
+            "trump": self.state_tracker.trump_suit,
         })
         
         card_str = str(card)

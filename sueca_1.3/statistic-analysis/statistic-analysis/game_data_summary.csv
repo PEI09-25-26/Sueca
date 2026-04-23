@@ -1,0 +1,2 @@
+game_number,game_id,match_number,rounds_played,winner_team,winner_label,team1_score,team2_score,trump_card,trump_suit,phase,finished_at
+1,5CF1B0,1,10,team1,Team 1 (N/S),76,44,26,♥,finished,2026-04-23T14:11:11.965041+00:00

@@ -722,6 +722,7 @@ class GameManager:
         self.default_game_id = 'default'
         self._lock = threading.Lock()
         self.games[self.default_game_id] = GameState(self.default_game_id)
+        self.actions = {}  # game_id -> list of actions
 
     @staticmethod
     def normalize_game_id(game_id):
@@ -1650,6 +1651,40 @@ def hybrid_confirm_capture():
         'captured_display': recognized.display,
         'state': hybrid_coordinator.to_payload(room, _players_meta(game)),
         'game_state': game.get_state(),
+    })
+
+
+@app.route('/api/log_action', methods=['POST'])
+def log_action():
+    """Log a player action (hand_before, legal_moves, chosen_card, etc.)"""
+    data = request.get_json() or {}
+    game_id = data.get('game_id')
+    
+    if not game_id:
+        return jsonify({'success': False, 'message': 'game_id is required'}), 400
+    
+    # Initialize actions list for this game if needed
+    if game_id not in manager.actions:
+        manager.actions[game_id] = []
+    
+    # Store the action with timestamp
+    action = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        **{k: v for k, v in data.items() if k != 'game_id'}
+    }
+    
+    manager.actions[game_id].append(action)
+    return jsonify({'success': True, 'message': f'Action logged for game {game_id}'})
+
+
+@app.route('/api/actions/<game_id>', methods=['GET'])
+def get_actions(game_id):
+    """Retrieve all logged actions for a game"""
+    actions = manager.actions.get(game_id, [])
+    return jsonify({
+        'game_id': game_id,
+        'actions': actions,
+        'count': len(actions)
     })
 
 
