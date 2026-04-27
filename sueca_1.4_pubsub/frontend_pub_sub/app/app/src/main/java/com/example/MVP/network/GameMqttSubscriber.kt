@@ -17,7 +17,8 @@ import java.util.UUID
 
 class GameMqttSubscriber(
     private val brokerHost: String,
-    private val brokerPort: Int
+    private val brokerPort: Int,
+    private val protocol: String = "wss"  // wss for WebSocket Secure, tcp for raw TCP
 ) {
     private val tag = "SuecaMQTT"
 
@@ -37,7 +38,7 @@ class GameMqttSubscriber(
         onConnectionError: (String) -> Unit,
         onBrokerRoundTrip: () -> Unit = {}
     ) {
-        val serverUri = "tcp://$brokerHost:$brokerPort"
+        val serverUri = "$protocol://$brokerHost:$brokerPort"
         val clientId = "android-${UUID.randomUUID()}"
         val probeTopic = "sueca/games/$gameId/client_probe/$clientId"
         val probePayload = "probe-${UUID.randomUUID()}"

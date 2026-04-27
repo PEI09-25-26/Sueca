@@ -24,3 +24,7 @@ __pycache__/
 
 # Logger files
 *.log
+
+# Cloudflare Tunnel Credentials
+**/apps/cloudflare/*.json
+!**/apps/cloudflare/config.yml
