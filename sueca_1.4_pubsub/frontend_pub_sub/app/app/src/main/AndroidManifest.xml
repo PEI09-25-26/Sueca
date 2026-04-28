@@ -9,6 +9,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="true" />
 
     <application
+        android:name=".SuecaApp"
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
         android:icon="@drawable/sueca"
@@ -16,7 +17,7 @@
         android:theme="@style/Theme.Sueca">
 
         <activity
-            android:name="com.example.MVP.MainMenuActivity"
+            android:name="com.example.MVP.LoginActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
@@ -24,6 +25,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="com.example.MVP.RegisterActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <activity
+            android:name="com.example.MVP.VerifyEmailActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <activity
+            android:name="com.example.MVP.MainMenuActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
 
 
         <activity

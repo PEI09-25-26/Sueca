@@ -1,7 +1,131 @@
 package com.example.MVP.models
 
-import com.google.gson.annotations.SerializedName
 import com.google.gson.JsonObject
+import com.google.gson.annotations.SerializedName
+
+// ============ Auth Models ============
+data class RegisterRequest(
+    val username: String,
+    val email: String,
+    val password: String
+)
+
+data class RegisterResponse(
+    val success: Boolean,
+    val message: String,
+    @SerializedName("verificationRequired") val verificationRequired: Boolean? = null,
+    @SerializedName("verificationId") val verificationId: String? = null
+)
+
+data class VerifyEmailRequest(
+    @SerializedName("verification_id") val verificationId: String,
+    val code: String
+)
+
+data class LoginRequest(
+    val username: String,
+    val password: String
+)
+
+data class UpdateUserRequest(
+    val description: String? = null,
+    val photoURL: String? = null,
+    val bannerURL: String? = null,
+    val privacy: String? = null,
+    val status: String? = null,
+    val password: String? = null
+)
+
+data class LogoutRequest(
+    val uid: String
+)
+
+data class AuthResponse(
+    val success: Boolean,
+    val message: String,
+    val user: UserData? = null,
+    val token: String? = null
+)
+
+data class UserResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val user: UserData? = null
+)
+
+data class UserData(
+    val uid: String,
+    val username: String,
+    val email: String,
+    @SerializedName("emailVerified") val emailVerified: Boolean,
+    val description: String,
+    val photoURL: String,
+    val bannerURL: String,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName("lastLoginAt") val lastLoginAt: String?,
+    val privacy: String,
+    @SerializedName("friendsCount") val friendsCount: Int,
+    val status: String
+)
+
+// ============ Friend Models ============
+data class SendFriendRequestRequest(
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_uid") val toUid: String
+)
+
+data class SendFriendRequestByUsernameRequest(
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_username") val toUsername: String
+)
+
+data class AcceptFriendRequestRequest(
+    @SerializedName("request_id") val requestId: String
+)
+
+data class DeclineFriendRequestRequest(
+    @SerializedName("request_id") val requestId: String
+)
+
+data class FriendRequestResponse(
+    val success: Boolean,
+    val message: String,
+    val request: FriendRequest? = null
+)
+
+data class FriendRequest(
+    val id: String,
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_uid") val toUid: String,
+    val status: String,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String
+)
+
+data class FriendsListResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val friends: List<UserData>? = null,
+    val count: Int? = null
+)
+
+data class IncomingFriendRequestData(
+    val id: String,
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_uid") val toUid: String,
+    @SerializedName("from_username") val fromUsername: String,
+    val status: String,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String
+)
+
+data class FriendRequestsListResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val requests: List<IncomingFriendRequestData>? = null,
+    val count: Int? = null
+)
 
 // ============ Card Data ============
 data class Card(
@@ -33,6 +157,8 @@ data class GameStatusResponse(
     @SerializedName("current_round") val currentRound: Int,
     @SerializedName("round_suit") val roundSuit: String?,
     @SerializedName("game_started") val gameStarted: Boolean,
+    @SerializedName("creator_id") val creatorId: String? = null,
+    @SerializedName("is_public") val isPublic: Boolean? = null,
     val scores: Map<String, Int>?,
     @SerializedName("available_slots") val availableSlots: List<LobbySlot>? = emptyList(),
     @SerializedName("match_points") val matchPoints: MatchPoints? = null
@@ -103,6 +229,12 @@ data class SelectTrumpRequest(
     @SerializedName("game_id") val gameId: String? = null
 )
 
+data class RoomVisibilityRequest(
+    @SerializedName("player_id") val playerId: String,
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("is_public") val isPublic: Boolean
+)
+
 // ============ Responses ============
 data class GenericResponse(
     val success: Boolean,
@@ -142,6 +274,23 @@ data class CreateRoomResponse(
     @SerializedName("room_id") val roomId: String? = null,
     @SerializedName("player_id") val playerId: String? = null,
     @SerializedName("game_id") val gameId: String? = null,
+    val message: String? = null
+)
+
+data class RoomSummary(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("player_count") val playerCount: Int,
+    @SerializedName("max_players") val maxPlayers: Int,
+    val players: List<String> = emptyList(),
+    val phase: String? = null,
+    @SerializedName("is_public") val isPublic: Boolean? = null,
+    @SerializedName("game_started") val gameStarted: Boolean = false
+)
+
+data class RoomsResponse(
+    val success: Boolean,
+    val rooms: List<RoomSummary>? = null,
+    @SerializedName("total_rooms") val totalRooms: Int = 0,
     val message: String? = null
 )
 

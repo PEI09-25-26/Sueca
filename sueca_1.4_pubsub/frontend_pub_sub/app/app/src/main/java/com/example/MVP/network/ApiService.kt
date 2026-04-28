@@ -5,6 +5,80 @@ import retrofit2.http.*
 
 interface ApiService {
 
+    // ============ /api/auth Endpoints ============
+
+    @POST("/api/auth/register")
+    suspend fun registerUser(@Body request: RegisterRequest): RegisterResponse
+
+    @POST("/api/auth/verify-email")
+    suspend fun verifyEmail(@Body request: VerifyEmailRequest): AuthResponse
+
+    @POST("/api/auth/login")
+    suspend fun loginUser(@Body request: LoginRequest): AuthResponse
+
+    @GET("/api/auth/user/{uid}")
+    suspend fun getUser(
+        @Path("uid") uid: String,
+        @Header("Authorization") token: String
+    ): UserResponse
+
+    @PUT("/api/auth/user/{uid}")
+    suspend fun updateUser(
+        @Path("uid") uid: String,
+        @Body request: UpdateUserRequest,
+        @Header("Authorization") token: String
+    ): UserResponse
+
+    @DELETE("/api/auth/user/{uid}")
+    suspend fun deleteUser(
+        @Path("uid") uid: String,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/auth/logout")
+    suspend fun logoutUser(
+        @Body request: LogoutRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    // ============ /api/friends Endpoints ============
+
+    @POST("/api/friends/request")
+    suspend fun sendFriendRequest(
+        @Body request: SendFriendRequestRequest,
+        @Header("Authorization") token: String
+    ): FriendRequestResponse
+
+    @POST("/api/friends/request-by-username")
+    suspend fun sendFriendRequestByUsername(
+        @Body request: SendFriendRequestByUsernameRequest,
+        @Header("Authorization") token: String
+    ): FriendRequestResponse
+
+    @POST("/api/friends/accept")
+    suspend fun acceptFriendRequest(
+        @Body request: AcceptFriendRequestRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/friends/decline")
+    suspend fun declineFriendRequest(
+        @Body request: DeclineFriendRequestRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @GET("/api/friends/list")
+    suspend fun listFriends(
+        @Query("uid") uid: String,
+        @Header("Authorization") token: String
+    ): FriendsListResponse
+
+    @GET("/api/friends/requests")
+    suspend fun listFriendRequests(
+        @Query("uid") uid: String,
+        @Header("Authorization") token: String
+    ): FriendRequestsListResponse
+
     // ============ /api Endpoints ============
 
     @GET("/api/status")
@@ -18,6 +92,9 @@ interface ApiService {
 
     @POST("/api/create_room")
     suspend fun createRoomV2(): CreateRoomResponse
+
+    @GET("/api/rooms")
+    suspend fun getRooms(): RoomsResponse
 
     @GET("/api/hand/{playerId}")
     suspend fun getHand(
@@ -36,6 +113,9 @@ interface ApiService {
 
     @POST("/api/reset")
     suspend fun resetGame(): GenericResponse
+
+    @POST("/api/room_visibility")
+    suspend fun setRoomVisibility(@Body request: RoomVisibilityRequest): retrofit2.Response<GenericResponse>
 
     // =========== /api/room Endpoints ============
 
