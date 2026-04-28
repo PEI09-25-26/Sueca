@@ -7,14 +7,15 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    // For Android Emulator: use 10.0.2.2 to access localhost on host machine
-    // For Real Device: replace with your computer's IP address
-    // Sueca 1.4 gateway runs on port 8080 and exposes /game/* routing endpoints.
-    const val API_HOST = "192.168.1.188"
-    const val API_PORT = 8080
-    const val MQTT_BROKER_HOST = API_HOST
-    const val MQTT_BROKER_PORT = 1883
-    private const val BASE_URL = "http://$API_HOST:$API_PORT/"
+    // Public Cloudflare tunnel endpoints
+    // API: https://api.suecadaojogo.com (REST)
+    // MQTT: wss://mqtt.suecadaojogo.com (WebSocket over TLS)
+    const val API_HOST = "api.suecadaojogo.com"
+    const val API_PORT = 443
+    const val MQTT_BROKER_HOST = "mqtt.suecadaojogo.com"
+    const val MQTT_BROKER_PORT = 443  // Cloudflare proxies to 8083
+    const val MQTT_PROTOCOL = "wss"   // WebSocket Secure
+    private const val BASE_URL = "https://$API_HOST/"
 
     private val logger = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
