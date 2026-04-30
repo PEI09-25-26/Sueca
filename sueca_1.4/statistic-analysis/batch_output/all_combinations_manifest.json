@@ -1,0 +1,172 @@
+[
+  {
+    "generation": "Gen1",
+    "label": "weak_weak_average_random",
+    "games": 10,
+    "manifest_path": "batch_output/weak_weak_average_random/manifests/batch_manifest.json",
+    "manifest": [
+      {
+        "game_number": 1,
+        "game_id": "E225A4",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_001_E225A4.json",
+        "csv_path": null,
+        "winner_team": "team1",
+        "winner_label": "Team 1 (N/S)",
+        "final_scores": {
+          "team1": 108,
+          "team2": 12
+        },
+        "redis_key": "sueca:game:E225A4",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_001_E225A4.csv"
+      },
+      {
+        "game_number": 2,
+        "game_id": "8FAA69",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_002_8FAA69.json",
+        "csv_path": null,
+        "winner_team": "team1",
+        "winner_label": "Team 1 (N/S)",
+        "final_scores": {
+          "team1": 78,
+          "team2": 42
+        },
+        "redis_key": "sueca:game:8FAA69",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_002_8FAA69.csv"
+      },
+      {
+        "game_number": 3,
+        "game_id": "D9AC96",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_003_D9AC96.json",
+        "csv_path": null,
+        "winner_team": "team1",
+        "winner_label": "Team 1 (N/S)",
+        "final_scores": {
+          "team1": 78,
+          "team2": 42
+        },
+        "redis_key": "sueca:game:D9AC96",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_003_D9AC96.csv"
+      },
+      {
+        "game_number": 4,
+        "game_id": "68B703",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_004_68B703.json",
+        "csv_path": null,
+        "winner_team": "team2",
+        "winner_label": "Team 2 (E/W)",
+        "final_scores": {
+          "team1": 18,
+          "team2": 102
+        },
+        "redis_key": "sueca:game:68B703",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_004_68B703.csv"
+      },
+      {
+        "game_number": 5,
+        "game_id": "2234DE",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_005_2234DE.json",
+        "csv_path": null,
+        "winner_team": "team2",
+        "winner_label": "Team 2 (E/W)",
+        "final_scores": {
+          "team1": 34,
+          "team2": 86
+        },
+        "redis_key": "sueca:game:2234DE",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_005_2234DE.csv"
+      },
+      {
+        "game_number": 6,
+        "game_id": "BD815D",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_006_BD815D.json",
+        "csv_path": null,
+        "winner_team": "team2",
+        "winner_label": "Team 2 (E/W)",
+        "final_scores": {
+          "team1": 9,
+          "team2": 111
+        },
+        "redis_key": "sueca:game:BD815D",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_006_BD815D.csv"
+      },
+      {
+        "game_number": 7,
+        "game_id": "678090",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_007_678090.json",
+        "csv_path": null,
+        "winner_team": "team2",
+        "winner_label": "Team 2 (E/W)",
+        "final_scores": {
+          "team1": 33,
+          "team2": 87
+        },
+        "redis_key": "sueca:game:678090",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_007_678090.csv"
+      },
+      {
+        "game_number": 8,
+        "game_id": "7714B2",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_008_7714B2.json",
+        "csv_path": null,
+        "winner_team": "team1",
+        "winner_label": "Team 1 (N/S)",
+        "final_scores": {
+          "team1": 89,
+          "team2": 31
+        },
+        "redis_key": "sueca:game:7714B2",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_008_7714B2.csv"
+      },
+      {
+        "game_number": 9,
+        "game_id": "3281DC",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_009_3281DC.json",
+        "csv_path": null,
+        "winner_team": "team2",
+        "winner_label": "Team 2 (E/W)",
+        "final_scores": {
+          "team1": 52,
+          "team2": 68
+        },
+        "redis_key": "sueca:game:3281DC",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_009_3281DC.csv"
+      },
+      {
+        "game_number": 10,
+        "game_id": "A38F21",
+        "json_path": "batch_output/weak_weak_average_random/games/game_data_010_A38F21.json",
+        "csv_path": null,
+        "winner_team": "team1",
+        "winner_label": "Team 1 (N/S)",
+        "final_scores": {
+          "team1": 68,
+          "team2": 52
+        },
+        "redis_key": "sueca:game:A38F21",
+        "actions_csv": "batch_output/weak_weak_average_random/games/actions_010_A38F21.csv"
+      }
+    ],
+    "bots": [
+      {
+        "name": "N",
+        "position": "NORTH",
+        "difficulty": "weak"
+      },
+      {
+        "name": "E",
+        "position": "EAST",
+        "difficulty": "weak"
+      },
+      {
+        "name": "S",
+        "position": "SOUTH",
+        "difficulty": "average"
+      },
+      {
+        "name": "W",
+        "position": "WEST",
+        "difficulty": "random"
+      }
+    ]
+  }
+]

@@ -8,6 +8,7 @@ from ..card_mapper import CardMapper
 from ..agents.random_agent.random_agent import RandomAgent
 from ..agents.weak_agent import WeakAgent
 import logging
+import os
 import requests
 import threading
 import uuid
@@ -51,6 +52,7 @@ class GameState:
         self.reset()
 
     def reset(self):
+        self.fast_mode = str(os.getenv("SUECA_STATISTICS_FAST_MODE", "")).strip().lower() in {"1", "true", "yes", "on"}
         self.deck = Deck()
         self.players = []
         self.max_players = 4
@@ -81,6 +83,9 @@ class GameState:
         # Dealer rotates each match. Initial dealer is WEST to preserve current first-match behavior.
         self.dealer_index = self.positions.index(Positions.WEST)
         self._push_state('game_reset')
+
+    def set_fast_mode(self, enabled):
+        self.fast_mode = bool(enabled)
 
     def _prepare_new_match(self, advance_dealer=False):
         self.deck = Deck()
@@ -428,6 +433,7 @@ class GameState:
         self._push_state('round_end')
 
     def play_card(self, player_id, card_str):
+        should_finish_now = False
         with self._play_lock:
             player = self.get_player(player_id)
             if not player:
@@ -489,10 +495,13 @@ class GameState:
         if len(self.round_plays) == 4:
             self.current_player = None
             self.round_resolving = True
-            threading.Timer(1.69, self._finish_round).start()
+            should_finish_now = self.fast_mode
 
-        # Keep MQTT/state consumers in sync after every accepted play.
-        self._push_state('card_played')
+        if len(self.round_plays) == 4:
+            if should_finish_now:
+                self._finish_round()
+            else:
+                threading.Timer(1.69, self._finish_round).start()
 
         return True, f'Played {CardMapper.get_card(card)}'
 

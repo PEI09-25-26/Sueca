@@ -82,8 +82,7 @@ def connect_mqtt(wait_seconds: float = 3.0):
 
         deadline = time.time() + max(wait_seconds, 0)
         while not _connected and time.time() < deadline:
-            time.sleep(0.05)
-        return _connected
+            return _connected
     except Exception as e:
         logger.error(f"[MQTT] Connection failed: {e}")
         return False

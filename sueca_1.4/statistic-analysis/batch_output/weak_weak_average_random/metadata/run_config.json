@@ -1,0 +1,38 @@
+{
+  "mode": "combinations",
+  "generation": "Gen1",
+  "split_by_generation": false,
+  "combination_label": "weak_weak_average_random",
+  "games": 10,
+  "base_url": "http://127.0.0.1:5000",
+  "timeout_sec": 0,
+  "poll_interval": 0.03,
+  "join_timeout_sec": 1.5,
+  "split_csv": true,
+  "save_game_files": true,
+  "save_to_redis": true,
+  "redis_key_prefix": "sueca:game",
+  "bots": [
+    {
+      "name": "N",
+      "position": "NORTH",
+      "difficulty": "weak"
+    },
+    {
+      "name": "E",
+      "position": "EAST",
+      "difficulty": "weak"
+    },
+    {
+      "name": "S",
+      "position": "SOUTH",
+      "difficulty": "average"
+    },
+    {
+      "name": "W",
+      "position": "WEST",
+      "difficulty": "random"
+    }
+  ],
+  "fast_mode": true
+}

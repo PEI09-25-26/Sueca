@@ -645,20 +645,14 @@ class GameClient:
 
     def auto_update_thread(self):
         while self.running:
-            try:
-                if not self.pause_updates:
-                    if MQTT_EVENTS_ENABLED and self.mqtt_connected:
-                        if self.needs_refresh:
-                            self.display_game(force=False)
-                            self.needs_refresh = False
-                        time.sleep(0.2)
-                    else:
-                        self.display_game(force=True)
-                        time.sleep(HTTP_POLL_INTERVAL)
+            if not self.pause_updates:
+                if MQTT_EVENTS_ENABLED and self.mqtt_connected:
+                    if self.needs_refresh:
+                        self.display_game(force=False)
+                        self.needs_refresh = False
                 else:
-                    time.sleep(0.2)
-            except Exception:
-                pass
+                    self.display_game(force=True)
+         
 
     def run(self):
         self.clear_screen()
@@ -746,7 +740,6 @@ class GameClient:
                         while time.time() < deadline:
                             if _state_has_me():
                                 break
-                            time.sleep(0.1)
                     if not _state_has_me():
                         print('[ERROR] MQTT state not received. Strict MQTT mode does not fallback to HTTP.')
                         return
@@ -776,7 +769,6 @@ class GameClient:
         print('  2. WEST player selects trump (choose top or bottom)')
         print('  3. Cards are dealt and game starts!')
         print('\nYour hand will update automatically every 2 seconds.\n')
-        time.sleep(2)
 
         update_thread = Thread(target=self.auto_update_thread, daemon=True)
         update_thread.start()
@@ -798,7 +790,6 @@ class GameClient:
 
                     if is_my_action:
                         self.pause_updates = True
-                        time.sleep(0.1)
                         self.display_game(force=True)
 
                 user_input = input().strip().lower()

@@ -94,7 +94,6 @@ def add_bot(data: dict = Body(default_factory=dict)):
         bot_player = next((player for player in game.players if player.player_name == bot_name), None)
         if bot_player:
             break
-        time.sleep(0.2)
     if bot_player:
         publish_bot_added(game_id, bot_player.player_id, bot_name, difficulty, position)
         return {

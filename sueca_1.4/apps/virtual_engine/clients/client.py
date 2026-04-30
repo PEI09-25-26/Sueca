@@ -33,6 +33,7 @@ class GameClient:
         self.my_hand = []
         self.mqtt_client = None
         self.mqtt_connected = False
+        self._fast_http_fallback = False
 
     def _get(self, path, params=None, timeout=2):
         response = requests.get(f'{SERVER_URL}{path}', params=params, timeout=timeout)
@@ -67,6 +68,7 @@ class GameClient:
 
     def _start_mqtt_listener(self):
         if not MQTT_EVENTS_ENABLED or mqtt_client is None or self.mqtt_client is not None:
+            self._fast_http_fallback = True
             return
         try:
             self.mqtt_client = mqtt_client.Client(client_id=f've-bot-{os.getpid()}-{id(self)}')
@@ -76,9 +78,11 @@ class GameClient:
                 self.mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
             self.mqtt_client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=60)
             self.mqtt_client.loop_start()
+            self._fast_http_fallback = False
         except Exception:
             self.mqtt_client = None
             self.mqtt_connected = False
+            self._fast_http_fallback = True
 
     def _stop_mqtt_listener(self):
         if not self.mqtt_client:
@@ -91,9 +95,10 @@ class GameClient:
         finally:
             self.mqtt_client = None
             self.mqtt_connected = False
+            self._fast_http_fallback = True
 
     def get_status(self):
-        if MQTT_EVENTS_ENABLED:
+        if MQTT_EVENTS_ENABLED and not self._fast_http_fallback and self.mqtt_connected and self.latest_state is not None:
             return self.latest_state
         params = {'game_id': self.game_id} if self.game_id else None
         data = self._get('/api/status', params=params)
@@ -112,7 +117,7 @@ class GameClient:
         return data.get('success', False), data.get('message', UNKNOWN_ERROR), data.get('player_id')
 
     def get_hand(self):
-        if MQTT_EVENTS_ENABLED:
+        if MQTT_EVENTS_ENABLED and not self._fast_http_fallback and self.mqtt_connected and self.my_hand:
             return self.my_hand
         if not self.player_id:
             return []

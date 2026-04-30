@@ -1,0 +1,11 @@
+game_number,game_id,round_number,round_points,round_winner_team,team1_before,team2_before,team1_after,team2_after,cards_played_count,cards_played
+1,2404E1,1,12,team2,0,0,0,12,3,S:Positions.SOUTH:2 | E:Positions.EAST:5 | N:Positions.NORTH:3
+1,2404E1,2,15,team2,0,12,0,27,3,W:Positions.WEST:19 | S:Positions.SOUTH:11 | E:Positions.EAST:17
+1,2404E1,3,11,team2,0,27,0,38,2,W:Positions.WEST:29 | S:Positions.SOUTH:21
+1,2404E1,4,13,team2,0,38,0,51,3,W:Positions.WEST:16 | S:Positions.SOUTH:13 | E:Positions.EAST:18
+1,2404E1,5,4,team2,0,51,0,55,3,E:Positions.EAST:37 | N:Positions.NORTH:33 | W:Positions.WEST:31
+1,2404E1,6,5,team2,0,55,0,60,2,E:Positions.EAST:36 | N:Positions.NORTH:22
+1,2404E1,7,12,team1,0,60,12,60,3,E:Positions.EAST:38 | N:Positions.NORTH:23 | W:Positions.WEST:34
+1,2404E1,8,20,team1,12,60,32,60,3,S:Positions.SOUTH:28 | E:Positions.EAST:25 | N:Positions.NORTH:27
+1,2404E1,9,6,team2,32,60,32,66,3,S:Positions.SOUTH:26 | E:Positions.EAST:32 | N:Positions.NORTH:6
+1,2404E1,10,22,team1,32,66,54,66,2,W:Positions.WEST:0 | S:Positions.SOUTH:4

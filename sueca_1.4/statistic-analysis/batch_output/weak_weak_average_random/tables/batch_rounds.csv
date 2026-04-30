@@ -1,0 +1,101 @@
+game_number,game_id,round_number,round_points,round_winner_team,team1_before,team2_before,team1_after,team2_after,cards_played_count,cards_played
+1,E225A4,1,5,team1,0,0,5,0,3,S:Positions.SOUTH:16 | E:Positions.EAST:10 | N:Positions.NORTH:15
+1,E225A4,2,15,team1,5,0,20,0,2,S:Positions.SOUTH:17 | E:Positions.EAST:12
+1,E225A4,3,21,team1,20,0,41,0,2,N:Positions.NORTH:22 | W:Positions.WEST:28
+1,E225A4,4,7,team2,41,0,41,7,2,S:Positions.SOUTH:4 | E:Positions.EAST:7
+1,E225A4,5,10,team1,41,7,51,7,2,E:Positions.EAST:8 | N:Positions.NORTH:30
+1,E225A4,6,5,team2,51,7,51,12,2,N:Positions.NORTH:26 | W:Positions.WEST:35
+1,E225A4,7,13,team1,51,12,64,12,4,W:Positions.WEST:5 | S:Positions.SOUTH:33 | E:Positions.EAST:9 | N:Positions.NORTH:20
+1,E225A4,8,25,team1,64,12,89,12,4,S:Positions.SOUTH:39 | E:Positions.EAST:14 | N:Positions.NORTH:38 | W:Positions.WEST:37
+1,E225A4,9,5,team1,89,12,94,12,4,S:Positions.SOUTH:36 | E:Positions.EAST:25 | N:Positions.NORTH:21 | W:Positions.WEST:31
+1,E225A4,10,14,team1,94,12,108,12,4,S:Positions.SOUTH:34 | E:Positions.EAST:18 | N:Positions.NORTH:27 | W:Positions.WEST:3
+2,8FAA69,1,6,team2,0,0,0,6,3,S:Positions.SOUTH:35 | E:Positions.EAST:30 | N:Positions.NORTH:33
+2,8FAA69,2,5,team2,0,6,0,11,3,W:Positions.WEST:26 | S:Positions.SOUTH:25 | E:Positions.EAST:20
+2,8FAA69,3,10,team2,0,11,0,21,3,W:Positions.WEST:11 | S:Positions.SOUTH:18 | E:Positions.EAST:22
+2,8FAA69,4,7,team2,0,21,0,28,2,E:Positions.EAST:7 | N:Positions.NORTH:4
+2,8FAA69,5,13,team1,0,28,13,28,3,E:Positions.EAST:5 | N:Positions.NORTH:9 | W:Positions.WEST:2
+2,8FAA69,6,14,team2,13,28,13,42,3,N:Positions.NORTH:16 | W:Positions.WEST:14 | S:Positions.SOUTH:19
+2,8FAA69,7,20,team1,13,42,33,42,4,E:Positions.EAST:38 | N:Positions.NORTH:28 | W:Positions.WEST:32 | S:Positions.SOUTH:31
+2,8FAA69,8,8,team1,33,42,41,42,3,N:Positions.NORTH:17 | W:Positions.WEST:10 | S:Positions.SOUTH:27
+2,8FAA69,9,11,team1,41,42,52,42,2,S:Positions.SOUTH:29 | E:Positions.EAST:34
+2,8FAA69,10,26,team1,52,42,78,42,2,S:Positions.SOUTH:8 | E:Positions.EAST:39
+3,D9AC96,1,3,team2,0,0,0,3,3,S:Positions.SOUTH:33 | E:Positions.EAST:30 | N:Positions.NORTH:31
+3,D9AC96,2,0,,0,3,0,3,2,W:Positions.WEST:11 | S:Positions.SOUTH:14
+3,D9AC96,3,13,team2,0,3,0,16,2,S:Positions.SOUTH:32 | E:Positions.EAST:0
+3,D9AC96,4,12,team2,0,16,0,28,3,E:Positions.EAST:25 | N:Positions.NORTH:22 | W:Positions.WEST:28
+3,D9AC96,5,5,team1,0,28,5,28,2,W:Positions.WEST:13 | S:Positions.SOUTH:1
+3,D9AC96,6,14,team2,5,28,5,42,2,S:Positions.SOUTH:38 | E:Positions.EAST:4
+3,D9AC96,7,21,team1,5,42,26,42,3,E:Positions.EAST:17 | N:Positions.NORTH:19 | W:Positions.WEST:5
+3,D9AC96,8,14,team1,26,42,40,42,2,S:Positions.SOUTH:9 | E:Positions.EAST:20
+3,D9AC96,9,13,team1,40,42,53,42,3,S:Positions.SOUTH:8 | E:Positions.EAST:23 | N:Positions.NORTH:26
+3,D9AC96,10,25,team1,53,42,78,42,3,S:Positions.SOUTH:2 | E:Positions.EAST:18 | N:Positions.NORTH:27
+4,68B703,1,4,team2,0,0,0,4,2,S:Positions.SOUTH:24 | E:Positions.EAST:21
+4,68B703,2,0,,0,4,0,4,3,W:Positions.WEST:11 | S:Positions.SOUTH:10 | E:Positions.EAST:13
+4,68B703,3,13,team2,0,4,0,17,3,N:Positions.NORTH:25 | W:Positions.WEST:29 | S:Positions.SOUTH:20
+4,68B703,4,13,team1,0,17,13,17,2,E:Positions.EAST:16 | N:Positions.NORTH:1
+4,68B703,5,5,team1,13,17,18,17,2,N:Positions.NORTH:26 | W:Positions.WEST:22
+4,68B703,6,13,team2,18,17,18,30,3,N:Positions.NORTH:33 | W:Positions.WEST:39 | S:Positions.SOUTH:34
+4,68B703,7,6,team2,18,30,18,36,2,W:Positions.WEST:2 | S:Positions.SOUTH:5
+4,68B703,8,24,team2,18,36,18,60,3,E:Positions.EAST:9 | N:Positions.NORTH:32 | W:Positions.WEST:6
+4,68B703,9,25,team2,18,60,18,85,4,E:Positions.EAST:19 | N:Positions.NORTH:28 | W:Positions.WEST:12 | S:Positions.SOUTH:17
+4,68B703,10,17,team2,18,85,18,102,4,E:Positions.EAST:37 | N:Positions.NORTH:38 | W:Positions.WEST:3 | S:Positions.SOUTH:36
+5,2234DE,1,5,team2,0,0,0,5,4,S:Positions.SOUTH:5 | E:Positions.EAST:3 | N:Positions.NORTH:0 | W:Positions.WEST:6
+5,2234DE,2,0,,0,5,0,5,3,W:Positions.WEST:11 | S:Positions.SOUTH:14 | E:Positions.EAST:12
+5,2234DE,3,16,team1,0,5,16,5,4,S:Positions.SOUTH:15 | E:Positions.EAST:13 | N:Positions.NORTH:16 | W:Positions.WEST:39
+5,2234DE,4,4,team1,16,5,20,5,3,N:Positions.NORTH:37 | W:Positions.WEST:34 | S:Positions.SOUTH:32
+5,2234DE,5,14,team1,20,5,34,5,3,N:Positions.NORTH:8 | W:Positions.WEST:4 | S:Positions.SOUTH:2
+5,2234DE,6,5,team2,34,5,34,10,2,N:Positions.NORTH:31 | W:Positions.WEST:35
+5,2234DE,7,21,team2,34,10,34,31,2,E:Positions.EAST:19 | N:Positions.NORTH:22
+5,2234DE,8,5,team2,34,31,34,36,3,W:Positions.WEST:26 | S:Positions.SOUTH:25 | E:Positions.EAST:20
+5,2234DE,9,15,team2,34,36,34,51,4,W:Positions.WEST:21 | S:Positions.SOUTH:27 | E:Positions.EAST:29 | N:Positions.NORTH:1
+5,2234DE,10,35,team2,34,51,34,86,4,E:Positions.EAST:17 | N:Positions.NORTH:38 | W:Positions.WEST:28 | S:Positions.SOUTH:9
+6,BD815D,1,3,team1,0,0,3,0,4,S:Positions.SOUTH:26 | E:Positions.EAST:22 | N:Positions.NORTH:21 | W:Positions.WEST:23
+6,BD815D,2,4,team1,3,0,7,0,4,S:Positions.SOUTH:7 | E:Positions.EAST:4 | N:Positions.NORTH:0 | W:Positions.WEST:32
+6,BD815D,3,14,team2,7,0,7,14,3,S:Positions.SOUTH:24 | E:Positions.EAST:28 | N:Positions.NORTH:27
+6,BD815D,4,11,team2,7,14,7,25,3,E:Positions.EAST:39 | N:Positions.NORTH:33 | W:Positions.WEST:31
+6,BD815D,5,2,team1,7,25,9,25,2,E:Positions.EAST:10 | N:Positions.NORTH:15
+6,BD815D,6,16,team2,9,25,9,41,2,N:Positions.NORTH:35 | W:Positions.WEST:37
+6,BD815D,7,4,team2,9,41,9,45,2,E:Positions.EAST:14 | N:Positions.NORTH:1
+6,BD815D,8,7,team2,9,45,9,52,3,W:Positions.WEST:25 | S:Positions.SOUTH:3 | E:Positions.EAST:16
+6,BD815D,9,24,team2,9,52,9,76,2,E:Positions.EAST:19 | N:Positions.NORTH:6
+6,BD815D,10,35,team2,9,76,9,111,2,E:Positions.EAST:18 | N:Positions.NORTH:36
+7,678090,1,13,team1,0,0,13,0,3,S:Positions.SOUTH:16 | E:Positions.EAST:12 | N:Positions.NORTH:18
+7,678090,2,3,team2,13,0,13,3,3,N:Positions.NORTH:34 | W:Positions.WEST:30 | S:Positions.SOUTH:32
+7,678090,3,2,team2,13,3,13,5,3,E:Positions.EAST:25 | N:Positions.NORTH:23 | W:Positions.WEST:22
+7,678090,4,2,team1,13,5,15,5,3,E:Positions.EAST:13 | N:Positions.NORTH:0 | W:Positions.WEST:15
+7,678090,5,6,team1,15,5,21,5,3,N:Positions.NORTH:37 | W:Positions.WEST:35 | S:Positions.SOUTH:33
+7,678090,6,28,team2,21,5,21,33,4,N:Positions.NORTH:28 | W:Positions.WEST:26 | S:Positions.SOUTH:27 | E:Positions.EAST:29
+7,678090,7,12,team1,21,33,33,33,3,E:Positions.EAST:2 | N:Positions.NORTH:5 | W:Positions.WEST:1
+7,678090,8,11,team2,33,33,33,44,3,S:Positions.SOUTH:19 | E:Positions.EAST:3 | N:Positions.NORTH:31
+7,678090,9,19,team2,33,44,33,63,2,E:Positions.EAST:9 | N:Positions.NORTH:24
+7,678090,10,24,team2,33,63,33,87,3,E:Positions.EAST:6 | N:Positions.NORTH:38 | W:Positions.WEST:4
+8,7714B2,1,10,team2,0,0,0,10,3,S:Positions.SOUTH:2 | E:Positions.EAST:4 | N:Positions.NORTH:1
+8,7714B2,2,3,team2,0,10,0,13,3,W:Positions.WEST:10 | S:Positions.SOUTH:12 | E:Positions.EAST:16
+8,7714B2,3,6,team2,0,13,0,19,4,E:Positions.EAST:25 | N:Positions.NORTH:23 | W:Positions.WEST:27 | S:Positions.SOUTH:20
+8,7714B2,4,12,team2,0,19,0,31,3,W:Positions.WEST:15 | S:Positions.SOUTH:13 | E:Positions.EAST:18
+8,7714B2,5,5,team1,0,31,5,31,3,E:Positions.EAST:35 | N:Positions.NORTH:36 | W:Positions.WEST:31
+8,7714B2,6,10,team1,5,31,15,31,3,N:Positions.NORTH:28 | W:Positions.WEST:21 | S:Positions.SOUTH:0
+8,7714B2,7,21,team1,15,31,36,31,3,N:Positions.NORTH:38 | W:Positions.WEST:33 | S:Positions.SOUTH:39
+8,7714B2,8,13,team1,36,31,49,31,3,S:Positions.SOUTH:19 | E:Positions.EAST:34 | N:Positions.NORTH:5
+8,7714B2,9,10,team1,49,31,59,31,2,S:Positions.SOUTH:17 | E:Positions.EAST:6
+8,7714B2,10,30,team1,59,31,89,31,3,S:Positions.SOUTH:9 | E:Positions.EAST:37 | N:Positions.NORTH:29
+9,3281DC,1,16,team2,0,0,0,16,3,S:Positions.SOUTH:5 | E:Positions.EAST:6 | N:Positions.NORTH:1
+9,3281DC,2,21,team2,0,16,0,37,3,W:Positions.WEST:38 | S:Positions.SOUTH:33 | E:Positions.EAST:39
+9,3281DC,3,13,team2,0,37,0,50,3,E:Positions.EAST:16 | N:Positions.NORTH:14 | W:Positions.WEST:18
+9,3281DC,4,4,team1,0,50,4,50,2,W:Positions.WEST:0 | S:Positions.SOUTH:21
+9,3281DC,5,7,team2,4,50,4,57,3,S:Positions.SOUTH:36 | E:Positions.EAST:10 | N:Positions.NORTH:31
+9,3281DC,6,4,team1,4,57,8,57,3,W:Positions.WEST:11 | S:Positions.SOUTH:17 | E:Positions.EAST:13
+9,3281DC,7,2,team2,8,57,8,59,2,S:Positions.SOUTH:35 | E:Positions.EAST:20
+9,3281DC,8,9,team2,8,59,8,68,3,W:Positions.WEST:27 | S:Positions.SOUTH:23 | E:Positions.EAST:15
+9,3281DC,9,22,team1,8,68,30,68,3,W:Positions.WEST:24 | S:Positions.SOUTH:25 | E:Positions.EAST:8
+9,3281DC,10,22,team1,30,68,52,68,3,N:Positions.NORTH:29 | W:Positions.WEST:2 | S:Positions.SOUTH:34
+10,A38F21,1,21,team2,0,0,0,21,3,S:Positions.SOUTH:4 | E:Positions.EAST:1 | N:Positions.NORTH:8
+10,A38F21,2,3,team2,0,21,0,24,3,W:Positions.WEST:36 | S:Positions.SOUTH:30 | E:Positions.EAST:31
+10,A38F21,3,6,team2,0,24,0,30,2,W:Positions.WEST:7 | S:Positions.SOUTH:2
+10,A38F21,4,13,team1,0,30,13,30,2,W:Positions.WEST:32 | S:Positions.SOUTH:35
+10,A38F21,5,5,team2,13,30,13,35,4,N:Positions.NORTH:15 | W:Positions.WEST:16 | S:Positions.SOUTH:10 | E:Positions.EAST:14
+10,A38F21,6,13,team2,13,35,13,48,2,W:Positions.WEST:29 | S:Positions.SOUTH:24
+10,A38F21,7,4,team2,13,48,13,52,4,W:Positions.WEST:13 | S:Positions.SOUTH:17 | E:Positions.EAST:22 | N:Positions.NORTH:12
+10,A38F21,8,7,team1,13,52,20,52,2,E:Positions.EAST:23 | N:Positions.NORTH:27
+10,A38F21,9,17,team1,20,52,37,52,3,N:Positions.NORTH:28 | W:Positions.WEST:6 | S:Positions.SOUTH:3
+10,A38F21,10,31,team1,37,52,68,52,2,N:Positions.NORTH:18 | W:Positions.WEST:0

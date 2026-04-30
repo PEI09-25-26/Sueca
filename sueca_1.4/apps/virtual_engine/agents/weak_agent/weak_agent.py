@@ -1,5 +1,6 @@
 """WeakAgent - AI agent that plays Sueca using simple heuristics."""
 
+import os
 import random
 import time
 
@@ -7,6 +8,13 @@ from ...card_mapper import CardMapper
 from ...clients.client import GameClient
 from ...game_state_tracker import GameStateTracker
 from .decision_maker import DecisionMaker
+
+
+def _env_float(name, default):
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return float(default)
 
 
 class WeakAgent(GameClient):
@@ -18,7 +26,10 @@ class WeakAgent(GameClient):
         self.state_tracker = GameStateTracker()
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
-        self.think_time = 1.0
+        self.think_time = max(0.0, _env_float("SUECA_BOT_THINK_TIME", 0.0))
+        self.loop_sleep_min = max(0.0, _env_float("SUECA_BOT_LOOP_SLEEP_MIN", 0.0))
+        self.loop_sleep_max = max(self.loop_sleep_min, _env_float("SUECA_BOT_LOOP_SLEEP_MAX", 0.0))
+        self.error_sleep = max(0.0, _env_float("SUECA_BOT_ERROR_SLEEP", 0.0))
         self.player_id = None
         self.game_id = game_id
         self.position = position
@@ -38,7 +49,7 @@ class WeakAgent(GameClient):
         while True:
             state = self.get_status()
             if state is None:
-                time.sleep(1)
+              
                 continue
 
             phase = state.get("phase")
@@ -65,7 +76,7 @@ class WeakAgent(GameClient):
 
             self._last_phase = phase
 
-            time.sleep(random.uniform(0.5, 1.0))
+           
 
     def _handle_deck_cutting(self, state):
         if state.get("north_player_id") != self.player_id and state.get("north_player") != self.player_name:
@@ -97,7 +108,7 @@ class WeakAgent(GameClient):
         ) or not self.state_tracker.my_hand:
             return
 
-        time.sleep(self.think_time)
+  
 
         card = self.decision_maker.choose_card(self.state_tracker.my_hand)
         if card is None:

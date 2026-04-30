@@ -1,0 +1,878 @@
+{
+  "game_data": {
+    "game_number": 3,
+    "game_id": "D9AC96",
+    "agent_configuration": [
+      {
+        "name": "N",
+        "position": "NORTH",
+        "difficulty": "weak"
+      },
+      {
+        "name": "E",
+        "position": "EAST",
+        "difficulty": "weak"
+      },
+      {
+        "name": "S",
+        "position": "SOUTH",
+        "difficulty": "average"
+      },
+      {
+        "name": "W",
+        "position": "WEST",
+        "difficulty": "random"
+      }
+    ],
+    "agent_difficulties": {
+      "N": "weak",
+      "E": "weak",
+      "S": "average",
+      "W": "random"
+    },
+    "final_scores": {
+      "team1": 78,
+      "team2": 42
+    },
+    "trump_card": "3",
+    "trump_card_suit": "♣",
+    "cut_index": null,
+    "trump_choice": null,
+    "winner_team": "team1",
+    "winner_label": "Team 1 (N/S)",
+    "match_number": 3,
+    "rounds_played": 10,
+    "finished_at": "2026-04-30T15:38:20.689634+00:00",
+    "matches_played": 1,
+    "phase": "finished",
+    "player_names": [
+      "N",
+      "E",
+      "W",
+      "S"
+    ],
+    "team_map": {
+      "team1": [
+        "N",
+        "S"
+      ],
+      "team2": [
+        "E",
+        "W"
+      ]
+    },
+    "timeline": [
+      {
+        "ts": 1777563494.1262248,
+        "phase": "deck_cutting",
+        "current_round": 1,
+        "team_scores": {
+          "team1": 0,
+          "team2": 0
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563494.3822818,
+        "phase": "trump_selection",
+        "current_round": 1,
+        "team_scores": {
+          "team1": 0,
+          "team2": 0
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563494.6234431,
+        "phase": "playing",
+        "current_round": 1,
+        "team_scores": {
+          "team1": 0,
+          "team2": 0
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "33",
+            "position": "Positions.SOUTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563494.8922224,
+        "phase": "playing",
+        "current_round": 1,
+        "team_scores": {
+          "team1": 0,
+          "team2": 0
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "33",
+            "position": "Positions.SOUTH"
+          },
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "30",
+            "position": "Positions.EAST"
+          },
+          {
+            "player_id": "86673c07",
+            "player_name": "N",
+            "card": "31",
+            "position": "Positions.NORTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563495.1811974,
+        "phase": "playing",
+        "current_round": 2,
+        "team_scores": {
+          "team1": 0,
+          "team2": 3
+        },
+        "round_plays": [
+          {
+            "player_id": "72161ca9",
+            "player_name": "W",
+            "card": "11",
+            "position": "Positions.WEST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563495.48039,
+        "phase": "playing",
+        "current_round": 2,
+        "team_scores": {
+          "team1": 0,
+          "team2": 3
+        },
+        "round_plays": [
+          {
+            "player_id": "72161ca9",
+            "player_name": "W",
+            "card": "11",
+            "position": "Positions.WEST"
+          },
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "14",
+            "position": "Positions.SOUTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563495.7397516,
+        "phase": "playing",
+        "current_round": 3,
+        "team_scores": {
+          "team1": 0,
+          "team2": 3
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563496.0080893,
+        "phase": "playing",
+        "current_round": 3,
+        "team_scores": {
+          "team1": 0,
+          "team2": 3
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "32",
+            "position": "Positions.SOUTH"
+          },
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "0",
+            "position": "Positions.EAST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563496.2691474,
+        "phase": "playing",
+        "current_round": 4,
+        "team_scores": {
+          "team1": 0,
+          "team2": 16
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563496.5693693,
+        "phase": "playing",
+        "current_round": 4,
+        "team_scores": {
+          "team1": 0,
+          "team2": 16
+        },
+        "round_plays": [
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "25",
+            "position": "Positions.EAST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563496.9053948,
+        "phase": "playing",
+        "current_round": 4,
+        "team_scores": {
+          "team1": 0,
+          "team2": 16
+        },
+        "round_plays": [
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "25",
+            "position": "Positions.EAST"
+          },
+          {
+            "player_id": "86673c07",
+            "player_name": "N",
+            "card": "22",
+            "position": "Positions.NORTH"
+          },
+          {
+            "player_id": "72161ca9",
+            "player_name": "W",
+            "card": "28",
+            "position": "Positions.WEST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563497.1860774,
+        "phase": "playing",
+        "current_round": 5,
+        "team_scores": {
+          "team1": 0,
+          "team2": 28
+        },
+        "round_plays": [
+          {
+            "player_id": "72161ca9",
+            "player_name": "W",
+            "card": "13",
+            "position": "Positions.WEST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563497.4616394,
+        "phase": "playing",
+        "current_round": 5,
+        "team_scores": {
+          "team1": 0,
+          "team2": 28
+        },
+        "round_plays": [
+          {
+            "player_id": "72161ca9",
+            "player_name": "W",
+            "card": "13",
+            "position": "Positions.WEST"
+          },
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "1",
+            "position": "Positions.SOUTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563497.7602477,
+        "phase": "playing",
+        "current_round": 6,
+        "team_scores": {
+          "team1": 5,
+          "team2": 28
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563498.0531406,
+        "phase": "playing",
+        "current_round": 6,
+        "team_scores": {
+          "team1": 5,
+          "team2": 28
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "38",
+            "position": "Positions.SOUTH"
+          },
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "4",
+            "position": "Positions.EAST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563498.37086,
+        "phase": "playing",
+        "current_round": 7,
+        "team_scores": {
+          "team1": 5,
+          "team2": 42
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563498.6407866,
+        "phase": "playing",
+        "current_round": 7,
+        "team_scores": {
+          "team1": 5,
+          "team2": 42
+        },
+        "round_plays": [
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "17",
+            "position": "Positions.EAST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563498.8859792,
+        "phase": "playing",
+        "current_round": 7,
+        "team_scores": {
+          "team1": 5,
+          "team2": 42
+        },
+        "round_plays": [
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "17",
+            "position": "Positions.EAST"
+          },
+          {
+            "player_id": "86673c07",
+            "player_name": "N",
+            "card": "19",
+            "position": "Positions.NORTH"
+          },
+          {
+            "player_id": "72161ca9",
+            "player_name": "W",
+            "card": "5",
+            "position": "Positions.WEST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563499.1465676,
+        "phase": "playing",
+        "current_round": 8,
+        "team_scores": {
+          "team1": 26,
+          "team2": 42
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "9",
+            "position": "Positions.SOUTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563499.4115832,
+        "phase": "playing",
+        "current_round": 8,
+        "team_scores": {
+          "team1": 26,
+          "team2": 42
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "9",
+            "position": "Positions.SOUTH"
+          },
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "20",
+            "position": "Positions.EAST"
+          }
+        ]
+      },
+      {
+        "ts": 1777563499.6769493,
+        "phase": "playing",
+        "current_round": 9,
+        "team_scores": {
+          "team1": 40,
+          "team2": 42
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563499.952362,
+        "phase": "playing",
+        "current_round": 9,
+        "team_scores": {
+          "team1": 40,
+          "team2": 42
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "8",
+            "position": "Positions.SOUTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563500.2144752,
+        "phase": "playing",
+        "current_round": 9,
+        "team_scores": {
+          "team1": 40,
+          "team2": 42
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "8",
+            "position": "Positions.SOUTH"
+          },
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "23",
+            "position": "Positions.EAST"
+          },
+          {
+            "player_id": "86673c07",
+            "player_name": "N",
+            "card": "26",
+            "position": "Positions.NORTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563500.5322576,
+        "phase": "playing",
+        "current_round": 10,
+        "team_scores": {
+          "team1": 53,
+          "team2": 42
+        },
+        "round_plays": []
+      },
+      {
+        "ts": 1777563500.8248365,
+        "phase": "playing",
+        "current_round": 10,
+        "team_scores": {
+          "team1": 53,
+          "team2": 42
+        },
+        "round_plays": [
+          {
+            "player_id": "1bd6cafb",
+            "player_name": "S",
+            "card": "2",
+            "position": "Positions.SOUTH"
+          },
+          {
+            "player_id": "1d883d93",
+            "player_name": "E",
+            "card": "18",
+            "position": "Positions.EAST"
+          },
+          {
+            "player_id": "86673c07",
+            "player_name": "N",
+            "card": "27",
+            "position": "Positions.NORTH"
+          }
+        ]
+      },
+      {
+        "ts": 1777563501.106415,
+        "phase": "finished",
+        "current_round": 11,
+        "team_scores": {
+          "team1": 78,
+          "team2": 42
+        },
+        "round_plays": []
+      }
+    ]
+  },
+  "round_data": {
+    "round_1": {
+      "points": 3,
+      "team_scores_before": {
+        "team1": 0,
+        "team2": 0
+      },
+      "team_scores_after": {
+        "team1": 0,
+        "team2": 3
+      },
+      "cards_played": [
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "33",
+          "position": "Positions.SOUTH"
+        },
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "30",
+          "position": "Positions.EAST"
+        },
+        {
+          "player_id": "86673c07",
+          "player_name": "N",
+          "card": "31",
+          "position": "Positions.NORTH"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♠",
+      "winner_team": "team2",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_2": {
+      "points": 0,
+      "team_scores_before": {
+        "team1": 0,
+        "team2": 3
+      },
+      "team_scores_after": {
+        "team1": 0,
+        "team2": 3
+      },
+      "cards_played": [
+        {
+          "player_id": "72161ca9",
+          "player_name": "W",
+          "card": "11",
+          "position": "Positions.WEST"
+        },
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "14",
+          "position": "Positions.SOUTH"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♦",
+      "winner_team": null,
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_3": {
+      "points": 13,
+      "team_scores_before": {
+        "team1": 0,
+        "team2": 3
+      },
+      "team_scores_after": {
+        "team1": 0,
+        "team2": 16
+      },
+      "cards_played": [
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "32",
+          "position": "Positions.SOUTH"
+        },
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "0",
+          "position": "Positions.EAST"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♠",
+      "winner_team": "team2",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_4": {
+      "points": 12,
+      "team_scores_before": {
+        "team1": 0,
+        "team2": 16
+      },
+      "team_scores_after": {
+        "team1": 0,
+        "team2": 28
+      },
+      "cards_played": [
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "25",
+          "position": "Positions.EAST"
+        },
+        {
+          "player_id": "86673c07",
+          "player_name": "N",
+          "card": "22",
+          "position": "Positions.NORTH"
+        },
+        {
+          "player_id": "72161ca9",
+          "player_name": "W",
+          "card": "28",
+          "position": "Positions.WEST"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♥",
+      "winner_team": "team2",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_5": {
+      "points": 5,
+      "team_scores_before": {
+        "team1": 0,
+        "team2": 28
+      },
+      "team_scores_after": {
+        "team1": 5,
+        "team2": 28
+      },
+      "cards_played": [
+        {
+          "player_id": "72161ca9",
+          "player_name": "W",
+          "card": "13",
+          "position": "Positions.WEST"
+        },
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "1",
+          "position": "Positions.SOUTH"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♦",
+      "winner_team": "team1",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_6": {
+      "points": 14,
+      "team_scores_before": {
+        "team1": 5,
+        "team2": 28
+      },
+      "team_scores_after": {
+        "team1": 5,
+        "team2": 42
+      },
+      "cards_played": [
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "38",
+          "position": "Positions.SOUTH"
+        },
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "4",
+          "position": "Positions.EAST"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♠",
+      "winner_team": "team2",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_7": {
+      "points": 21,
+      "team_scores_before": {
+        "team1": 5,
+        "team2": 42
+      },
+      "team_scores_after": {
+        "team1": 26,
+        "team2": 42
+      },
+      "cards_played": [
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "17",
+          "position": "Positions.EAST"
+        },
+        {
+          "player_id": "86673c07",
+          "player_name": "N",
+          "card": "19",
+          "position": "Positions.NORTH"
+        },
+        {
+          "player_id": "72161ca9",
+          "player_name": "W",
+          "card": "5",
+          "position": "Positions.WEST"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♦",
+      "winner_team": "team1",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_8": {
+      "points": 14,
+      "team_scores_before": {
+        "team1": 26,
+        "team2": 42
+      },
+      "team_scores_after": {
+        "team1": 40,
+        "team2": 42
+      },
+      "cards_played": [
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "9",
+          "position": "Positions.SOUTH"
+        },
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "20",
+          "position": "Positions.EAST"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♣",
+      "winner_team": "team1",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_9": {
+      "points": 13,
+      "team_scores_before": {
+        "team1": 40,
+        "team2": 42
+      },
+      "team_scores_after": {
+        "team1": 53,
+        "team2": 42
+      },
+      "cards_played": [
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "8",
+          "position": "Positions.SOUTH"
+        },
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "23",
+          "position": "Positions.EAST"
+        },
+        {
+          "player_id": "86673c07",
+          "player_name": "N",
+          "card": "26",
+          "position": "Positions.NORTH"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♣",
+      "winner_team": "team1",
+      "winner_player": null,
+      "winner_id": null
+    },
+    "round_10": {
+      "points": 25,
+      "team_scores_before": {
+        "team1": 53,
+        "team2": 42
+      },
+      "team_scores_after": {
+        "team1": 78,
+        "team2": 42
+      },
+      "cards_played": [
+        {
+          "player_id": "1bd6cafb",
+          "player_name": "S",
+          "card": "2",
+          "position": "Positions.SOUTH"
+        },
+        {
+          "player_id": "1d883d93",
+          "player_name": "E",
+          "card": "18",
+          "position": "Positions.EAST"
+        },
+        {
+          "player_id": "86673c07",
+          "player_name": "N",
+          "card": "27",
+          "position": "Positions.NORTH"
+        }
+      ],
+      "bot_perception": {},
+      "reasoning_protocol": {},
+      "round_suit": "♣",
+      "winner_team": "team1",
+      "winner_player": null,
+      "winner_id": null
+    }
+  }
+}
