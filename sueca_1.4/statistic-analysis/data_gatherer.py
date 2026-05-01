@@ -377,6 +377,12 @@ class DataGatherer:
         }
 
         if isinstance(round_number, int) and round_number > 0:
+            if (
+                (isinstance(self._last_seen_round, int) and round_number != self._last_seen_round)
+                or len(round_plays) < self._last_round_plays_len
+            ):
+                self._last_round_plays_len = 0
+
             new_plays = round_plays[self._last_round_plays_len:]
             trick_offset = len(round_plays) - len(new_plays)
 
@@ -899,7 +905,7 @@ class DataGatherer:
             create_resp = gatherer.create_bot_match(
                 bots=deepcopy(bots_payload),
                 join_timeout_sec=join_timeout_sec,
-                fast_mode=True,
+                fast_mode=False,
             )
             game_id = create_resp.get("game_id") or f"match_{i}"
             gatherer.collect_until_finished(timeout_sec=timeout_sec)
@@ -1424,7 +1430,7 @@ def main():
                         "save_to_redis": args.save_to_redis,
                         "redis_key_prefix": args.redis_key_prefix,
                         "bots": combo.get("bots"),
-                        "fast_mode": True,
+                        "fast_mode": False,
                     },
                 )
                 all_manifests.append(
@@ -1484,7 +1490,7 @@ def main():
                     "save_to_redis": args.save_to_redis,
                     "redis_key_prefix": args.redis_key_prefix,
                     "bots": selected_bots,
-                    "fast_mode": True,
+                    "fast_mode": False,
                 },
             )
             generation_reports.append(

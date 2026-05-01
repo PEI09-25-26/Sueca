@@ -3,7 +3,7 @@
   "generation": "Gen1",
   "split_by_generation": false,
   "combination_label": "weak_weak_average_random",
-  "games": 10,
+  "games": 2,
   "base_url": "http://127.0.0.1:5000",
   "timeout_sec": 0,
   "poll_interval": 0.03,
@@ -34,5 +34,5 @@
       "difficulty": "random"
     }
   ],
-  "fast_mode": true
+  "fast_mode": false
 }
