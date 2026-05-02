@@ -41,14 +41,17 @@ class Deck:
 
     def cut_deck(self, index):
         """Cuts the deck at a given index, prone to small intentional deviations. """
+        index = max(1, min(self.DECKSIZE - 1, int(index)))
         if 35 > index > 5:
             random_variable = random.randint(-5, 5)
         elif 40 >= index >= 35:
             random_variable = random.randint(-5, 40 - index)
         elif 0 < index <= 5:
             random_variable = random.randint(1 - index, 5)
+        else:
+            random_variable = 0
         index += random_variable
-        if 0 < index <= 40:
-            top = self.cards[:index]
-            bottom = self.cards[index:]
-            self.cards = bottom + top
+        index = max(1, min(self.DECKSIZE - 1, index))
+        top = self.cards[:index]
+        bottom = self.cards[index:]
+        self.cards = bottom + top

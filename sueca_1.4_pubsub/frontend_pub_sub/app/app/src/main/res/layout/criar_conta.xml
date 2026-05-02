@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/background_gradient">
+
+    <ImageView
+        android:id="@+id/imgLogo"
+        android:layout_width="116dp"
+        android:layout_height="118dp"
+        android:layout_marginBottom="16dp"
+        android:contentDescription="Logo"
+        android:src="@drawable/sueca" />
+
+    <LinearLayout
+        android:id="@+id/createRoomContainer"
+        android:layout_width="match_parent"
+        android:layout_height="324dp"
+        android:background="@drawable/section_outline"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+
+        <TextView
+            android:id="@+id/CriarConta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:gravity="center"
+            android:text="Criar Conta:"
+            android:textColor="@android:color/white"
+            android:textSize="23sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/inputName2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/edittext_bg"
+            android:hint="Nome"
+            android:padding="12dp"
+            android:textColor="@android:color/white" />
+
+        <EditText
+            android:id="@+id/editTextTextPassword"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/edittext_bg"
+            android:ems="10"
+            android:hint="Password"
+            android:inputType="textPassword"
+            android:padding="12dp"
+            android:textColor="@android:color/white" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnVision"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="Criar Conta"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="20sp"
+            app:backgroundTint="@color/teal_700"
+            app:cornerRadius="12dp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/criarConta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+
+        android:text="Entrar como convidado"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginTop="10dp"
+        />
+
+</LinearLayout>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:background="@drawable/background_gradient"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/txtAjustarTempo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Ajustar tempo antes de limpar as cartas"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        android:layout_marginTop="8dp"/>
+
+    <TextView
+        android:id="@+id/txtTempo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="----- ms"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        android:layout_gravity="center"/>
+
+    <com.google.android.material.chip.Chip
+        android:id="@+id/chip"
+        android:layout_width="371dp"
+        android:layout_height="wrap_content" />
+
+
+
+</LinearLayout>

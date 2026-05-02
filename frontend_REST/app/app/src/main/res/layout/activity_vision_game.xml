@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:background="@drawable/background_gradient"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="12dp">
+
+    <ImageView
+        android:id="@+id/backButton"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:src="@drawable/ic_back_arrow"/>
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"/>
+
+    <Button
+        android:id="@+id/btnStartGame"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="▶ Começar Jogo (após mostrar trunfo)"
+        android:textAllCaps="false"
+        android:background="@color/teal_700"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="8dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mão de cartas"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="12dp"/>
+
+    <GridLayout
+        android:id="@+id/playerHand"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:rowCount="1"
+        android:columnCount="5"
+        android:layout_marginTop="12dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Norte"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="16dp"
+        android:layout_gravity="center_horizontal"/>
+
+    <RelativeLayout
+        android:id="@+id/gameTable"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:id="@+id/scoreText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Pontuação:"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/scoreNorth"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/scoreText"
+            android:text="Norte + sul:"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/scoreNorthText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/scoreText"
+            android:layout_toRightOf="@+id/scoreNorth"
+            android:text="  0"
+            android:textColor="@color/white"
+            />
+        <TextView
+            android:id="@+id/scoreEast"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/scoreNorth"
+            android:text="Este + Oeste:"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/scoreEastText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/scoreNorth"
+            android:layout_toRightOf="@+id/scoreEast"
+            android:text="  0"
+            android:textColor="@color/white"
+            />
+
+        <!-- Card NORTH -->
+        <ImageView
+            android:id="@+id/card_north"
+            android:layout_width="60dp"
+            android:layout_height="90dp"
+            android:layout_alignParentTop="true"
+            android:layout_centerHorizontal="true"
+            android:src="@drawable/card_back"
+            android:contentDescription="Carta Norte"/>
+
+        <!-- Trunfo text -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/trump_card"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="8dp"
+            android:text="Trunfo"
+            android:textColor="@android:color/white" />
+
+        <!-- Card WEST -->
+        <ImageView
+            android:id="@+id/card_west"
+            android:layout_width="60dp"
+            android:layout_height="90dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:src="@drawable/card_back"
+            android:contentDescription="Carta Oeste"/>
+
+        <!-- West text -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/card_west"
+            android:layout_marginBottom="8dp"
+            android:text="Oeste"
+            android:textColor="@android:color/white" />
+
+        <!-- Card EAST -->
+        <ImageView
+            android:id="@+id/card_east"
+            android:layout_width="60dp"
+            android:layout_height="90dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:src="@drawable/card_back"
+            android:contentDescription="Carta Este"/>
+
+        <!-- East text -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/card_east"
+            android:layout_alignParentEnd="true"
+            android:layout_marginBottom="8dp"
+            android:text="Este"
+            android:textColor="@android:color/white" />
+
+        <!-- Card SOUTH -->
+        <ImageView
+            android:id="@+id/card_south"
+            android:layout_width="60dp"
+            android:layout_height="90dp"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:src="@drawable/card_back"
+            android:contentDescription="Carta Sul"/>
+
+        <!-- Sul text -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/card_south"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="8dp"
+            android:text="Sul"
+            android:textColor="@android:color/white" />
+
+        <!-- Trump Card CENTER -->
+        <ImageView
+            android:id="@+id/trump_card"
+            android:layout_width="60dp"
+            android:layout_height="90dp"
+
+            android:layout_centerInParent="true"
+            android:src="@drawable/card_back"
+            android:contentDescription="Trunfo"/>
+    </RelativeLayout>
+
+</LinearLayout>
