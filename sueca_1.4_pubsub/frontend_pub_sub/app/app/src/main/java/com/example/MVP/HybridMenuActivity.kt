@@ -8,12 +8,11 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.example.MVP.network.GatewayClient
+import kotlinx.coroutines.launch
 
 class HybridMenuActivity : AppCompatActivity() {
-
-    companion object {
-        private val mockRoomRegistry = mutableSetOf<String>()
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,10 +42,34 @@ class HybridMenuActivity : AppCompatActivity() {
 
         btnCreateRoom.setOnClickListener {
             val name = inputName.text.toString().ifBlank { randomName() }
-            val roomId = generateMockRoomId()
-            mockRoomRegistry.add(roomId)
-            Toast.makeText(this, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
-            openHybridRoom(roomId = roomId, playerName = name, isHost = true)
+            lifecycleScope.launch {
+                try {
+                    val response = GatewayClient.createRoom()
+                    if (!response.success) {
+                        Toast.makeText(
+                            this@HybridMenuActivity,
+                            response.message ?: "Falha ao criar sala hibrida.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+
+                    val roomId = response.gameId ?: response.roomId
+                    if (roomId.isNullOrBlank()) {
+                        Toast.makeText(this@HybridMenuActivity, "Resposta invalida do servidor.", Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+
+                    Toast.makeText(this@HybridMenuActivity, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
+                    openHybridRoom(roomId = roomId, playerName = name, isHost = true)
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@HybridMenuActivity,
+                        "Nao foi possivel criar sala. Verifica o servidor.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
         }
 
         btnJoinRoom.setOnClickListener {
@@ -58,13 +81,19 @@ class HybridMenuActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (!mockRoomRegistry.contains(roomId)) {
-                Toast.makeText(this, "Sala mock nao encontrada.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            lifecycleScope.launch {
+                try {
+                    val status = GatewayClient.getStatus(roomId)
+                    if (status == null) {
+                        Toast.makeText(this@HybridMenuActivity, "Sala nao encontrada.", Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    Toast.makeText(this@HybridMenuActivity, "Entraste na sala: $roomId", Toast.LENGTH_SHORT).show()
+                    openHybridRoom(roomId = roomId, playerName = name, isHost = false)
+                } catch (e: Exception) {
+                    Toast.makeText(this@HybridMenuActivity, "Sala nao encontrada.", Toast.LENGTH_SHORT).show()
+                }
             }
-
-            Toast.makeText(this, "Entraste na sala mock: $roomId", Toast.LENGTH_SHORT).show()
-            openHybridRoom(roomId = roomId, playerName = name, isHost = false)
         }
     }
 
@@ -80,8 +109,4 @@ class HybridMenuActivity : AppCompatActivity() {
         return "Player${(1000..9999).random()}"
     }
 
-    private fun generateMockRoomId(): String {
-        val pool = ('A'..'Z') + ('0'..'9')
-        return "HB" + (1..4).map { pool.random() }.joinToString("")
-    }
 }

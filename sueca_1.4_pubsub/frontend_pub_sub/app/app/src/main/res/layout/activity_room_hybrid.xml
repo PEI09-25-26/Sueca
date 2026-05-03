@@ -33,14 +33,23 @@
         android:textStyle="bold" />
 
     <TextView
-        android:id="@+id/txtHybridMockInfo"
+        android:id="@+id/txtHybridRoleInfo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:text="Modo mock: sem backend"
+        android:text="Define o teu papel na partida"
         android:textColor="@android:color/white"
         android:textSize="12sp"
         android:alpha="0.85" />
+
+    <Switch
+        android:id="@+id/switchVirtualRole"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Entrar como jogador virtual"
+        android:textColor="@android:color/white"
+        android:checked="true" />
 
     <RelativeLayout
         android:id="@+id/seatChooserLayout"

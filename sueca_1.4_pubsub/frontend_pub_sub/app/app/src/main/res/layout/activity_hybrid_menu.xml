@@ -46,7 +46,7 @@
             android:id="@+id/btnCreateRoom"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:text="Criar sala mock"
+            android:text="Criar sala"
             android:textAllCaps="false"
             app:backgroundTint="@color/orange"
             android:textColor="@android:color/white"

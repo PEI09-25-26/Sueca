@@ -73,6 +73,46 @@ interface ApiService {
     @POST("game/new_round/{gameId}")
     suspend fun startNewRound(@Path("gameId") gameId: String): StartGameResponse
 
+    // =========== Hybrid Endpoints ============
+
+    @POST("/api/hybrid/session/reset")
+    suspend fun resetHybridSession(@Body request: HybridSessionResetRequest): HybridSessionStatusResponse
+
+    @GET("/api/hybrid/session/status")
+    suspend fun getHybridSessionStatus(
+        @Query("game_id") gameId: String,
+        @Query("target_count") targetCount: Int = 10
+    ): HybridSessionStatusResponse
+
+    @POST("/api/hybrid/recognize_card")
+    suspend fun recognizeHybridCard(@Body request: HybridRecognizeRequest): HybridRecognizeResponse
+
+    @POST("/api/hybrid/register_player")
+    suspend fun hybridRegisterPlayer(@Body request: HybridRegisterPlayerRequest): HybridStateResponse
+
+    @GET("/api/hybrid/state")
+    suspend fun hybridState(@Query("game_id") gameId: String): HybridStateResponse
+
+    @POST("/api/hybrid/deal/reset")
+    suspend fun hybridDealReset(@Body request: HybridDealResetRequest): HybridStateResponse
+
+    @POST("/api/hybrid/deal/recognize")
+    suspend fun hybridDealRecognize(@Body request: HybridDealRecognizeRequest): HybridDealRecognizeResponse
+
+    @POST("/api/hybrid/virtual/select_card")
+    suspend fun hybridSelectCard(@Body request: HybridSelectCardRequest): HybridStateResponse
+
+    @GET("/api/hybrid/pending_play")
+    suspend fun hybridPendingPlay(@Query("game_id") gameId: String): HybridPendingResponse
+
+    @POST("/api/hybrid/play/confirm_capture")
+    suspend fun hybridConfirmCapture(@Body request: HybridConfirmCaptureRequest): HybridConfirmCaptureResponse
+
+    @POST("/api/hybrid/trump/confirm_capture")
+    suspend fun hybridConfirmTrumpCapture(
+        @Body request: HybridConfirmTrumpCaptureRequest
+    ): HybridConfirmTrumpCaptureResponse
+
     // =========== Gateway endpoints (Sueca 1.4) ============
 
     @POST("/game/room_mode/{gameId}")
