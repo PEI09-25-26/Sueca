@@ -158,3 +158,4 @@ class CardAnalyzer:
                     counter += 1
 
         return counter
+    

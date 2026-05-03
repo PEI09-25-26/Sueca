@@ -156,6 +156,8 @@ data class GameStatusResponse(
     @SerializedName("current_round") val currentRound: Int,
     @SerializedName("round_suit") val roundSuit: String?,
     @SerializedName("game_started") val gameStarted: Boolean,
+    @SerializedName("creator_id") val creatorId: String? = null,
+    @SerializedName("is_public") val isPublic: Boolean? = null,
     val scores: Map<String, Int>?,
     @SerializedName("available_slots") val availableSlots: List<LobbySlot>? = emptyList(),
     @SerializedName("match_points") val matchPoints: MatchPoints? = null
@@ -226,6 +228,12 @@ data class SelectTrumpRequest(
     @SerializedName("game_id") val gameId: String? = null
 )
 
+data class RoomVisibilityRequest(
+    @SerializedName("player_id") val playerId: String,
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("is_public") val isPublic: Boolean
+)
+
 // ============ Responses ============
 data class GenericResponse(
     val success: Boolean,
@@ -265,6 +273,23 @@ data class CreateRoomResponse(
     @SerializedName("room_id") val roomId: String? = null,
     @SerializedName("player_id") val playerId: String? = null,
     @SerializedName("game_id") val gameId: String? = null,
+    val message: String? = null
+)
+
+data class RoomSummary(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("player_count") val playerCount: Int,
+    @SerializedName("max_players") val maxPlayers: Int,
+    val players: List<String> = emptyList(),
+    val phase: String? = null,
+    @SerializedName("is_public") val isPublic: Boolean? = null,
+    @SerializedName("game_started") val gameStarted: Boolean = false
+)
+
+data class RoomsResponse(
+    val success: Boolean,
+    val rooms: List<RoomSummary>? = null,
+    @SerializedName("total_rooms") val totalRooms: Int = 0,
     val message: String? = null
 )
 

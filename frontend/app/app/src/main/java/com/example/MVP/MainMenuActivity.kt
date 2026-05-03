@@ -18,6 +18,8 @@ class MainMenuActivity : AppCompatActivity() {
 
     private lateinit var friendRequestsBadge: TextView
     private lateinit var profileIcon: ImageView
+    private lateinit var btnPlay: Button
+    private lateinit var playOptionsContainer: View
     private var lastBadgeRefreshAt: Long = 0L
     private var lastProfileRefreshAt: Long = 0L
 
@@ -31,75 +33,30 @@ class MainMenuActivity : AppCompatActivity() {
         AuthManager.initialize(applicationContext)
         setContentView(R.layout.activity_main_menu_mvp)
 
-        val btnJoin = findViewById<Button>(R.id.btnJoin)
-        val btnVision = findViewById<Button>(R.id.btnVision)
+        btnPlay = findViewById(R.id.btnPlay)
+        playOptionsContainer = findViewById(R.id.playOptionsContainer)
+
+        val btnVirtual = findViewById<Button>(R.id.btnVirtual)
+        val btnPresential = findViewById<Button>(R.id.btnPresential)
         val btnHybrid = findViewById<Button>(R.id.btnHybrid)
         val friendsIcon = findViewById<ImageView>(R.id.image_friends)
         profileIcon = findViewById(R.id.image_profile2)
         friendRequestsBadge = findViewById(R.id.friend_requests_badge)
 
-        btnJoin.setOnClickListener {
-            showModeDialog()
+        btnPlay.setOnClickListener {
+            togglePlayOptions(show = true)
         }
 
-        btnVision.setOnClickListener {
-            val name = AuthManager.getPlayerDisplayName() ?: randomName()
-            val roomId: String? = null
+        btnVirtual.setOnClickListener {
+            openOnlineMenu()
+        }
 
-            lifecycleScope.launch {
-                try {
-                    // Calling the middleware
-                    val response = RetrofitClient.api.startGame(
-                        StartGameRequest(playerName = name, roomId = roomId)
-                    )
-
-                    if (response.success) {
-                        Toast.makeText(
-                            this@MainMenuActivity,
-                            "Vision AI Started!",
-                            Toast.LENGTH_SHORT
-                        ).show()
-
-                        // Open VisionActivity
-                        val intent = Intent(this@MainMenuActivity, VisionActivity::class.java)
-                        intent.putExtra("playerName", name)
-                        intent.putExtra("roomId", response.gameId)
-                        startActivity(intent)
-                    } else {
-                        Toast.makeText(
-                            this@MainMenuActivity,
-                            "Failed to start: ${response.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                } catch (e: retrofit2.HttpException) {
-                    e.printStackTrace()
-                    Toast.makeText(
-                        this@MainMenuActivity,
-                        "HTTP Error: ${e.code()} - ${e.message()}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } catch (e: java.net.ConnectException) {
-                    e.printStackTrace()
-                    Toast.makeText(
-                        this@MainMenuActivity,
-                        "Cannot connect to server. Make sure middleware is running.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    Toast.makeText(
-                        this@MainMenuActivity,
-                        "Error: ${e.javaClass.simpleName} - ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
+        btnPresential.setOnClickListener {
+            launchPresentialVisionGame()
         }
 
         btnHybrid.setOnClickListener {
-            val intent = Intent(this, HybridMenuActivity::class.java)
-            startActivity(intent)
+            openHybridMenu()
         }
 
         friendsIcon.setOnClickListener {
@@ -120,6 +77,14 @@ class MainMenuActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
+    }
+
+    override fun onBackPressed() {
+        if (playOptionsContainer.visibility == View.VISIBLE) {
+            togglePlayOptions(show = false)
+            return
+        }
+        super.onBackPressed()
     }
 
     override fun onResume() {
@@ -207,45 +172,66 @@ class MainMenuActivity : AppCompatActivity() {
         }
     }
 
-    private fun goToGame(playerName: String) {
-        val intent = Intent(this, GameActivity::class.java)
-        intent.putExtra("playerName", playerName)
-        startActivity(intent)
+    private fun togglePlayOptions(show: Boolean) {
+        btnPlay.visibility = if (show) View.GONE else View.VISIBLE
+        playOptionsContainer.visibility = if (show) View.VISIBLE else View.GONE
     }
 
-    private fun goToRoom(roomId: String, playerId: String) {
-        val intent = Intent(this, RoomActivity::class.java)
-        intent.putExtra("roomId", roomId)
-        intent.putExtra("playerId", playerId)
-        startActivity(intent)
-    }
+    private fun launchPresentialVisionGame() {
+        val name = AuthManager.getPlayerDisplayName() ?: randomName()
+        val roomId: String? = null
 
-    private fun handleNetworkError(message: String?) {
-        Toast.makeText(this, "Server Offline. Entering Mock mode...", Toast.LENGTH_LONG).show()
-        val intent = Intent(this, RoomActivity::class.java)
-        intent.putExtra("roomId", "SALA_LOCAL")
-        intent.putExtra("playerId", "ID_LOCAL")
-        startActivity(intent)
-    }
+        lifecycleScope.launch {
+            try {
+                val response = RetrofitClient.api.startGame(
+                    StartGameRequest(playerName = name, roomId = roomId)
+                )
 
-    private fun showModeDialog() {
-        // Use explicit dialog buttons so mode choices are always visible.
-        AlertDialog.Builder(this)
-            .setTitle("Escolher modo")
-            .setItems(arrayOf("Local", "Online")) { _, which ->
-                when (which) {
-                    0 -> joinLocalGame()
-                    1 -> openOnlineMenu()
+                if (response.success) {
+                    Toast.makeText(
+                        this@MainMenuActivity,
+                        "Vision AI Started!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    val intent = Intent(this@MainMenuActivity, VisionActivity::class.java)
+                    intent.putExtra("playerName", name)
+                    intent.putExtra("roomId", response.gameId)
+                    startActivity(intent)
+                } else {
+                    Toast.makeText(
+                        this@MainMenuActivity,
+                        "Failed to start: ${response.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
+            } catch (e: retrofit2.HttpException) {
+                e.printStackTrace()
+                Toast.makeText(
+                    this@MainMenuActivity,
+                    "HTTP Error: ${e.code()} - ${e.message()}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: java.net.ConnectException) {
+                e.printStackTrace()
+                Toast.makeText(
+                    this@MainMenuActivity,
+                    "Cannot connect to server. Make sure middleware is running.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(
+                    this@MainMenuActivity,
+                    "Error: ${e.javaClass.simpleName} - ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
             }
-            .show()
+        }
     }
 
-    private fun joinLocalGame() {
-        // Local mode should not depend on backend endpoints.
-        val intent = Intent(this, RoomActivity::class.java)
-        intent.putExtra("roomId", "SALA_LOCAL")
-        intent.putExtra("playerId", "ID_LOCAL")
+    private fun openHybridMenu() {
+        val intent = Intent(this, HybridMenuActivity::class.java)
         startActivity(intent)
     }
 

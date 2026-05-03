@@ -1,7 +1,7 @@
 Flask==3.0.0
 Flask-CORS==4.0.0
 Flask-Limiter==3.5.0
-PyJWT==2.8.1
+PyJWT==2.8.0
 bcrypt==4.1.1
 requests==2.31.0
 fastapi==0.135.1
@@ -10,3 +10,4 @@ numpy==2.2.4
 opencv-python-headless==4.11.0.86
 firebase-admin==5.0.0
 sendgrid==6.11.0
+python-dotenv==1.0.1

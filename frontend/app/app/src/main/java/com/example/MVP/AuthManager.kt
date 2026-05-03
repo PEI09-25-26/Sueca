@@ -16,6 +16,7 @@ object AuthManager {
     private const val KEY_IS_ANONYMOUS = "is_anonymous"
     private const val KEY_ANONYMOUS_NAME = "anonymous_name"
     private const val KEY_USER_DATA = "user_data"
+    private val GUEST_NAME_REGEX = Regex("^Guest\\s+\\d+$")
 
     private lateinit var prefs: SharedPreferences
 
@@ -56,7 +57,24 @@ object AuthManager {
     }
 
     fun getPlayerDisplayName(): String? {
-        return getUsername() ?: getAnonymousName()
+        if (isLoggedIn()) {
+            return getUsername()
+        }
+
+        val anonymousName = getAnonymousName()?.trim()
+        if (!anonymousName.isNullOrBlank() && GUEST_NAME_REGEX.matches(anonymousName)) {
+            return anonymousName
+        }
+
+        val guestName = generateGuestName()
+        if (isInitialized()) {
+            prefs.edit().apply {
+                putBoolean(KEY_IS_ANONYMOUS, true)
+                putString(KEY_ANONYMOUS_NAME, guestName)
+                apply()
+            }
+        }
+        return guestName
     }
 
     fun isLoggedIn(): Boolean = getToken() != null && getUid() != null
@@ -68,7 +86,12 @@ object AuthManager {
 
     fun startAnonymousSession(name: String? = null) {
         if (!isInitialized()) return
-        val guestName = (name?.trim()).takeUnless { it.isNullOrBlank() } ?: "Guest${(1000..9999).random()}"
+        val anonymousName = name?.trim()
+        val guestName = if (!anonymousName.isNullOrBlank() && GUEST_NAME_REGEX.matches(anonymousName)) {
+            anonymousName
+        } else {
+            generateGuestName()
+        }
 
         prefs.edit().apply {
             remove(KEY_TOKEN)
@@ -79,6 +102,10 @@ object AuthManager {
             putString(KEY_ANONYMOUS_NAME, guestName)
             apply()
         }
+    }
+
+    private fun generateGuestName(): String {
+        return "Guest ${(1000..9999).random()}"
     }
 
     private fun extractApiErrorMessage(e: Exception): String {

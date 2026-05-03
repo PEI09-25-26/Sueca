@@ -1,6 +1,7 @@
 package com.example.MVP.network
 
 import com.example.MVP.models.*
+import retrofit2.Response
 import retrofit2.http.*
 
 interface ApiService {
@@ -93,6 +94,9 @@ interface ApiService {
     @POST("/api/create_room")
     suspend fun createRoomV2(): CreateRoomResponse
 
+    @GET("/api/rooms")
+    suspend fun getRooms(): RoomsResponse
+
     @GET("/api/hand/{playerId}")
     suspend fun getHand(
         @Path("playerId") playerId: String,
@@ -110,6 +114,9 @@ interface ApiService {
 
     @POST("/api/reset")
     suspend fun resetGame(): GenericResponse
+
+    @POST("/api/room_visibility")
+    suspend fun setRoomVisibility(@Body request: RoomVisibilityRequest): Response<GenericResponse>
 
     // =========== /api/room Endpoints ============
 
