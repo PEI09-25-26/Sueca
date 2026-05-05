@@ -23,6 +23,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import org.eclipse.paho.client.mqttv3.IMqttActionListener
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
+import org.eclipse.paho.client.mqttv3.IMqttToken
+import org.eclipse.paho.client.mqttv3.MqttAsyncClient
+import org.eclipse.paho.client.mqttv3.MqttCallback
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions
+import org.eclipse.paho.client.mqttv3.MqttMessage
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import java.util.UUID
+
 class OnlineMenuActivity : AppCompatActivity() {
 
     private lateinit var txtDisplayedName: TextView
@@ -35,11 +45,11 @@ class OnlineMenuActivity : AppCompatActivity() {
     private var roomsPollingJob: Job? = null
     private var lastBadgeRefreshAt: Long = 0L
     private var lastProfileRefreshAt: Long = 0L
+    private var roomsMqttClient: MqttAsyncClient? = null
 
     companion object {
         private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
         private const val PROFILE_REFRESH_INTERVAL_MS = 10_000L
-        private const val ROOM_LIST_REFRESH_INTERVAL_MS = 2_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -146,12 +156,40 @@ class OnlineMenuActivity : AppCompatActivity() {
     }
 
     private fun startRoomsPolling() {
-        roomsPollingJob?.cancel()
-        roomsPollingJob = lifecycleScope.launch {
-            while (true) {
-                refreshRoomsOnce()
-                delay(ROOM_LIST_REFRESH_INTERVAL_MS)
+        lifecycleScope.launch { refreshRoomsOnce() }
+        
+        if (roomsMqttClient != null) return
+        
+        val serverUri = "wss://${RetrofitClient.MQTT_BROKER_HOST}:${RetrofitClient.MQTT_BROKER_PORT}"
+        val clientId = "android-rooms-${UUID.randomUUID()}"
+        try {
+            roomsMqttClient = MqttAsyncClient(serverUri, clientId, MemoryPersistence())
+            roomsMqttClient?.setCallback(object : MqttCallback {
+                override fun connectionLost(cause: Throwable?) {}
+                
+                override fun messageArrived(topic: String?, message: MqttMessage?) {
+                    lifecycleScope.launch { refreshRoomsOnce() }
+                }
+                
+                override fun deliveryComplete(token: IMqttDeliveryToken?) {}
+            })
+            
+            val options = MqttConnectOptions().apply {
+                isAutomaticReconnect = true
+                isCleanSession = false
+                connectionTimeout = 8
+                keepAliveInterval = 30
             }
+            
+            roomsMqttClient?.connect(options, null, object : IMqttActionListener {
+                override fun onSuccess(asyncActionToken: IMqttToken?) {
+                    roomsMqttClient?.subscribe("sueca/rooms/events", 1)
+                }
+                
+                override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {}
+            })
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -374,7 +412,7 @@ class OnlineMenuActivity : AppCompatActivity() {
     }
 
     private fun showCreateAccountPrompt(message: String) {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("Criar conta")
             .setMessage(message)
             .setPositiveButton("Registar") { _, _ ->

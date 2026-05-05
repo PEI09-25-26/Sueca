@@ -175,7 +175,7 @@ class ProfileActivity : AppCompatActivity() {
     }
 
     private fun showCreateAccountPrompt() {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("Criar conta")
             .setMessage("Para aceder ao perfil precisas de criar ou iniciar conta.")
             .setPositiveButton("Registar") { _, _ ->

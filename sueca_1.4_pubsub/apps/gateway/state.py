@@ -29,6 +29,9 @@ CV_SERVICE_WS_URL = SERVICES.cv_service_ws_url
 GAME_SERVICE_URL = SERVICES.physical_engine_url
 VIRTUAL_ENGINE_URL = SERVICES.virtual_engine_url
 PHYSICAL_ENGINE_URL = SERVICES.physical_engine_url
+AUTH_SERVICE_URL = SERVICES.auth_service_url
+FRIENDS_SERVICE_URL = SERVICES.friends_service_url
+AGENTS_SERVICE_URL = SERVICES.agents_service_url
 FORWARD_TO_FRONTEND = SERVICES.frontend_url.rstrip("/") != SERVICES.gateway_url.rstrip("/")
 
 active_connections: dict[str, Any] = {}

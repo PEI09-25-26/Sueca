@@ -4,8 +4,8 @@ from pydantic import BaseModel
 import threading
 import time
 
-from card_mapper import CardMapper
-from referee import Referee
+from ..card_mapper import CardMapper
+from ..referee import Referee
 
 ref = Referee()
 state_sync_lock = threading.Lock()

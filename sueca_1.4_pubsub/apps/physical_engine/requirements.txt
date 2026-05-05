@@ -1,0 +1,4 @@
+fastapi[all]
+uvicorn[standard]
+requests
+opencv-python-headless

@@ -172,6 +172,16 @@ object GatewayClient {
         )
     }
 
+    suspend fun startGame(gameId: String): GenericResponse {
+        val payload = mapOf("game_id" to gameId)
+        val envelope = command("start", gameId = gameId, payload = payload)
+        val response = envelope.response
+        return GenericResponse(
+            success = response.bool("success") ?: false,
+            message = response.string("message") ?: fallbackMessage(envelope)
+        )
+    }
+
     suspend fun getHand(playerId: String, gameId: String?): HandResponse {
         val envelope = RetrofitClient.api.routeQuery(
             queryPath = "hand/$playerId",

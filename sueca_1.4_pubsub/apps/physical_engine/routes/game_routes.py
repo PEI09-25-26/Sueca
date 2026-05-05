@@ -4,8 +4,8 @@ try:
     from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
     from ..event_publisher import publish_physical_event
 except ImportError:
-    from core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
-    from event_publisher import publish_physical_event
+    from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
+    from ..event_publisher import publish_physical_event
 
 
 router = APIRouter()

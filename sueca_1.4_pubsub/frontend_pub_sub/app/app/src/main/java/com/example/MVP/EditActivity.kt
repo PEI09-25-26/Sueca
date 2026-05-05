@@ -1,10 +1,12 @@
 package com.example.MVP
 
 import android.os.Bundle
+import android.content.Intent
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -20,6 +22,7 @@ class EditActivity : AppCompatActivity() {
     private lateinit var nameEditText: EditText
     private lateinit var descriptionEditText: EditText
     private lateinit var saveButton: MaterialButton
+    private lateinit var deleteAccountButton: MaterialButton
 
     private var selectedBanner: String = ""
     private var selectedPhoto: String = ""
@@ -35,6 +38,7 @@ class EditActivity : AppCompatActivity() {
         nameEditText = findViewById(R.id.edit_name_profile)
         descriptionEditText = findViewById(R.id.edit_description_profile)
         saveButton = findViewById(R.id.edit_save_profile)
+        deleteAccountButton = findViewById(R.id.edit_delete_account)
 
         loadCurrentUser()
 
@@ -53,6 +57,75 @@ class EditActivity : AppCompatActivity() {
         saveButton.setOnClickListener {
             saveProfileChanges()
         }
+
+        deleteAccountButton.setOnClickListener {
+            promptDeleteAccountFlow()
+        }
+    }
+
+    private fun promptDeleteAccountFlow() {
+        val uid = AuthManager.getUid()
+        if (uid.isNullOrBlank()) {
+            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+            .setTitle("Apagar Conta")
+            .setMessage("Queres apagar a conta? Vamos enviar um codigo de verificacao por email.")
+            .setPositiveButton("Continuar") { _, _ ->
+                lifecycleScope.launch {
+                    AuthManager.requestAccountDelete(uid)
+                        .onSuccess {
+                            promptDeleteCode(uid)
+                        }
+                        .onFailure { error ->
+                            Toast.makeText(
+                                this@EditActivity,
+                                "Erro ao pedir verificacao: ${error.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun promptDeleteCode(uid: String) {
+        val input = EditText(this)
+        input.hint = "Codigo de 6 digitos"
+
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+            .setTitle("Confirmar Apagar Conta")
+            .setMessage("Introduz o codigo enviado para o teu email.")
+            .setView(input)
+            .setPositiveButton("Confirmar") { _, _ ->
+                val code = input.text?.toString()?.trim().orEmpty()
+                if (code.isBlank()) {
+                    Toast.makeText(this, "Codigo obrigatorio", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                lifecycleScope.launch {
+                    AuthManager.confirmAccountDelete(uid, code)
+                        .onSuccess {
+                            Toast.makeText(this@EditActivity, "Conta apagada", Toast.LENGTH_SHORT).show()
+                            val intent = Intent(this@EditActivity, LoginActivity::class.java)
+                            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+                            startActivity(intent)
+                            finish()
+                        }
+                        .onFailure { error ->
+                            Toast.makeText(
+                                this@EditActivity,
+                                "Erro ao apagar conta: ${error.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun loadCurrentUser() {

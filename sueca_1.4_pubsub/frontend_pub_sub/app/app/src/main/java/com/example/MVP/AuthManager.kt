@@ -236,6 +236,35 @@ object AuthManager {
 		}
 	}
 
+	suspend fun requestAccountDelete(uid: String): Result<Unit> {
+		return try {
+			val token = getAuthHeader() ?: return Result.failure(Exception("No auth token"))
+			val response = RetrofitClient.api.requestDeleteAccount(DeleteAccountRequest(uid), token)
+			if (response.success) {
+				Result.success(Unit)
+			} else {
+				Result.failure(Exception(response.message ?: "Failed to request delete"))
+			}
+		} catch (e: Exception) {
+			Result.failure(Exception(extractApiErrorMessage(e)))
+		}
+	}
+
+	suspend fun confirmAccountDelete(uid: String, code: String): Result<Unit> {
+		return try {
+			val token = getAuthHeader() ?: return Result.failure(Exception("No auth token"))
+			val response = RetrofitClient.api.confirmDeleteAccount(ConfirmDeleteAccountRequest(uid, code), token)
+			if (response.success) {
+				clearUserData()
+				Result.success(Unit)
+			} else {
+				Result.failure(Exception(response.message ?: "Failed to delete account"))
+			}
+		} catch (e: Exception) {
+			Result.failure(Exception(extractApiErrorMessage(e)))
+		}
+	}
+
 	suspend fun updatePresence(status: String): Result<Unit> {
 		return try {
 			val uid = getUid() ?: return Result.failure(Exception("No user logged in"))

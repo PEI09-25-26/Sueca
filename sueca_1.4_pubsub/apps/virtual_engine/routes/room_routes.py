@@ -19,6 +19,50 @@ def get_status(game_id: Optional[str] = Query(default=None)):
     return game.get_state()
 
 
+@router.get("/api/rooms")
+def list_rooms(
+    include_default: bool = Query(default=False),
+    include_empty: bool = Query(default=True),
+    include_full: bool = Query(default=True),
+    include_private: bool = Query(default=False),
+):
+    rooms = []
+
+    for game_id, game in manager.games.items():
+        if not include_default and game_id == manager.default_game_id:
+            continue
+
+        game_state = game.get_state()
+        is_public = bool(game_state.get("is_public", getattr(game, "is_public", True)))
+        if not include_private and not is_public:
+            continue
+
+        player_count = int(game_state.get("player_count", 0))
+        max_players = int(getattr(game, "max_players", 4))
+        if not include_empty and player_count == 0:
+            continue
+        if not include_full and player_count >= max_players:
+            continue
+
+        rooms.append(
+            {
+                "game_id": game_id,
+                "player_count": player_count,
+                "max_players": max_players,
+                "players": [p.get("name", "") for p in game_state.get("players", [])],
+                "phase": game_state.get("phase"),
+                "is_public": is_public,
+                "game_started": bool(game_state.get("game_started", False)),
+            }
+        )
+
+    return {
+        "success": True,
+        "rooms": rooms,
+        "total_rooms": len(rooms),
+    }
+
+
 @router.get("/api/room/{game_id}/lobby")
 def get_room_lobby(game_id: str):
     game = manager.get_game(game_id)
@@ -137,3 +181,36 @@ def join_game(data: dict = Body(default_factory=dict)):
         }
     
     return {"success": False, "message": message}
+
+@router.post("/api/room_visibility")
+def update_room_visibility(data: dict = Body(default_factory=dict)):
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    actor_id = data.get("player_id") or data.get("actor_id")
+    if not actor_id:
+        return error("player_id required", 400)
+    if not game.creator_id or game.creator_id != actor_id:
+        return error("Only room creator can change room visibility", 403)
+
+    if "is_public" not in data:
+        return error("is_public required", 400)
+
+    raw_visibility = data.get("is_public")
+    if isinstance(raw_visibility, bool):
+        is_public = raw_visibility
+    else:
+        visibility_value = str(raw_visibility).strip().lower()
+        if visibility_value in {"1", "true", "yes", "public"}:
+            is_public = True
+        elif visibility_value in {"0", "false", "no", "private"}:
+            is_public = False
+        else:
+            return error("Invalid is_public value", 400)
+
+    game.is_public = is_public
+    game._push_state("room_visibility_changed")
+
+    message = "Room is now public" if is_public else "Room is now private"
+    return {"success": True, "message": message, "game_id": game_id, "is_public": is_public}

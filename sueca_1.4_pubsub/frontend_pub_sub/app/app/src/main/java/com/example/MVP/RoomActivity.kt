@@ -267,6 +267,11 @@ class RoomActivity : AppCompatActivity() {
         }
         updateUI(state)
 
+        val isHost = state.creatorId == playerId && playerId.isNotBlank()
+        if (state.players.size == 4 && !state.gameStarted && isHost) {
+            lifecycleScope.launch { GatewayClient.startGame(roomId) }
+        }
+
         // Move to game as soon as lobby is complete (deck_cutting and beyond).
         val playerSeated = state.players.any { it.name == playerName || (playerId.isNotBlank() && it.id == playerId) }
         val gameProgressed = state.phase != "waiting"

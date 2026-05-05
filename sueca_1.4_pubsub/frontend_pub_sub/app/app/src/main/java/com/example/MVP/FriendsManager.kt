@@ -5,15 +5,23 @@ import com.example.MVP.network.RetrofitClient
 
 object FriendsManager {
 
-    suspend fun sendFriendRequestByUsername(toUsername: String): Result<FriendRequest> {
+    suspend fun sendFriendRequestByCode(friendCode: String): Result<FriendRequest> {
         return try {
             val fromUid = AuthManager.getUid()
                 ?: return Result.failure(Exception("User not logged in"))
             val token = AuthManager.getAuthHeader()
                 ?: return Result.failure(Exception("No auth token"))
 
-            val request = SendFriendRequestByUsernameRequest(fromUid, toUsername)
-            val response = RetrofitClient.api.sendFriendRequestByUsername(request, token)
+            val lookup = RetrofitClient.api.getUserByFriendCode(friendCode, token)
+            val targetUid = lookup.user?.uid
+                ?: return Result.failure(Exception(lookup.message ?: "Codigo de amigo invalido"))
+
+            if (targetUid == fromUid) {
+                return Result.failure(Exception("Nao podes adicionar-te a ti proprio"))
+            }
+
+            val request = SendFriendRequestRequest(fromUid, targetUid)
+            val response = RetrofitClient.api.sendFriendRequest(request, token)
 
             if (response.success && response.request != null) {
                 Result.success(response.request)

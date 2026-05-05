@@ -111,7 +111,7 @@ class GameActivity : AppCompatActivity() {
     private fun setupUI() {
 
         findViewById<ImageView>(R.id.backButton).setOnClickListener {
-            AlertDialog.Builder(this)
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
                 .setMessage("Desistir do jogo?")
                 .setPositiveButton("Sim") { _, _ -> finish() }
                 .setNegativeButton("Nao", null)
@@ -526,7 +526,7 @@ class GameActivity : AppCompatActivity() {
                 val team2 = points?.team2 ?: 0
                 val matchesPlayed = response.matchesPlayed ?: 0
 
-                AlertDialog.Builder(this@GameActivity)
+                AlertDialog.Builder(this@GameActivity, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
                     .setTitle("Match Scoreboard")
                     .setMessage(
                         "Team 1 (N/S): $team1\n" +
@@ -547,7 +547,7 @@ class GameActivity : AppCompatActivity() {
         input.hint = "1 - 40"
         input.inputType = android.text.InputType.TYPE_CLASS_NUMBER
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("Cut deck")
             .setView(input)
             .setPositiveButton("Cut") { _, _ ->

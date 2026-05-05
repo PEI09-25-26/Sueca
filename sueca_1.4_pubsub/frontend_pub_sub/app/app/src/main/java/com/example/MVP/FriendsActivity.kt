@@ -80,19 +80,19 @@ class FriendsActivity : AppCompatActivity() {
         rejectRequest2 = findViewById(R.id.reject_request_2)
 
         addFriendButton.setOnClickListener {
-            val username = addFriendInput.text.toString().trim()
-            if (username.isBlank()) {
-                Toast.makeText(this, "Insere o username do amigo", Toast.LENGTH_SHORT).show()
+            val friendCode = addFriendInput.text.toString().trim()
+            if (friendCode.isBlank()) {
+                Toast.makeText(this, "Insere o codigo de amigo", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            sendFriendRequest(username)
+            sendFriendRequest(friendCode)
         }
 
     }
 
-    private fun sendFriendRequest(username: String) {
+    private fun sendFriendRequest(friendCode: String) {
         lifecycleScope.launch {
-            FriendsManager.sendFriendRequestByUsername(username)
+            FriendsManager.sendFriendRequestByCode(friendCode)
                 .onSuccess {
                     addFriendInput.text?.clear()
                     Toast.makeText(this@FriendsActivity, "Pedido enviado", Toast.LENGTH_SHORT).show()
@@ -215,7 +215,7 @@ class FriendsActivity : AppCompatActivity() {
     }
 
     private fun showCreateAccountPrompt() {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("Criar conta")
             .setMessage("Para aceder aos amigos precisas de criar ou iniciar conta.")
             .setPositiveButton("Registar") { _, _ ->

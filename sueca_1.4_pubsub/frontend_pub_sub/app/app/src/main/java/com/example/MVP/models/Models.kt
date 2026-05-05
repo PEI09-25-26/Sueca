@@ -40,6 +40,15 @@ data class LogoutRequest(
     val uid: String
 )
 
+data class DeleteAccountRequest(
+    val uid: String
+)
+
+data class ConfirmDeleteAccountRequest(
+    val uid: String,
+    val code: String
+)
+
 data class AuthResponse(
     val success: Boolean,
     val message: String,
@@ -66,7 +75,8 @@ data class UserData(
     @SerializedName("lastLoginAt") val lastLoginAt: String?,
     val privacy: String,
     @SerializedName("friendsCount") val friendsCount: Int,
-    val status: String
+    val status: String,
+    @SerializedName("friendCode") val friendCode: String? = null
 )
 
 // ============ Friend Models ============

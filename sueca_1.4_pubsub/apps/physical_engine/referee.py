@@ -1,4 +1,4 @@
-from card_mapper import CardMapper
+from .card_mapper import CardMapper
 from collections import deque
 import random
 

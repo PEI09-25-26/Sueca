@@ -1,0 +1,88 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./.env
+    depends_on:
+      - auth
+      - agents
+
+  auth:
+    build:
+      context: .
+      dockerfile: apps/auth/Dockerfile
+    ports:
+      - "5010:5010"
+    env_file:
+      - ./.env
+
+  friends:
+    build:
+      context: .
+      dockerfile: apps/auth/Dockerfile
+    command: ["uvicorn", "apps.auth.friends.main:app", "--host", "0.0.0.0", "--port", "5020"]
+    ports:
+      - "5020:5020"
+    env_file:
+      - ./.env
+
+  agents:
+    build:
+      context: .
+      dockerfile: apps/agents/Dockerfile
+    ports:
+      - "5030:5030"
+    env_file:
+      - ./.env
+
+  virtual_engine:
+    build:
+      context: .
+      dockerfile: apps/virtual_engine/Dockerfile
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./.env
+    depends_on:
+      - auth
+
+  physical_engine:
+    build:
+      context: .
+      dockerfile: apps/physical_engine/Dockerfile
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+    env_file:
+      - ./.env
+    depends_on:
+      - auth
+
+  cloudflare:
+    build:
+      context: .
+      dockerfile: apps/cloudflare/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - gateway
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16379:6379"
+
+  emqx:
+    image: emqx/emqx:5.0.0
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "18083:18083"
+    environment:
+      - EMQX_NAME=emqx-sueca
+      - EMQX_HOST=0.0.0.0
+    volumes: []

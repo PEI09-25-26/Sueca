@@ -22,6 +22,12 @@ interface ApiService {
         @Header("Authorization") token: String
     ): UserResponse
 
+    @GET("/api/auth/user/by-friend-code/{friendCode}")
+    suspend fun getUserByFriendCode(
+        @Path("friendCode") friendCode: String,
+        @Header("Authorization") token: String
+    ): UserResponse
+
     @PUT("/api/auth/user/{uid}")
     suspend fun updateUser(
         @Path("uid") uid: String,
@@ -38,6 +44,18 @@ interface ApiService {
     @POST("/api/auth/logout")
     suspend fun logoutUser(
         @Body request: LogoutRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/auth/request-delete")
+    suspend fun requestDeleteAccount(
+        @Body request: DeleteAccountRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/auth/confirm-delete")
+    suspend fun confirmDeleteAccount(
+        @Body request: ConfirmDeleteAccountRequest,
         @Header("Authorization") token: String
     ): GenericResponse
 

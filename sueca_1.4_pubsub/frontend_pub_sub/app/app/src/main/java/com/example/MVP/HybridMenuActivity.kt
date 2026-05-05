@@ -408,7 +408,7 @@ class HybridMenuActivity : AppCompatActivity() {
     }
 
     private fun showCreateAccountPrompt(message: String) {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("Criar conta")
             .setMessage(message)
             .setPositiveButton("Registar") { _, _ ->

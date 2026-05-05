@@ -179,6 +179,18 @@
                 app:backgroundTint="@color/teal_700"
                 app:cornerRadius="12dp" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/edit_delete_account"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="8dp"
+                android:text="Apagar Conta"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                app:backgroundTint="@android:color/holo_red_dark"
+                app:cornerRadius="12dp" />
+
         </LinearLayout>
 
         <View
