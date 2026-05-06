@@ -136,6 +136,18 @@ def route_presence():
         return {"success": False, "message": str(error)}
 
 
+@router.get("/api/status")
+def proxy_api_status(request: Request):
+    game_id = request.query_params.get("game_id")
+    mode = normalize_mode(state.room_modes.get(game_id, "virtual"))
+    target = target_base_for_mode(mode)
+    target_url = f"{target}/api/status"
+    try:
+        response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+        return _decode_backend_response(response)
+    except requests.RequestException as error:
+        return {"success": False, "target": target_url, "message": str(error)}
+
 @router.get("/api/rooms")
 def proxy_api_rooms(request: Request):
     target = target_base_for_mode("virtual")

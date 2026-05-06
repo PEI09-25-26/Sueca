@@ -181,6 +181,13 @@ class HybridMenuActivity : AppCompatActivity() {
         roomsListContainer = findViewById(R.id.hybridRoomsListContainer)
         txtHybridRoomsEmpty = findViewById(R.id.txtHybridRoomsEmpty)
 
+        val btnRefreshRooms = findViewById<ImageView>(R.id.btnRefreshRooms)
+        btnRefreshRooms.setOnClickListener {
+            btnRefreshRooms.animate().rotationBy(360f).setDuration(500).start()
+            renderMockRooms(inputRoomId)
+            Toast.makeText(this, "Salas atualizadas", Toast.LENGTH_SHORT).show()
+        }
+
         backButton.setOnClickListener { finish() }
 
         val noWhitespaceFilter = InputFilter { source, start, end, _, _, _ ->

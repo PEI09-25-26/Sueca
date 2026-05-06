@@ -69,6 +69,15 @@ class OnlineMenuActivity : AppCompatActivity() {
         txtOnlineRoomsEmpty = findViewById(R.id.txtOnlineRoomsEmpty)
         txtDisplayedName.text = "Nome exibido: ${resolveDisplayedName()}"
 
+        val btnRefreshRooms = findViewById<ImageView>(R.id.btnRefreshRooms)
+        btnRefreshRooms.setOnClickListener {
+            btnRefreshRooms.animate().rotationBy(360f).setDuration(500).start()
+            lifecycleScope.launch {
+                refreshRoomsOnce()
+                Toast.makeText(this@OnlineMenuActivity, "Salas atualizadas", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         backButton.setOnClickListener { finish() }
 
         val noWhitespaceFilter = InputFilter { source, start, end, _, _, _ ->

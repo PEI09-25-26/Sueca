@@ -6,6 +6,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
@@ -25,14 +26,8 @@ class FriendsActivity : AppCompatActivity() {
     private lateinit var addFriendInput: EditText
     private lateinit var addFriendButton: Button
 
-    private lateinit var requestCard1: View
-    private lateinit var requestCard2: View
-    private lateinit var requestName1: TextView
-    private lateinit var requestName2: TextView
-    private lateinit var acceptRequest1: Button
-    private lateinit var acceptRequest2: Button
-    private lateinit var rejectRequest1: Button
-    private lateinit var rejectRequest2: Button
+    private lateinit var friendRequestsContainer: LinearLayout
+    private lateinit var txtNoRequests: TextView
 
     private var pendingRequests: List<IncomingFriendRequestData> = emptyList()
     private var lastRefreshAt: Long = 0L
@@ -58,6 +53,9 @@ class FriendsActivity : AppCompatActivity() {
         }
 
         friendsListView = findViewById(R.id.friendsListView)
+        val emptyView = findViewById<View>(R.id.emptyViewTextView)
+        friendsListView.emptyView = emptyView
+
         adapter = FriendsAdapter(this, emptyList())
         friendsListView.adapter = adapter
         friendsListView.setOnItemClickListener { _, _, position, _ ->
@@ -70,14 +68,8 @@ class FriendsActivity : AppCompatActivity() {
         addFriendInput = findViewById(R.id.input_add_friend)
         addFriendButton = findViewById(R.id.button_add_friend)
 
-        requestCard1 = findViewById(R.id.request_card_1)
-        requestCard2 = findViewById(R.id.request_card_2)
-        requestName1 = findViewById(R.id.request_name_1)
-        requestName2 = findViewById(R.id.request_name_2)
-        acceptRequest1 = findViewById(R.id.accept_request_1)
-        acceptRequest2 = findViewById(R.id.accept_request_2)
-        rejectRequest1 = findViewById(R.id.reject_request_1)
-        rejectRequest2 = findViewById(R.id.reject_request_2)
+        friendRequestsContainer = findViewById<LinearLayout>(R.id.friend_requests_container)
+        txtNoRequests = findViewById(R.id.txt_no_requests)
 
         addFriendButton.setOnClickListener {
             val friendCode = addFriendInput.text.toString().trim()
@@ -128,27 +120,33 @@ class FriendsActivity : AppCompatActivity() {
     }
 
     private fun renderPendingRequests(requests: List<IncomingFriendRequestData>) {
-        val req1 = requests.getOrNull(0)
-        val req2 = requests.getOrNull(1)
+        friendRequestsContainer.removeAllViews()
+        friendRequestsContainer.addView(txtNoRequests)
 
-        if (req1 == null) {
-            requestCard1.visibility = View.GONE
-        } else {
-            requestCard1.visibility = View.VISIBLE
-            requestName1.text = req1.fromUsername.ifBlank { req1.fromUid }
-
-            acceptRequest1.setOnClickListener { respondToRequest(req1.id, true) }
-            rejectRequest1.setOnClickListener { respondToRequest(req1.id, false) }
+        if (requests.isEmpty()) {
+            txtNoRequests.visibility = View.VISIBLE
+            return
         }
 
-        if (req2 == null) {
-            requestCard2.visibility = View.GONE
-        } else {
-            requestCard2.visibility = View.VISIBLE
-            requestName2.text = req2.fromUsername.ifBlank { req2.fromUid }
+        txtNoRequests.visibility = View.GONE
 
-            acceptRequest2.setOnClickListener { respondToRequest(req2.id, true) }
-            rejectRequest2.setOnClickListener { respondToRequest(req2.id, false) }
+        requests.forEach { request ->
+            val itemView = layoutInflater.inflate(R.layout.item_friend_request, friendRequestsContainer, false)
+            
+            val nameText = itemView.findViewById<TextView>(R.id.request_name)
+            val btnAccept = itemView.findViewById<Button>(R.id.accept_request)
+            val btnReject = itemView.findViewById<Button>(R.id.reject_request)
+            val profileImg = itemView.findViewById<ImageView>(R.id.request_profile_img)
+
+            nameText.text = request.fromUsername.ifBlank { request.fromUid }
+            
+            btnAccept.setOnClickListener { respondToRequest(request.id, true) }
+            btnReject.setOnClickListener { respondToRequest(request.id, false) }
+            
+            // Optionally load profile pic if available in future
+            profileImg.setImageResource(R.drawable.profile_pic1)
+
+            friendRequestsContainer.addView(itemView)
         }
     }
 

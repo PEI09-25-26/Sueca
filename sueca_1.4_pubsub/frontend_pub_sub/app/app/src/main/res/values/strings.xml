@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MVP</string>
+    <string name="app_name">Suecada</string>
 
     <string name="close_profile">Close Profile</string>
     <string name="edit">Edit</string>
@@ -27,4 +27,10 @@
     <string name="email">Email</string>
     <string name="description">Descricao</string>
     <string name="friends_count">Amigos: 0</string>
+    <string name="available_rooms">Salas Disponíveis</string>
+    <string name="refresh">Atualizar</string>
+    <string name="no_pending_requests">Sem pedidos pendentes</string>
+    <string name="accept">Aceitar</string>
+    <string name="decline">Recusar</string>
+    <string name="no_friends_yet">Sem amigos ainda</string>
 </resources>
