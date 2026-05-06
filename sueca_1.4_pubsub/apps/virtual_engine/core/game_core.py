@@ -254,6 +254,51 @@ class GameState:
         self._push_state('player_removed')
         return True, f'Player {target.player_name} removed successfully'
 
+    def leave(self, player_id):
+        """
+        Voluntary leave by a player. This removes the player from the room,
+        frees their seat, reassigns creator if needed, and emits state.
+        Returns (success: bool, message: str).
+        """
+        target = self.get_player(player_id)
+        if not target:
+            return False, 'Player not found'
+
+        # Do not allow leaving while a game is actively in progress
+        if self.game_started and self.phase != 'finished':
+            return False, 'Cannot leave while game is in progress'
+
+        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+        # Free up the position
+        if target.position not in self.available_team_positions[team_key]:
+            self.available_team_positions[team_key].append(target.position)
+
+        try:
+            self.players.remove(target)
+        except ValueError:
+            pass
+
+        if target in self.teams[0]:
+            self.teams[0].remove(target)
+        elif target in self.teams[1]:
+            self.teams[1].remove(target)
+
+        if target.player_id in self.scores:
+            del self.scores[target.player_id]
+
+        # If the leaving player was the creator, assign a new creator if any players remain
+        if self.creator_id == player_id:
+            if len(self.players) > 0:
+                # pick first player as new creator
+                new_creator = self.players[0]
+                self.creator_id = getattr(new_creator, 'player_id', None)
+            else:
+                self.creator_id = None
+
+        logger.info('Player %s left game %s', target.player_name, self.game_id)
+        self._push_state('player_left')
+        return True, f'Player {target.player_name} left the game'
+
     def get_player(self, player_id):
         for player in self.players:
             if getattr(player, 'player_id', None) == player_id:
@@ -740,6 +785,14 @@ class GameManager:
             self.games[game_id] = GameState(game_id)
             publish_room_event('room_created', game_id=game_id)
             return game_id
+
+    def delete_room(self, game_id: str):
+        with self._lock:
+            if game_id in self.games and game_id != self.default_game_id:
+                del self.games[game_id]
+                publish_room_event('room_deleted', game_id=game_id)
+                return True
+        return False
 
     def create_game(self, creator_name, position_choice):
         with self._lock:

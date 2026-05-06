@@ -262,6 +262,11 @@ data class RoomVisibilityRequest(
     @SerializedName("is_public") val isPublic: Boolean
 )
 
+data class LeaveRoomRequest(
+    @SerializedName("player_id") val playerId: String,
+    @SerializedName("game_id") val gameId: String
+)
+
 // ============ Responses ============
 data class GenericResponse(
     val success: Boolean,

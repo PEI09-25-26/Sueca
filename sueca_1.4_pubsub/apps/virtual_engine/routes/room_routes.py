@@ -214,3 +214,29 @@ def update_room_visibility(data: dict = Body(default_factory=dict)):
 
     message = "Room is now public" if is_public else "Room is now private"
     return {"success": True, "message": message, "game_id": game_id, "is_public": is_public}
+
+@router.post("/api/leave")
+def leave_game(data: dict = Body(default_factory=dict)):
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    player_id = data.get("player_id") or data.get("actor_id")
+    if not player_id:
+        return error("player_id required", 400)
+
+    # Voluntary leave: allow leaving if game not started, or if finished (e.g. before rematch)
+    success, message = game.leave(player_id)
+    if not success:
+        return {"success": False, "message": message}
+
+    # Clean up sessions for this player
+    session_manager.delete_sessions_for_player(player_id)
+
+    # If room is empty after leaving, delete the room
+    if len(game.players) == 0:
+        manager.delete_room(game_id)
+        return {"success": True, "message": message + ". Room was empty and has been removed."}
+
+    # If the creator was reassigned, inform clients via returned state
+    return {"success": True, "message": message, "game_id": game_id, "state": game.get_state()}

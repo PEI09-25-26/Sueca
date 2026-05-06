@@ -10,6 +10,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -111,7 +112,12 @@ class RoomActivity : AppCompatActivity() {
 
         txtRoom.text = "Sala: $roomId"
 
-        btnBack.setOnClickListener { finish() }
+        btnBack.setOnClickListener { leaveRoomAndExit() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                leaveRoomAndExit()
+            }
+        })
 
         if (roomId == "SALA_LOCAL") {
             hideAllSeatButtons()
@@ -308,14 +314,18 @@ class RoomActivity : AppCompatActivity() {
         val mySeat = normalizePosition(me?.position)
         val hasSelectedSeat = mySeat.isNotBlank()
 
+        if (playerId.isNotBlank() && meById == null && meByName == null) {
+            playerId = ""
+        }
+
         val isHost = state.players.firstOrNull()?.id?.let { it == playerId } == true ||
             state.players.firstOrNull()?.name == playerName
         this.isHost = isHost
 
         val canUseBotActions = state.phase == "waiting" && isHost && available.isNotEmpty()
         val canRemovePlayers = state.phase == "waiting" && isHost && !botPlacementMode
-        
-        // We hide the old top bot buttons container as per request
+
+        // Keep the old bot actions hidden; seat management now happens from the seat popup.
         botActionsContainer.visibility = View.GONE
 
         roomVisibilityContainer.visibility = if (isHost) View.VISIBLE else View.GONE
@@ -330,9 +340,8 @@ class RoomActivity : AppCompatActivity() {
             exitBotPlacementMode()
         }
 
-        // Host always sees the "+" buttons on empty seats if game hasn't started
         val hostCanManageSeats = isHost && state.phase == "waiting"
-        val seatButtonsForBotPlacement = (botPlacementMode || hostCanManageSeats) && canUseBotActions
+        val seatButtonsForBotPlacement = botPlacementMode && canUseBotActions
 
         renderSeat(
             position = "NORTH",
@@ -383,11 +392,10 @@ class RoomActivity : AppCompatActivity() {
             playerLabel = txtSeatWestPlayer
         )
 
-        if (hasSelectedSeat && !seatButtonsForBotPlacement) {
-            hideAllSeatButtons()
-            txtSeatHint.text = "Lugar escolhido: $mySeat"
-        } else if (seatButtonsForBotPlacement) {
+        if (seatButtonsForBotPlacement) {
             txtSeatHint.text = "Escolhe onde colocar o bot"
+        } else if (hasSelectedSeat) {
+            txtSeatHint.text = "Lugar escolhido: $mySeat"
         } else {
             txtSeatHint.text = "Escolhe o teu lugar (+)"
         }
@@ -483,24 +491,25 @@ class RoomActivity : AppCompatActivity() {
     }
 
     private fun onSeatActionClick(position: String) {
-        if (isHost && playerId.isNotBlank()) {
-            // If I'm the host and I already have a seat, clicking another seat triggers the management dialog
-            val myPos = normalizePosition(latestRoomState?.players?.find { it.id == playerId }?.position)
-            if (myPos != position.uppercase(Locale.ROOT)) {
-                showSeatManagementDialog(position)
-                return
-            }
-        }
-
         if (botPlacementMode) {
             addBotAtPosition(position)
             return
         }
+
+        if (playerId.isNotBlank()) {
+            showSeatManagementDialog(position)
+            return
+        }
+
         joinWithPosition(position)
     }
 
     private fun showSeatManagementDialog(position: String) {
-        val options = arrayOf("Convidar Amigo", "Adicionar Agente")
+        val options = if (isHost) {
+            arrayOf("Convidar Amigo", "Adicionar Agente", "Mudar Lugar")
+        } else {
+            arrayOf("Mudar Lugar")
+        }
         val adapter = ArrayAdapter(this, R.layout.dialog_custom_item, options)
         
         val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
@@ -509,13 +518,69 @@ class RoomActivity : AppCompatActivity() {
         AlertDialog.Builder(this, R.style.CustomDialogTheme)
             .setCustomTitle(titleView)
             .setAdapter(adapter) { _, which ->
-                when (which) {
-                    0 -> showInviteFriendDialog(position)
-                    1 -> showAgentLevelDialog(position)
+                if (isHost) {
+                    when (which) {
+                        0 -> showInviteFriendDialog(position)
+                        1 -> showAgentLevelDialog(position)
+                        2 -> changeSeatTo(position)
+                    }
+                } else {
+                    changeSeatTo(position)
                 }
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    private fun leaveRoomAndExit() {
+        if (roomId == "SALA_LOCAL") {
+            finish()
+            return
+        }
+
+        if (playerId.isBlank()) {
+            finish()
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                runCatching {
+                    GatewayClient.leaveRoom(roomId, playerId)
+                }
+            } finally {
+                finish()
+            }
+        }
+    }
+
+    private fun changeSeatTo(position: String) {
+        if (playerId.isBlank()) {
+            Toast.makeText(this, "Ainda sem player_id. Aguarda um instante.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                val response = GatewayClient.changePosition(
+                    playerId = playerId,
+                    gameId = roomId,
+                    position = position.lowercase(Locale.ROOT)
+                )
+
+                if (response.success) {
+                    Toast.makeText(this@RoomActivity, response.message ?: "Lugar alterado.", Toast.LENGTH_SHORT).show()
+                    val state = GatewayClient.getStatus(roomId)
+                    if (state != null) {
+                        applyState(state)
+                    }
+                } else {
+                    Toast.makeText(this@RoomActivity, response.message ?: "Nao foi possivel alterar lugar.", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@RoomActivity, "Erro ao alterar lugar.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun showInviteFriendDialog(position: String) {
@@ -683,7 +748,7 @@ class RoomActivity : AppCompatActivity() {
         button: Button,
         playerLabel: TextView
     ) {
-        val showButton = isAvailable && (playerId.isBlank() || forceShowAction)
+        val showButton = isAvailable
         button.visibility = if (showButton) View.VISIBLE else View.GONE
         button.isEnabled = showButton
 

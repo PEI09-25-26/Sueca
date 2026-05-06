@@ -153,6 +153,9 @@ interface ApiService {
     @POST("/api/room_visibility")
     suspend fun setRoomVisibility(@Body request: RoomVisibilityRequest): retrofit2.Response<GenericResponse>
 
+    @POST("/api/leave")
+    suspend fun leaveRoom(@Body request: LeaveRoomRequest): GenericResponse
+
     // =========== /api/room Endpoints ============
 
     @GET("/api/room/{gameId}/match_points")

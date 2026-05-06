@@ -12,6 +12,7 @@ import com.example.MVP.models.HandResponse
 import com.example.MVP.models.JoinGameRequest
 import com.example.MVP.models.JoinGameResponse
 import com.example.MVP.models.MatchPointsResponse
+import com.example.MVP.models.LeaveRoomRequest
 import com.example.MVP.models.RemoveParticipantRequest
 import com.example.MVP.models.RoomModeRequest
 import com.example.MVP.models.SelectTrumpRequest
@@ -121,6 +122,20 @@ object GatewayClient {
         return GenericResponse(
             success = response.bool("success") ?: false,
             message = response.string("message") ?: fallbackMessage(envelope)
+        )
+    }
+
+    suspend fun leaveRoom(gameId: String, playerId: String): GenericResponse {
+        val response = RetrofitClient.api.leaveRoom(
+            LeaveRoomRequest(
+                gameId = gameId,
+                playerId = playerId
+            )
+        )
+
+        return GenericResponse(
+            success = response.success,
+            message = response.message ?: "Saida da sala processada."
         )
     }
 

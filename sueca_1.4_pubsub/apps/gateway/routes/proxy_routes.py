@@ -177,6 +177,22 @@ async def proxy_api_start(request: Request):
         )
 
 
+@router.post("/api/leave")
+async def proxy_api_leave(request: Request):
+    target = target_base_for_mode("virtual")
+    target_url = f"{target}/api/leave"
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
+        response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except requests.RequestException as error:
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
+
+
 @router.api_route("/api/auth/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_api_auth(path: str, request: Request):
     target = state.AUTH_SERVICE_URL.rstrip("/")
