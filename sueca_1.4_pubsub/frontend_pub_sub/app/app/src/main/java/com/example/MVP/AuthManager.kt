@@ -2,13 +2,15 @@ package com.example.MVP
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
 import com.example.MVP.models.*
 import com.example.MVP.network.RetrofitClient
 import org.json.JSONObject
 import retrofit2.HttpException
 
 object AuthManager {
-	private const val PREFS_NAME = "SuecaAuth"
+	private const val PREFS_NAME = "SuecaAuthSecure"
 	private const val KEY_TOKEN = "auth_token"
 	private const val KEY_UID = "user_uid"
 	private const val KEY_USERNAME = "username"
@@ -22,7 +24,19 @@ object AuthManager {
 	private fun isInitialized(): Boolean = ::prefs.isInitialized
 
 	fun initialize(context: Context) {
-		prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+		try {
+			val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+			prefs = EncryptedSharedPreferences.create(
+				PREFS_NAME,
+				masterKeyAlias,
+				context,
+				EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+				EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+			)
+		} catch (e: Exception) {
+			// Fallback to regular prefs if encryption fails (e.g. key store issues)
+			prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+		}
 	}
 
 	fun getToken(): String? {

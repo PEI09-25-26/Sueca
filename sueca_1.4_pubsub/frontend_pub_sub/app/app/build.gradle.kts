@@ -68,4 +68,7 @@ dependencies {
 
     // MQTT (pub-sub) for real-time room/game state updates
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+
+    // Security: encrypted shared preferences
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
