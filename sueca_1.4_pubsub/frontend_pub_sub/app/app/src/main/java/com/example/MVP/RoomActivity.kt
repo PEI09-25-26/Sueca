@@ -4,10 +4,12 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.GameStatusResponse
@@ -307,10 +309,9 @@ class RoomActivity : AppCompatActivity() {
 
         val canUseBotActions = state.phase == "waiting" && isHost && available.isNotEmpty()
         val canRemovePlayers = state.phase == "waiting" && isHost && !botPlacementMode
-        botActionsContainer.visibility = if (canUseBotActions) View.VISIBLE else View.GONE
-        btnAddRandomBot.isEnabled = canUseBotActions
-        btnAddAgent2Bot.isEnabled = canUseBotActions
-        btnAddAgent1Bot.isEnabled = canUseBotActions
+        
+        // We hide the old top bot buttons container as per request
+        botActionsContainer.visibility = View.GONE
 
         btnToggleVisibility.visibility = if (isHost) View.VISIBLE else View.GONE
         if (isHost) {
@@ -323,7 +324,9 @@ class RoomActivity : AppCompatActivity() {
             exitBotPlacementMode()
         }
 
-        val seatButtonsForBotPlacement = botPlacementMode && canUseBotActions
+        // Host always sees the "+" buttons on empty seats if game hasn't started
+        val hostCanManageSeats = isHost && state.phase == "waiting"
+        val seatButtonsForBotPlacement = (botPlacementMode || hostCanManageSeats) && canUseBotActions
 
         renderSeat(
             position = "NORTH",
@@ -465,11 +468,99 @@ class RoomActivity : AppCompatActivity() {
     }
 
     private fun onSeatActionClick(position: String) {
+        if (isHost && playerId.isNotBlank()) {
+            // If I'm the host and I already have a seat, clicking another seat triggers the management dialog
+            val myPos = normalizePosition(latestRoomState?.players?.find { it.id == playerId }?.position)
+            if (myPos != position.uppercase(Locale.ROOT)) {
+                showSeatManagementDialog(position)
+                return
+            }
+        }
+
         if (botPlacementMode) {
             addBotAtPosition(position)
             return
         }
         joinWithPosition(position)
+    }
+
+    private fun showSeatManagementDialog(position: String) {
+        val options = arrayOf("Convidar Amigo", "Adicionar Agente")
+        val adapter = ArrayAdapter(this, R.layout.dialog_custom_item, options)
+        
+        val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
+        titleView.text = "Lugar ${position.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}"
+
+        AlertDialog.Builder(this, R.style.CustomDialogTheme)
+            .setCustomTitle(titleView)
+            .setAdapter(adapter) { _, which ->
+                when (which) {
+                    0 -> showInviteFriendDialog(position)
+                    1 -> showAgentLevelDialog(position)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun showInviteFriendDialog(position: String) {
+        val uid = AuthManager.getUid() ?: return
+        lifecycleScope.launch {
+            FriendsManager.listFriends(uid).onSuccess { friends ->
+                if (friends.isEmpty()) {
+                    Toast.makeText(this@RoomActivity, "Ainda não tens amigos.", Toast.LENGTH_SHORT).show()
+                    return@onSuccess
+                }
+
+                val names = friends.map { it.username }.toTypedArray()
+                val adapter = ArrayAdapter(this@RoomActivity, R.layout.dialog_custom_item, names)
+
+                val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
+                titleView.text = "Convidar para Mesa ${position.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}"
+
+                AlertDialog.Builder(this@RoomActivity, R.style.CustomDialogTheme)
+                    .setCustomTitle(titleView)
+                    .setAdapter(adapter) { _, which ->
+                        val friend = friends[which]
+                        Toast.makeText(this@RoomActivity, "Convite enviado para ${friend.username}", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Voltar", null)
+                    .show()
+            }.onFailure {
+                Toast.makeText(this@RoomActivity, "Erro ao carregar amigos.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun showAgentLevelDialog(position: String) {
+        val levels = arrayOf(
+            "Nível 1",
+            "Nível 2",
+            "Nível 3",
+            "Nível 4"
+        )
+        val adapter = ArrayAdapter(this, R.layout.dialog_custom_item, levels)
+        
+        val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
+        titleView.text = "Escolher nível do agente"
+
+        AlertDialog.Builder(this, R.style.CustomDialogTheme)
+            .setCustomTitle(titleView)
+            .setAdapter(adapter) { _, which ->
+                val (difficulty, namePrefix) = when (which) {
+                    0 -> "random" to "BOT_LV1"
+                    1 -> "weak" to "BOT_LV2"
+                    2 -> "Average" to "BOT_LV3"
+                    3 -> "smart" to "BOT_LV4"
+                    else -> "random" to "Bot"
+                }
+                
+                pendingBotDifficulty = difficulty
+                pendingBotNamePrefix = namePrefix
+                addBotAtPosition(position)
+            }
+            .setNegativeButton("Voltar", null)
+            .show()
     }
 
     private fun toggleBotPlacementMode(difficulty: String, namePrefix: String) {

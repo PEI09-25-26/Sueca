@@ -1,5 +1,3 @@
-"""AverageAgent moved from virtual_engine to standalone agents service."""
-
 import random
 import time
 

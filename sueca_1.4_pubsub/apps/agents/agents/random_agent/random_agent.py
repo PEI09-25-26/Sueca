@@ -1,6 +1,3 @@
-"""
-RandomAgent moved out of virtual_engine to agents service.
-"""
 from apps.virtual_engine.clients.client import GameClient
 from apps.virtual_engine.game_state_tracker import GameStateTracker
 from apps.virtual_engine.card_mapper import CardMapper
