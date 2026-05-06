@@ -79,6 +79,8 @@ class FriendsActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 FriendsManager.getFriendCode().onSuccess { response ->
                     txtFriendCode.text = response.code
+                    AuthManager.saveFriendCode(response.code)
+                    Toast.makeText(this@FriendsActivity, "Código atualizado", Toast.LENGTH_SHORT).show()
                 }.onFailure { error ->
                     Toast.makeText(this@FriendsActivity, "Erro ao obter código: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
@@ -224,9 +226,15 @@ class FriendsActivity : AppCompatActivity() {
             loadFriends()
             loadPendingRequests()
             
-            lifecycleScope.launch {
-                FriendsManager.getFriendCode().onSuccess { response ->
-                    txtFriendCode.text = response.code
+            val savedCode = AuthManager.getSavedFriendCode()
+            if (savedCode != null) {
+                txtFriendCode.text = savedCode
+            } else {
+                lifecycleScope.launch {
+                    FriendsManager.getFriendCode().onSuccess { response ->
+                        txtFriendCode.text = response.code
+                        AuthManager.saveFriendCode(response.code)
+                    }
                 }
             }
         }

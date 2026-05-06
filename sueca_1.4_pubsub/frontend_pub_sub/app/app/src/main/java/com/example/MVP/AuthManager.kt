@@ -15,6 +15,7 @@ object AuthManager {
 	private const val KEY_UID = "user_uid"
 	private const val KEY_USERNAME = "username"
 	private const val KEY_EMAIL = "email"
+	private const val KEY_FRIEND_CODE = "friend_code"
 	private const val KEY_IS_ANONYMOUS = "is_anonymous"
 	private const val KEY_ANONYMOUS_NAME = "anonymous_name"
 	private val GUEST_NAME_REGEX = Regex("^Guest\\s+\\d+$")
@@ -57,6 +58,16 @@ object AuthManager {
 	fun getEmail(): String? {
 		if (!isInitialized()) return null
 		return prefs.getString(KEY_EMAIL, null)
+	}
+
+	fun getSavedFriendCode(): String? {
+		if (!isInitialized()) return null
+		return prefs.getString(KEY_FRIEND_CODE, null)
+	}
+
+	fun saveFriendCode(code: String) {
+		if (!isInitialized()) return
+		prefs.edit().putString(KEY_FRIEND_CODE, code).apply()
 	}
 
 	fun isAnonymous(): Boolean {
@@ -302,6 +313,9 @@ object AuthManager {
 			putString(KEY_UID, user.uid)
 			putString(KEY_USERNAME, user.username)
 			putString(KEY_EMAIL, user.email)
+			if (user.friendCode != null) {
+				putString(KEY_FRIEND_CODE, user.friendCode)
+			}
 			putBoolean(KEY_IS_ANONYMOUS, false)
 			remove(KEY_ANONYMOUS_NAME)
 			apply()
@@ -315,6 +329,7 @@ object AuthManager {
 			remove(KEY_UID)
 			remove(KEY_USERNAME)
 			remove(KEY_EMAIL)
+			remove(KEY_FRIEND_CODE)
 			remove(KEY_IS_ANONYMOUS)
 			remove(KEY_ANONYMOUS_NAME)
 			apply()
