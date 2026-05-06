@@ -37,6 +37,16 @@
             android:screenOrientation="portrait"/>
 
         <activity
+            android:name="com.example.MVP.RecoverPasswordActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <activity
+            android:name="com.example.MVP.ResetPasswordActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <activity
             android:name="com.example.MVP.MainMenuActivity"
             android:exported="false"
             android:screenOrientation="portrait"/>

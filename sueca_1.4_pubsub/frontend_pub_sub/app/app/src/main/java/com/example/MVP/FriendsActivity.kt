@@ -249,7 +249,6 @@ class FriendsActivity : AppCompatActivity() {
         val acceptButton = contentView.findViewById<Button>(R.id.friend_info_accept)
         val rejectButton = contentView.findViewById<Button>(R.id.friend_info_reject)
         val removeFriendButton = contentView.findViewById<Button>(R.id.friend_info_remove_friend)
-        val openProfileButton = contentView.findViewById<Button>(R.id.friend_info_open_profile)
 
         applyBannerPreview(bannerView, friend.bannerURL)
         applyPhotoPreview(avatarView, friend.photoURL)
@@ -292,13 +291,6 @@ class FriendsActivity : AppCompatActivity() {
                         }
                 }
             }
-        }
-
-        openProfileButton.setOnClickListener {
-            dialog.dismiss()
-            val intent = Intent(this, ProfileActivity::class.java)
-            intent.putExtra(ProfileActivity.EXTRA_PROFILE_UID, friend.uid)
-            startActivity(intent)
         }
 
         dialog.show()

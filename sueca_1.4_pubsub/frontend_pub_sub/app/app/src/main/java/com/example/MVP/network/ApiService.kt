@@ -16,6 +16,12 @@ interface ApiService {
     @POST("/api/auth/login")
     suspend fun loginUser(@Body request: LoginRequest): AuthResponse
 
+    @GET("/api/auth/recover-password")
+    suspend fun recoverPassword(@Query("email") email: String): RecoverPasswordResponse
+
+    @POST("/api/auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequest): GenericResponse
+
     @GET("/api/auth/user/{uid}")
     suspend fun getUser(
         @Path("uid") uid: String,

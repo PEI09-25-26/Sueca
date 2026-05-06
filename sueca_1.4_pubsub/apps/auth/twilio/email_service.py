@@ -94,3 +94,16 @@ class EmailService:
             subject='Codigo de verificacao - Sueca',
             html_content=html_content,
         )
+
+    def send_password_recovery_code(self, to_email: str, code: str, username: str = ''):
+        template_html = self._load_template('recovery_code.html')
+        html_content = (
+            template_html
+            .replace('{{CODE}}', code)
+            .replace('{{USERNAME}}', username or 'jogador')
+        )
+        return self.send_email(
+            to_email=to_email,
+            subject='Codigo de recuperacao de password - Sueca',
+            html_content=html_content,
+        )

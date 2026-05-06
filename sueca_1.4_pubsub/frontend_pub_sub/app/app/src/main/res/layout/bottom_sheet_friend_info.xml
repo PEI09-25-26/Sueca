@@ -184,16 +184,5 @@
             android:textColor="@android:color/white"
             app:backgroundTint="@color/badge_red"
             app:cornerRadius="10dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/friend_info_open_profile"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="10dp"
-            android:text="Ver perfil completo"
-            android:textAllCaps="false"
-            android:textColor="@android:color/white"
-            app:backgroundTint="@color/teal_700"
-            app:cornerRadius="10dp" />
     </LinearLayout>
 </ScrollView>

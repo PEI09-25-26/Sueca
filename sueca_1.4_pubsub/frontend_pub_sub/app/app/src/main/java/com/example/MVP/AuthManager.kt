@@ -194,6 +194,35 @@ object AuthManager {
 		}
 	}
 
+	suspend fun recoverPassword(email: String): Result<String> {
+		return try {
+			val response = RetrofitClient.api.recoverPassword(email)
+
+			if (response.success && !response.verificationId.isNullOrBlank()) {
+				Result.success(response.verificationId)
+			} else {
+				Result.failure(Exception(response.message ?: "Failed to request password recovery"))
+			}
+		} catch (e: Exception) {
+			Result.failure(Exception(extractApiErrorMessage(e)))
+		}
+	}
+
+	suspend fun resetPassword(verificationId: String, code: String, newPassword: String): Result<Unit> {
+		return try {
+			val request = ResetPasswordRequest(verificationId, code, newPassword)
+			val response = RetrofitClient.api.resetPassword(request)
+
+			if (response.success) {
+				Result.success(Unit)
+			} else {
+				Result.failure(Exception(response.message ?: "Failed to reset password"))
+			}
+		} catch (e: Exception) {
+			Result.failure(Exception(extractApiErrorMessage(e)))
+		}
+	}
+
 	suspend fun logout(): Result<Unit> {
 		return try {
 			val uid = getUid() ?: return Result.failure(Exception("No user logged in"))

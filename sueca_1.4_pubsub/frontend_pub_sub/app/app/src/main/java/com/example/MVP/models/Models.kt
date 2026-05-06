@@ -56,6 +56,18 @@ data class AuthResponse(
     val token: String? = null
 )
 
+data class RecoverPasswordResponse(
+    val success: Boolean,
+    val message: String? = null,
+    @SerializedName("verificationId") val verificationId: String? = null
+)
+
+data class ResetPasswordRequest(
+    @SerializedName("verification_id") val verificationId: String,
+    val code: String,
+    @SerializedName("new_password") val newPassword: String
+)
+
 data class UserResponse(
     val success: Boolean,
     val message: String? = null,

@@ -15,6 +15,7 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var usernameEditText: EditText
     private lateinit var passwordEditText: EditText
     private lateinit var loginButton: Button
+    private lateinit var forgotPasswordLink: TextView
     private lateinit var registerLink: TextView
     private lateinit var anonymousLink: TextView
 
@@ -34,6 +35,7 @@ class LoginActivity : AppCompatActivity() {
         usernameEditText = findViewById(R.id.usernameEditText)
         passwordEditText = findViewById(R.id.passwordEditText)
         loginButton = findViewById(R.id.loginButton)
+        forgotPasswordLink = findViewById(R.id.forgotPasswordLink)
         registerLink = findViewById(R.id.registerLink)
         anonymousLink = findViewById(R.id.anonymousLink)
 
@@ -51,6 +53,10 @@ class LoginActivity : AppCompatActivity() {
 
         registerLink.setOnClickListener {
             startActivity(Intent(this, RegisterActivity::class.java))
+        }
+
+        forgotPasswordLink.setOnClickListener {
+            startActivity(Intent(this, RecoverPasswordActivity::class.java))
         }
 
         anonymousLink.setOnClickListener {

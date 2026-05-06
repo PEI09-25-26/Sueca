@@ -68,6 +68,12 @@ class ConfirmDeleteRequest(BaseModel):
     code: str
 
 
+class ResetPasswordRequest(BaseModel):
+    verification_id: str = Field(alias="verification_id")
+    code: str
+    new_password: str
+
+
 class FriendCodeLookupResponse(BaseModel):
     success: bool
     user: dict | None = None
@@ -348,3 +354,52 @@ def confirm_delete(req: ConfirmDeleteRequest):
 
     delete_user(req.uid)
     return {"success": True}
+
+@app.get("/recover-password", dependencies=[Depends(rate_limit_dependency(limit=5, window_seconds=60))])
+def recover_password(email: str):
+    email = email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email required")
+
+    user = find_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    code = f"{secrets.randbelow(1000000):06d}"
+    set_verification(uid, code, kind="recover", ttl_seconds=600)
+    try:
+        sent_status = EmailService().send_password_recovery_code(email, code, user.get("username", "user"))
+        if not sent_status:
+            raise HTTPException(status_code=502, detail="failed to send recovery email")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="failed to send recovery email")
+    return {"success": True, "verificationId": uid, "message": "recovery code sent"}
+
+@app.post("/reset-password", dependencies=[Depends(rate_limit_dependency(limit=5, window_seconds=60))])
+def reset_password(req: ResetPasswordRequest):
+    ok = check_verification(req.verification_id, req.code, kind="recover")
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid or expired code")
+
+    user = get_user(req.verification_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    new_password = req.new_password.strip()
+    if not new_password:
+        raise HTTPException(status_code=400, detail="new password required")
+
+    salt = secrets.token_hex(16)
+    salted = f"{salt}{new_password}"
+    user["salt"] = salt
+    user["password"] = bcrypt_sha256.hash(salted)
+    user["updatedAt"] = _now_iso()
+    create_user(req.verification_id, user)
+
+    return {"success": True, "message": "Password updated"}
