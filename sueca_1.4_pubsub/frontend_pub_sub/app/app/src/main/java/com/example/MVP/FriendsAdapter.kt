@@ -22,6 +22,7 @@ class FriendsAdapter(
         val usernameTextView = view.findViewById<TextView>(R.id.friend_username)
 
         usernameTextView.text = friend.username
+        view.contentDescription = "Amigo: ${friend.username}"
 
         if (friend.status == "online") {
             statusDot.setBackgroundResource(R.drawable.status_indicator_online)

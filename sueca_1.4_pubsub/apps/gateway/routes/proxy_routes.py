@@ -249,10 +249,60 @@ async def proxy_api_friends(path: str, request: Request):
         )
 
 
+@router.api_route("/api/friends", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_api_friends_root(request: Request):
+    """Proxy root /api/friends (no trailing slash) to friends service."""
+    target = state.FRIENDS_SERVICE_URL.rstrip("/")
+    target_url = f"{target}"
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
+        method = request.method.upper()
+        if method == "POST":
+            response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+        elif method == "PUT":
+            response = state.INTERNAL_HTTP.put(target_url, json=body, timeout=5)
+        elif method == "DELETE":
+            response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
+        else:
+            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except requests.RequestException as error:
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
+
+
 @router.api_route("/friends/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_friends(path: str, request: Request):
     target = state.FRIENDS_SERVICE_URL.rstrip("/")
     target_url = f"{target}/{path}"
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
+        method = request.method.upper()
+        if method == "POST":
+            response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+        elif method == "PUT":
+            response = state.INTERNAL_HTTP.put(target_url, json=body, timeout=5)
+        elif method == "DELETE":
+            response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
+        else:
+            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except requests.RequestException as error:
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
+
+
+@router.api_route("/friends", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_friends_root(request: Request):
+    """Proxy root /friends (no trailing slash) to friends service."""
+    target = state.FRIENDS_SERVICE_URL.rstrip("/")
+    target_url = f"{target}"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
         method = request.method.upper()

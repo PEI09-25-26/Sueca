@@ -85,6 +85,12 @@ interface ApiService {
         @Header("Authorization") token: String
     ): GenericResponse
 
+    @HTTP(method = "DELETE", path = "/api/friends", hasBody = true)
+    suspend fun removeFriend(
+        @Body request: FriendRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
     @GET("/api/friends/list")
     suspend fun listFriends(
         @Query("uid") uid: String,

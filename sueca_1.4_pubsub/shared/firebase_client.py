@@ -17,6 +17,14 @@ def _utc_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _to_iso(value) -> str:
+    if isinstance(value, datetime.datetime):
+        return value.astimezone(datetime.timezone.utc).isoformat()
+    if value is None:
+        return _utc_now().isoformat()
+    return str(value)
+
+
 def _read_key_from_env_file(file_path: Path) -> str | None:
     if not file_path.exists():
         return None
@@ -216,21 +224,38 @@ def add_friend_request(from_user: str, to_user: str) -> bool:
     doc_ref = _DB.collection("friend_requests").document(doc_id)
     if doc_ref.get().exists:
         return False
+    now = _utc_now()
+    from_user_doc = get_user(from_user) or {}
     doc_ref.set({
-        "from": from_user,
-        "to": to_user,
-        "created_at": _utc_now(),
+        "from_uid": from_user,
+        "to_uid": to_user,
+        "from_username": from_user_doc.get("username", ""),
+        "status": "pending",
+        "createdAt": now,
+        "updatedAt": now,
     })
     return True
 
 
 def get_incoming_friend_requests(user: str) -> list:
     _ensure_app()
-    docs = _DB.collection("friend_requests").where("to", "==", user).stream()
     out = []
+    docs = _DB.collection("friend_requests").stream()
     for d in docs:
         data = d.to_dict()
+        to_uid = data.get("to_uid") or data.get("to") or ""
+        if to_uid != user:
+            continue
+
+        from_uid = data.get("from_uid") or data.get("from") or ""
+        from_user_doc = get_user(from_uid) if from_uid else None
         data["id"] = d.id
+        data["from_uid"] = from_uid
+        data["to_uid"] = to_uid
+        data["from_username"] = data.get("from_username") or (from_user_doc.get("username", "") if from_user_doc else "")
+        data["status"] = data.get("status") or "pending"
+        data["createdAt"] = _to_iso(data.get("createdAt") or data.get("created_at"))
+        data["updatedAt"] = _to_iso(data.get("updatedAt") or data.get("updated_at") or data.get("createdAt"))
         out.append(data)
     return out
 

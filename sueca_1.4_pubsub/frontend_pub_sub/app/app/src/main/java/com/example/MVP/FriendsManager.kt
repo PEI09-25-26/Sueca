@@ -89,6 +89,33 @@ object FriendsManager {
         }
     }
 
+    suspend fun removeFriend(friendUid: String): Result<Unit> {
+        return try {
+            val userUid = AuthManager.getUid()
+                ?: return Result.failure(Exception("User not logged in"))
+            val token = AuthManager.getAuthHeader()
+                ?: return Result.failure(Exception("No auth token"))
+
+            val request = FriendRequest(
+                id = "",
+                fromUid = userUid,
+                toUid = friendUid,
+                status = "pending",
+                createdAt = "",
+                updatedAt = ""
+            )
+            val response = RetrofitClient.api.removeFriend(request, token)
+
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message ?: "Failed to remove friend"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun listFriends(uid: String): Result<List<UserData>> {
         return try {
             val token = AuthManager.getAuthHeader()

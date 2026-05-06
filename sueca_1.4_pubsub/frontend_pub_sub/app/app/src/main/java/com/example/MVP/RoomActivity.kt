@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -64,7 +65,9 @@ class RoomActivity : AppCompatActivity() {
     private lateinit var btnRemoveEast: Button
     private lateinit var btnRemoveSouth: Button
     private lateinit var btnRemoveWest: Button
-    private lateinit var btnToggleVisibility: ImageView
+    private lateinit var roomVisibilityContainer: View
+    private lateinit var imgRoomVisibilityLock: ImageButton
+    private lateinit var txtRoomVisibilityHint: TextView
 
     private var isHost: Boolean = false
     private var botPlacementMode: Boolean = false
@@ -102,7 +105,9 @@ class RoomActivity : AppCompatActivity() {
         btnRemoveEast = findViewById(R.id.btnRemoveEast)
         btnRemoveSouth = findViewById(R.id.btnRemoveSouth)
         btnRemoveWest = findViewById(R.id.btnRemoveWest)
-        btnToggleVisibility = findViewById(R.id.btnToggleVisibility)
+        roomVisibilityContainer = findViewById(R.id.roomVisibilityContainer)
+        imgRoomVisibilityLock = findViewById(R.id.imgRoomVisibilityLock)
+        txtRoomVisibilityHint = findViewById(R.id.txtRoomVisibilityHint)
 
         txtRoom.text = "Sala: $roomId"
 
@@ -313,11 +318,12 @@ class RoomActivity : AppCompatActivity() {
         // We hide the old top bot buttons container as per request
         botActionsContainer.visibility = View.GONE
 
-        btnToggleVisibility.visibility = if (isHost) View.VISIBLE else View.GONE
+        roomVisibilityContainer.visibility = if (isHost) View.VISIBLE else View.GONE
         if (isHost) {
             val isPublic = state.isPublic ?: true
-            btnToggleVisibility.setImageResource(if (isPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed)
-            btnToggleVisibility.alpha = if (isPublic) 1.0f else 0.7f
+            imgRoomVisibilityLock.setImageResource(if (isPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed)
+            imgRoomVisibilityLock.alpha = if (isPublic) 1.0f else 0.7f
+            txtRoomVisibilityHint.text = if (isPublic) "Qualquer pessoa pode entrar" else "Necessario codigo para entrar"
         }
 
         if (!canUseBotActions && botPlacementMode) {
@@ -433,7 +439,7 @@ class RoomActivity : AppCompatActivity() {
     }
 
     private fun wireVisibilityToggle() {
-        btnToggleVisibility.setOnClickListener {
+        imgRoomVisibilityLock.setOnClickListener {
             if (!isHost) return@setOnClickListener
 
             val currentIsPublic = latestRoomState?.isPublic ?: true
@@ -453,6 +459,12 @@ class RoomActivity : AppCompatActivity() {
                             if (nextIsPublic) "Sala agora é pública" else "Sala agora é privada",
                             Toast.LENGTH_SHORT
                         ).show()
+
+                        // Update UI immediately
+                        imgRoomVisibilityLock.setImageResource(if (nextIsPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed)
+                        imgRoomVisibilityLock.alpha = if (nextIsPublic) 1.0f else 0.7f
+                        txtRoomVisibilityHint.text = if (nextIsPublic) "Qualquer pessoa pode entrar" else "Necessario codigo para entrar"
+
                     } else {
                         Toast.makeText(
                             this@RoomActivity,
@@ -465,6 +477,9 @@ class RoomActivity : AppCompatActivity() {
                 }
             }
         }
+
+        // Also allow tapping the whole container
+        roomVisibilityContainer.setOnClickListener { imgRoomVisibilityLock.performClick() }
     }
 
     private fun onSeatActionClick(position: String) {
