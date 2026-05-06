@@ -28,6 +28,8 @@ class FriendsActivity : AppCompatActivity() {
 
     private lateinit var friendRequestsContainer: LinearLayout
     private lateinit var txtNoRequests: TextView
+    private lateinit var txtFriendCode: TextView
+    private lateinit var btnGenerateCode: Button
 
     private var pendingRequests: List<IncomingFriendRequestData> = emptyList()
     private var lastRefreshAt: Long = 0L
@@ -70,6 +72,18 @@ class FriendsActivity : AppCompatActivity() {
 
         friendRequestsContainer = findViewById<LinearLayout>(R.id.friend_requests_container)
         txtNoRequests = findViewById(R.id.txt_no_requests)
+        txtFriendCode = findViewById(R.id.txt_friend_code)
+        btnGenerateCode = findViewById(R.id.button_generate_code)
+
+        btnGenerateCode.setOnClickListener {
+            lifecycleScope.launch {
+                FriendsManager.getFriendCode().onSuccess { response ->
+                    txtFriendCode.text = response.code
+                }.onFailure { error ->
+                    Toast.makeText(this@FriendsActivity, "Erro ao obter código: ${error.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         addFriendButton.setOnClickListener {
             val friendCode = addFriendInput.text.toString().trim()
@@ -209,6 +223,12 @@ class FriendsActivity : AppCompatActivity() {
             lastRefreshAt = now
             loadFriends()
             loadPendingRequests()
+            
+            lifecycleScope.launch {
+                FriendsManager.getFriendCode().onSuccess { response ->
+                    txtFriendCode.text = response.code
+                }
+            }
         }
     }
 

@@ -113,6 +113,11 @@ data class FriendRequest(
     @SerializedName("updatedAt") val updatedAt: String
 )
 
+data class FriendCodeResponse(
+    val code: String,
+    @SerializedName("expires_at") val expiresAt: String? = null
+)
+
 data class FriendsListResponse(
     val success: Boolean,
     val message: String? = null,

@@ -40,6 +40,7 @@ def _resolve_service_account_key() -> str:
         project_root / ".env",
         project_root / "apps" / "twilio" / ".env",
         project_root / "apps" / "auth" / "twilio" / ".env",
+        project_root / "apps" / "auth" / "friends" / ".env",
         project_root / "apps" / "auth" / ".env",
     ]
     for candidate in candidates:

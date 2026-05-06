@@ -124,6 +124,22 @@ object GatewayClient {
         )
     }
 
+    suspend fun updateRoomVisibility(playerId: String, gameId: String, isPublic: Boolean): GenericResponse {
+        val payload = mapOf(
+            "player_id" to playerId,
+            "game_id" to gameId,
+            "is_public" to isPublic
+        )
+
+        val envelope = command("room_visibility", gameId = gameId, payload = payload)
+        val response = envelope.response
+
+        return GenericResponse(
+            success = response.bool("success") ?: false,
+            message = response.string("message") ?: fallbackMessage(envelope)
+        )
+    }
+
     suspend fun cutDeck(request: CutDeckRequest): GenericResponse {
         val payload = mapOf(
             "player_id" to request.playerId,

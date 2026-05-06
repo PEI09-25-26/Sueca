@@ -122,4 +122,16 @@ object FriendsManager {
             Result.failure(e)
         }
     }
+
+    suspend fun getFriendCode(): Result<FriendCodeResponse> {
+        return try {
+            val uid = AuthManager.getUid() ?: return Result.failure(Exception("User not logged in"))
+            val token = AuthManager.getAuthHeader() ?: return Result.failure(Exception("No auth token"))
+
+            val response = RetrofitClient.api.getFriendCode(uid, token)
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

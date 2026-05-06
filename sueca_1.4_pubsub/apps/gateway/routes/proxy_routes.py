@@ -2,12 +2,12 @@ from typing import Annotated, Optional
 
 import logging
 import requests
-from fastapi import APIRouter, Query, Request
+import json
+from fastapi import APIRouter, Query, Request, Response
 
 from .. import state
 from ..dto import CommandRequestDTO
 from ..helpers import is_service_up, normalize_mode, target_base_for_mode
-
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -49,28 +49,13 @@ def route_command(command: str, request_data: CommandRequestDTO):
     try:
         response = state.INTERNAL_HTTP.post(target_url, json=payload, timeout=5)
         data = _decode_backend_response(response)
-        backend_success = response.ok
-        if isinstance(data, dict) and "success" in data:
-            backend_success = bool(data.get("success"))
-
-        if response.ok and not backend_success:
-            logger.warning("Command %s returned HTTP %s but backend success=false: %s", command, response.status_code, data)
-
-        return {
-            "success": backend_success,
-            "http_success": response.ok,
-            "http_status": response.status_code,
-            "mode": mode,
-            "target": target_url,
-            "response": data,
-        }
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {
-            "success": False,
-            "mode": mode,
-            "target": target_url,
-            "message": str(error),
-        }
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "mode": mode, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.get("/game/query/{query_path:path}")
@@ -94,25 +79,13 @@ def route_query(
     try:
         response = state.INTERNAL_HTTP.get(target_url, params=params, timeout=5)
         data = _decode_backend_response(response)
-        backend_success = response.ok
-        if isinstance(data, dict) and "success" in data:
-            backend_success = bool(data.get("success"))
-
-        return {
-            "success": backend_success,
-            "http_success": response.ok,
-            "http_status": response.status_code,
-            "mode": resolved_mode,
-            "target": target_url,
-            "response": data,
-        }
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {
-            "success": False,
-            "mode": resolved_mode,
-            "target": target_url,
-            "message": str(error),
-        }
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "mode": resolved_mode, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.post("/stats/game/{game_id:path}")
@@ -122,18 +95,22 @@ def route_stats(game_id: str):
     target = f"{state.STATS_SERVICE_URL.rstrip('/')}/game/{game_id}"
     try:
         response = state.INTERNAL_HTTP.post(target, timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.get("/presence")
 def route_presence():
     try:
         response = state.INTERNAL_HTTP.get(f"{state.PRESENCE_SERVICE_URL.rstrip('/')}/status", timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "message": str(error)}
+        return Response(status_code=502, content=json.dumps({"success": False, "message": str(error)}), media_type=APPLICATION_JSON)
 
 
 @router.get("/api/status")
@@ -144,9 +121,13 @@ def proxy_api_status(request: Request):
     target_url = f"{target}/api/status"
     try:
         response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 @router.get("/api/rooms")
 def proxy_api_rooms(request: Request):
@@ -154,9 +135,13 @@ def proxy_api_rooms(request: Request):
     target_url = f"{target}/api/rooms"
     try:
         response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.post("/api/create_room")
@@ -165,9 +150,13 @@ def proxy_api_create_room(request: Request):
     target_url = f"{target}/api/create_room"
     try:
         response = state.INTERNAL_HTTP.post(target_url, timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.post("/api/start")
@@ -179,9 +168,13 @@ async def proxy_api_start(request: Request):
         if isinstance(body, dict) and "roomId" in body and "game_id" not in body:
             body["game_id"] = body.get("roomId")
         response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.api_route("/api/auth/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
@@ -199,9 +192,13 @@ async def proxy_api_auth(path: str, request: Request):
             response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.api_route("/auth/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
@@ -219,9 +216,13 @@ async def proxy_auth(path: str, request: Request):
             response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.api_route("/api/friends/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
@@ -239,9 +240,13 @@ async def proxy_api_friends(path: str, request: Request):
             response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.api_route("/friends/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
@@ -259,9 +264,13 @@ async def proxy_friends(path: str, request: Request):
             response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.api_route("/api/agents/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
@@ -279,9 +288,13 @@ async def proxy_api_agents(path: str, request: Request):
             response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 @router.api_route("/agents/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
@@ -299,6 +312,10 @@ async def proxy_agents(path: str, request: Request):
             response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
-        return _decode_backend_response(response)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
-        return {"success": False, "target": target_url, "message": str(error)}
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            media_type=APPLICATION_JSON,
+        )

@@ -62,6 +62,7 @@ class RoomActivity : AppCompatActivity() {
     private lateinit var btnRemoveEast: Button
     private lateinit var btnRemoveSouth: Button
     private lateinit var btnRemoveWest: Button
+    private lateinit var btnToggleVisibility: ImageView
 
     private var isHost: Boolean = false
     private var botPlacementMode: Boolean = false
@@ -99,6 +100,7 @@ class RoomActivity : AppCompatActivity() {
         btnRemoveEast = findViewById(R.id.btnRemoveEast)
         btnRemoveSouth = findViewById(R.id.btnRemoveSouth)
         btnRemoveWest = findViewById(R.id.btnRemoveWest)
+        btnToggleVisibility = findViewById(R.id.btnToggleVisibility)
 
         txtRoom.text = "Sala: $roomId"
 
@@ -118,6 +120,7 @@ class RoomActivity : AppCompatActivity() {
             }
             wireSeatSelection()
             wireBotActions()
+            wireVisibilityToggle()
         }
 
     }
@@ -298,8 +301,9 @@ class RoomActivity : AppCompatActivity() {
         val mySeat = normalizePosition(me?.position)
         val hasSelectedSeat = mySeat.isNotBlank()
 
-        isHost = state.players.firstOrNull()?.id?.let { it == playerId } == true ||
+        val isHost = state.players.firstOrNull()?.id?.let { it == playerId } == true ||
             state.players.firstOrNull()?.name == playerName
+        this.isHost = isHost
 
         val canUseBotActions = state.phase == "waiting" && isHost && available.isNotEmpty()
         val canRemovePlayers = state.phase == "waiting" && isHost && !botPlacementMode
@@ -307,6 +311,13 @@ class RoomActivity : AppCompatActivity() {
         btnAddRandomBot.isEnabled = canUseBotActions
         btnAddAgent2Bot.isEnabled = canUseBotActions
         btnAddAgent1Bot.isEnabled = canUseBotActions
+
+        btnToggleVisibility.visibility = if (isHost) View.VISIBLE else View.GONE
+        if (isHost) {
+            val isPublic = state.isPublic ?: true
+            btnToggleVisibility.setImageResource(if (isPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed)
+            btnToggleVisibility.alpha = if (isPublic) 1.0f else 0.7f
+        }
 
         if (!canUseBotActions && botPlacementMode) {
             exitBotPlacementMode()
@@ -415,6 +426,41 @@ class RoomActivity : AppCompatActivity() {
 
         botPlacementOverlay.setOnClickListener {
             // Keep overlay clickable to dim the UI but avoid accidental action underneath.
+        }
+    }
+
+    private fun wireVisibilityToggle() {
+        btnToggleVisibility.setOnClickListener {
+            if (!isHost) return@setOnClickListener
+
+            val currentIsPublic = latestRoomState?.isPublic ?: true
+            val nextIsPublic = !currentIsPublic
+
+            lifecycleScope.launch {
+                try {
+                    val response = GatewayClient.updateRoomVisibility(
+                        playerId = playerId,
+                        gameId = roomId,
+                        isPublic = nextIsPublic
+                    )
+
+                    if (response.success) {
+                        Toast.makeText(
+                            this@RoomActivity,
+                            if (nextIsPublic) "Sala agora é pública" else "Sala agora é privada",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            this@RoomActivity,
+                            "Erro ao mudar visibilidade: ${response.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this@RoomActivity, "Erro de ligação.", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 

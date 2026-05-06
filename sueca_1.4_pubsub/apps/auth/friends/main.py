@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 from pydantic import BaseModel
 from shared.firebase_client import (
     add_friend,
+    get_user,
     get_friends,
     remove_friend,
     add_friend_request,
@@ -33,10 +34,26 @@ def get_friends_route(user: str | None = None, uid: str | None = None):
         raise HTTPException(status_code=400, detail="user or uid required")
     return {"friends": get_friends(user_id)}
 
+@app.get("/friends/get_code", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def get_friend_code(user: str | None = None, uid: str | None = None):
+    """Retrieves the permanent friend code for a given user."""
+    user_id = user or uid
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user or uid required")
+
+    user_doc = get_user(user_id)
+    print(f"get_friend_code: user_id={user_id}, user_doc={user_doc}")
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    friend_code = user_doc.get("friendCode")
+    if not friend_code:
+        raise HTTPException(status_code=404, detail="Friend code not found for this user")
+
+    return {"code": friend_code}
 
 @app.post("/friends/request", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 def request_friend_route(req: FriendRequest):
-    # send a friend request (from user -> friend)
     ok = add_friend_request(req.user, req.friend)
     if not ok:
         raise HTTPException(status_code=400, detail="request already exists")

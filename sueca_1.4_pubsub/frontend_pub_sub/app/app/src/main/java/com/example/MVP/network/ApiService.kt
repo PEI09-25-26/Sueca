@@ -97,6 +97,12 @@ interface ApiService {
         @Header("Authorization") token: String
     ): FriendRequestsListResponse
 
+    @GET("/api/friends/get_code")
+    suspend fun getFriendCode(
+        @Query("uid") uid: String,
+        @Header("Authorization") token: String
+    ): FriendCodeResponse
+
     // ============ /api Endpoints ============
 
     @GET("/api/status")

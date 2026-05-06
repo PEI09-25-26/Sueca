@@ -33,4 +33,6 @@
     <string name="accept">Aceitar</string>
     <string name="decline">Recusar</string>
     <string name="no_friends_yet">Sem amigos ainda</string>
+    <string name="my_friend_code">O meu código</string>
+    <string name="get_code">Recuperar</string>
 </resources>
