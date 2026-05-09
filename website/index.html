@@ -13,36 +13,67 @@
   <body>
     <main>
       <section class="hero" aria-labelledby="hero-title">
-        <div class="container hero-content reveal">
-          <img
-            class="hero-logo"
-            src="assets/suecada-logo.png"
-            alt="Logo da Suecada com quatro ases e uma coroa"
-          >
+  <div class="container hero-layout reveal">
 
-          <h1 id="hero-title">Suecada</h1>
-          <p class="hero-copy">
-            Uma aplicação moderna de Sueca com jogadores virtuais inteligentes,
-            contagem automática de pontos e suporte para jogo híbrido no mundo real.
-          </p>
+    <!-- LEFT -->
+    <div class="hero-left">
+      <div class="brand-row">
+        <img
+          class="hero-logo"
+          src="assets/suecada-logo.png"
+          alt="Logo da Suecada"
+        >
 
-          <button class="download-button" type="button">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 3v12m0 0 5-5m-5 5-5-5"></path>
-              <path d="M5 15v4h14v-4"></path>
-            </svg>
-            Download da Aplicação
-          </button>
+        <h1 id="hero-title">Suecada</h1>
+      </div>
 
-          <p class="availability">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <rect x="8" y="2" width="8" height="20" rx="2"></rect>
-              <path d="M11 18h2"></path>
-            </svg>
-            Disponível para Android (.apk)
-          </p>
-        </div>
-      </section>
+      <p class="hero-copy">
+        Uma aplicação moderna de Sueca com jogadores virtuais inteligentes,
+        contagem automática de pontos e suporte para jogo híbrido no mundo real.
+      </p>
+
+      <button class="download-button" type="button">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 3v12m0 0 5-5m-5 5-5-5"></path>
+          <path d="M5 15v4h14v-4"></path>
+        </svg>
+
+        Download da Aplicação
+      </button>
+
+      <p class="availability">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect x="8" y="2" width="8" height="20" rx="2"></rect>
+          <path d="M11 18h2"></path>
+        </svg>
+
+        Disponível para Android (.apk)
+      </p>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="hero-carousel">
+      <button class="carousel-btn prev" aria-label="Imagem anterior">
+        ❮
+      </button>
+
+      <div class="carousel-track">
+        <img src="https://images.unsplash.com/photo-1511193311914-0346f16efe90?q=80&w=1200&auto=format&fit=crop" class="carousel-image active" alt="Pessoas a jogar cartas">
+        
+        <img src="https://images.unsplash.com/photo-1529480780361-c8cb81eb5735?q=80&w=1200&auto=format&fit=crop" class="carousel-image" alt="Cartas de jogo">
+
+        <img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=1200&auto=format&fit=crop" class="carousel-image" alt="Mesa de jogo">
+
+        <img src="https://images.unsplash.com/photo-1541278107931-e006523892df?q=80&w=1200&auto=format&fit=crop" class="carousel-image" alt="Grupo a jogar">
+      </div>
+
+      <button class="carousel-btn next" aria-label="Próxima imagem">
+        ❯
+      </button>
+    </div>
+
+  </div>
+</section>
 
       <section class="section" aria-labelledby="about-title">
         <div class="container">
@@ -55,8 +86,8 @@
               </p>
               <p>
                 Desenvolvida com tecnologia de ponta, a aplicação oferece suporte
-                tanto para jogo físico como digital, incluindo jogadores autónomos
-                com Inteligência Artificial que se adaptam ao teu estilo de jogo.
+                tanto para jogo presencial como virtual, incluindo jogadores autónomos
+                com Inteligência Artificial.
               </p>
               <p>
                 Automatiza completamente a pontuação, gestão de turnos e validação
@@ -85,7 +116,7 @@
                 </svg>
               </span>
               <h3>Jogador Virtual Inteligente</h3>
-              <p>IA avançada que joga como um parceiro real, adaptando-se ao teu estilo de jogo</p>
+              <p>IA avançada que joga como um parceiro real </p>
             </article>
 
             <article class="feature-card reveal">
@@ -99,7 +130,7 @@
                 </svg>
               </span>
               <h3>Jogo Híbrido Presencial</h3>
-              <p>Combina o melhor dos dois mundos: cartas físicas com assistência digital</p>
+              <p>Combina o melhor dos dois mundos: cartas físicas com jogadores virtuais</p>
             </article>
 
             <article class="feature-card reveal">
@@ -113,7 +144,7 @@
                 </svg>
               </span>
               <h3>Estatísticas e Histórico</h3>
-              <p>Acompanha o teu desempenho com estatísticas detalhadas de todas as partidas</p>
+              <p>Acompanha o teu desempenho com estatísticas detalhadas das tuas partidas</p>
             </article>
 
             <article class="feature-card reveal">
@@ -126,7 +157,7 @@
                   <path d="M19 7h2a3 3 0 0 1-3 3h-1"></path>
                 </svg>
               </span>
-              <h3>Sistema de Torneios</h3>
+              <h3>Sistema de Torneios [INDISPONIVEL]</h3>
               <p>Organiza e participa em torneios com amigos e familiares</p>
             </article>
 
@@ -162,13 +193,13 @@
             <article class="step-card reveal">
               <span class="step-number">01</span>
               <h3>Configurar o Jogo</h3>
-              <p>Define os jogadores e escolhe o modo de jogo (físico ou digital)</p>
+              <p>Define os jogadores e escolhe o modo de jogo (presencial, híbrido ou virtual)</p>
             </article>
 
             <article class="step-card reveal">
               <span class="step-number">02</span>
               <h3>Detetar Cartas</h3>
-              <p>A câmara reconhece as cartas jogadas em tempo real</p>
+              <p>A câmara reconhece as cartas jogadas em tempo real (jogo híbrido e presencial)</p>
             </article>
 
             <article class="step-card reveal">
