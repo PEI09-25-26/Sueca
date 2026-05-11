@@ -3,11 +3,15 @@
 
 from __future__ import annotations
 
+import sys
 import ast
 import csv
 import json
 from pathlib import Path
 from typing import Iterable
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from apps.virtual_engine.card_mapper import CardMapper
 
 LIST_FIELDS = {"hand_before", "legal_moves"}
 CARDS_IN_TRICK_FIELD = "cards_in_trick"
@@ -188,14 +192,25 @@ def normalize_row(
 			normalized[field] = _normalize_position(raw_value)
 		elif field == CARDS_IN_TRICK_FIELD:
 			cards = _normalize_cards_in_trick(raw_value)
-
 			pos = _to_int(raw_row.get("position_in_trick"))
 			if pos is not None:
 				cards = cards[:pos]
-
-				normalized[field] = _dump_json(cards)
+			normalized[field] = _dump_json(cards)
 		elif field in LIST_FIELDS:
 			normalized[field] = _dump_json(_normalize_list(raw_value))
+		elif field == "lead_suit":
+			lead = _normalize_string(raw_value)
+			position = _to_int(raw_row.get("position_in_trick"))
+			card_played = _to_int(raw_row.get("card_played"))
+
+			if position == 0 and card_played is not None:
+				lead = CardMapper.get_card_suit(card_played)
+
+			elif not lead:
+				cards_in_trick = _normalize_cards_in_trick(raw_row.get("cards_in_trick"))
+				if cards_in_trick:
+					lead = get_card_suit(cards_in_trick[0])
+			normalized[field] = lead
 		elif field in DICT_FIELDS:
 			normalized[field] = _dump_json(_normalize_team_scores(raw_value))
 		else:
