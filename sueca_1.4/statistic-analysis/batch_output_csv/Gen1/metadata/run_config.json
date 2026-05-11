@@ -1,38 +1,38 @@
 {
-  "mode": "combinations",
+  "mode": "batch",
   "generation": "Gen1",
-  "split_by_generation": false,
-  "combination_label": "weak_weak_average_random",
-  "games": 2,
+  "matches": 1000,
   "base_url": "http://127.0.0.1:5000",
   "timeout_sec": 0,
-  "poll_interval": 0.03,
-  "join_timeout_sec": 1.5,
+  "poll_interval": 0.0,
+  "join_timeout_sec": 2.0,
   "split_csv": true,
-  "save_game_files": true,
-  "save_to_redis": true,
+  "save_game_files": false,
+  "save_to_redis": false,
   "redis_key_prefix": "sueca:game",
   "bots": [
     {
-      "name": "N",
+      "name": "Rita",
       "position": "NORTH",
-      "difficulty": "weak"
+      "difficulty": "random"
     },
     {
-      "name": "E",
+      "name": "Alyssa",
       "position": "EAST",
       "difficulty": "weak"
     },
     {
-      "name": "S",
+      "name": "Ava",
       "position": "SOUTH",
       "difficulty": "average"
     },
     {
-      "name": "W",
+      "name": "Serana",
       "position": "WEST",
       "difficulty": "random"
     }
   ],
-  "fast_mode": false
+  "fetch_hands": false,
+  "capture_timeline": false,
+  "fast_mode": true
 }

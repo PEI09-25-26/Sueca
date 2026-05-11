@@ -17,6 +17,10 @@ def _env_float(name, default):
         return float(default)
 
 
+def _env_bool(name, default=False):
+    return os.getenv(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
 class RandomAgent(GameClient):
     """
     AI agent that automatically plays Sueca.
@@ -33,6 +37,8 @@ class RandomAgent(GameClient):
         self.loop_sleep_min = max(0.0, _env_float("SUECA_BOT_LOOP_SLEEP_MIN", 0.0))
         self.loop_sleep_max = max(self.loop_sleep_min, _env_float("SUECA_BOT_LOOP_SLEEP_MAX", 0.0))
         self.error_sleep = max(0.0, _env_float("SUECA_BOT_ERROR_SLEEP", 0.0))
+        self.verbose = _env_bool("SUECA_BOT_VERBOSE", False)
+        self.min_loop_sleep = max(0.001, self.loop_sleep_min)
         self.player_id = None
         self.game_id = game_id
         self.position = position
@@ -49,11 +55,13 @@ class RandomAgent(GameClient):
         if success:
             self.player_id = player_id
         if not success:
-            print(f"[ERROR] Failed to join game: {message}")
+            if self.verbose:
+                print(f"[ERROR] Failed to join game: {message}")
             return
         
         self.player_name = self.agent_name
-        print(f"RandomAgent joined as {self.player_name}\n")
+        if self.verbose:
+            print(f"RandomAgent joined as {self.player_name}\n")
         
         while True:
             state = self.get_status()
@@ -67,10 +75,11 @@ class RandomAgent(GameClient):
             
             # Update state tracker
             self.state_tracker.update_from_state(state, self.player_name)
-            
-            # Update hand
-            hand = self.get_hand()
-            self.state_tracker.update_my_hand(hand)
+
+            current_player_name = state.get("current_player_name") or state.get("current_player")
+            is_my_turn = state.get("current_player_id") == self.player_id or current_player_name == self.player_name
+            if phase == "playing" and is_my_turn and not self.state_tracker.my_hand:
+                self.state_tracker.update_my_hand(self.get_hand())
             
             # Handle deck cutting
             if phase == "deck_cutting":
@@ -90,10 +99,13 @@ class RandomAgent(GameClient):
                 if self._last_finished_match != match_number:
                     team1 = state.get("team_scores", {}).get("team1", 0)
                     team2 = state.get("team_scores", {}).get("team2", 0)
-                    print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
+                    if self.verbose:
+                        print(f"Game finished! Team 1: {team1} | Team 2: {team2}")
                     self._last_finished_match = match_number
+                    break
 
             self._last_phase = phase
+            time.sleep(self.min_loop_sleep)
          
     
     def _handle_deck_cutting(self, state):
@@ -106,9 +118,11 @@ class RandomAgent(GameClient):
         cut = self.decision_maker.choose_deck_cut()
         success, msg = self.cut_deck(cut)
         if success:
-            print(f"Agent cutting deck at {cut}")
+            if self.verbose:
+                print(f"Agent cutting deck at {cut}")
         else:
-            print(f"[ERROR] Cutting deck failed: {msg}")
+            if self.verbose:
+                print(f"[ERROR] Cutting deck failed: {msg}")
     
     def _handle_trump_selection(self, state):
         """
@@ -120,9 +134,11 @@ class RandomAgent(GameClient):
         choice = self.decision_maker.choose_trump_selection()
         success, msg = self.select_trump(choice)
         if success:
-            print(f"Agent selecting {choice} card for trump")
+            if self.verbose:
+                print(f"Agent selecting {choice} card for trump")
         else:
-            print(f"[ERROR] Selecting trump failed: {msg}")
+            if self.verbose:
+                print(f"[ERROR] Selecting trump failed: {msg}")
         
     
     def _handle_playing_turn(self, state):
@@ -145,7 +161,12 @@ class RandomAgent(GameClient):
         card_str = str(card)
         success, msg = self.play_card(card_str)
         if success:
+            played_card = int(card)
+            if played_card in self.state_tracker.my_hand:
+                self.state_tracker.my_hand.remove(played_card)
             card_display = CardMapper.get_card(card)
-            print(f"Agent played: {card_display}")
+            if self.verbose:
+                print(f"Agent played: {card_display}")
         else:
-            print(f"[ERROR] Playing card failed: {msg}")
+            if self.verbose:
+                print(f"[ERROR] Playing card failed: {msg}")

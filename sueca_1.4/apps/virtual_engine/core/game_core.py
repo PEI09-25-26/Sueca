@@ -24,8 +24,18 @@ logger = logging.getLogger(__name__)
 ACTIVE_BOT_THREADS: dict[str, threading.Thread] = {}
 
 
+def _cleanup_dead_threads():
+    """Remove dead threads from ACTIVE_BOT_THREADS to prevent memory leak."""
+    dead_keys = [k for k, t in ACTIVE_BOT_THREADS.items() if not t.is_alive()]
+    for key in dead_keys:
+        del ACTIVE_BOT_THREADS[key]
+    if dead_keys:
+        logger.debug(f"Cleaned up {len(dead_keys)} dead bot threads")
+
+
 def launch_bot_thread(agent, game_id: str, bot_name: str) -> bool:
     """Start bot run loop in background and keep a reference by game/name."""
+    _cleanup_dead_threads()  # Clean up before adding new thread
     key = f"{game_id}:{bot_name}"
     existing = ACTIVE_BOT_THREADS.get(key)
     if existing and existing.is_alive():
@@ -53,6 +63,9 @@ class GameState:
 
     def reset(self):
         self.fast_mode = str(os.getenv("SUECA_STATISTICS_FAST_MODE", "")).strip().lower() in {"1", "true", "yes", "on"}
+        if self.fast_mode:
+            logger.info(f"FAST_MODE ENABLED for game {self.game_id}")
+            logger.setLevel(logging.WARNING)
         self.deck = Deck()
         self.players = []
         self.max_players = 4
@@ -424,8 +437,10 @@ class GameState:
             'state': self.get_state(),
             'game_id': self.game_id,
         }
+        # In fast/statistics mode we avoid external HTTP/webhook posts to reduce latency.
         try:
-            requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
+            if not self.fast_mode and os.getenv('SUECA_EVENT_HTTP', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
         except Exception:
             pass
 
@@ -487,8 +502,10 @@ class GameState:
             'state': self.get_state(),
             'game_id': self.game_id,
         }
+        # Avoid external posts in fast mode to keep simulation tight.
         try:
-            requests.post('http://localhost:8000/game/event', json=event, timeout=0.5)
+            if not self.fast_mode and os.getenv('SUECA_EVENT_HTTP', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                requests.post('http://localhost:8000/game/event', json=event, timeout=0.5)
         except Exception:
             pass
 
@@ -588,32 +605,36 @@ class GameState:
             'game_id': self.game_id,
         }
 
+        # Avoid external HTTP posts during fast/inproc simulations
         try:
-            requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
+            if not self.fast_mode and os.getenv('SUECA_EVENT_HTTP', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
         except Exception:
             pass
 
         try:
-            hands_by_player = {
-                player.player_id: [str(card) for card in player.hand]
-                for player in self.players
-                if getattr(player, 'player_id', None)
-            }
-            topic = f'sueca/games/{self.game_id}/state'
-            published = mqtt_client.publish_json(
-                f'sueca/games/{self.game_id}/state',
-                {
-                    'event_type': event_type,
-                    'game_id': self.game_id,
-                    'state': state_snapshot,
-                    'hands': hands_by_player,
-                },
-                retain=True,
-            )
-            if published:
-                logger.info('Published state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
-            else:
-                logger.warning('Failed to publish state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
+            # Avoid MQTT publishes in fast/inproc simulations
+            if not self.fast_mode and os.getenv('SUECA_MQTT_EVENTS', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                hands_by_player = {
+                    player.player_id: [str(card) for card in player.hand]
+                    for player in self.players
+                    if getattr(player, 'player_id', None)
+                }
+                topic = f'sueca/games/{self.game_id}/state'
+                published = mqtt_client.publish_json(
+                    f'sueca/games/{self.game_id}/state',
+                    {
+                        'event_type': event_type,
+                        'game_id': self.game_id,
+                        'state': state_snapshot,
+                        'hands': hands_by_player,
+                    },
+                    retain=True,
+                )
+                if published:
+                    logger.info('Published state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
+                else:
+                    logger.warning('Failed to publish state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
         except Exception:
             logger.exception('Unexpected error while publishing state to MQTT (event=%s, game_id=%s)', event_type, self.game_id)
 
@@ -676,6 +697,22 @@ class GameManager:
         self.default_game_id = 'default'
         self._lock = threading.Lock()
         self.games[self.default_game_id] = GameState(self.default_game_id)
+        self._finished_games_threshold = 50  # Keep at most 50 finished games
+
+    def _cleanup_finished_games(self):
+        """Aggressively remove finished games to prevent memory leak."""
+        if len(self.games) > 20:  # Keep max 20 games in memory (except default)
+            # Remove any non-default games that are finished
+            finished_ids = [gid for gid, game in self.games.items() 
+                          if gid != self.default_game_id and game.phase in ('finished', 'waiting')]
+            # Keep only the most recent finished games
+            while len(self.games) > 20:
+                if finished_ids:
+                    gid = finished_ids.pop(0)
+                    del self.games[gid]
+                    logger.debug(f"Cleaned up finished game {gid}, games dict now has {len(self.games)} entries")
+                else:
+                    break
 
     def _generate_game_id(self):
         while True:
@@ -690,6 +727,7 @@ class GameManager:
 
     def create_room(self):
         with self._lock:
+            self._cleanup_finished_games()  # Clean before creating new game
             game_id = self._generate_game_id()
             self.games[game_id] = GameState(game_id)
             return game_id

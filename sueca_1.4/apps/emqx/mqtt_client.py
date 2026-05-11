@@ -28,6 +28,7 @@ USERNAME = os.getenv('MQTT_USERNAME', '')  # Empty for no auth
 PASSWORD = os.getenv('MQTT_PASSWORD', '')
 USE_AUTH = os.getenv('MQTT_USE_AUTH', 'false').lower() == 'true'
 CLIENT_ID = f"sueca-server-{random.randint(0, 9999)}"
+EVENTS_ENABLED = os.getenv('SUECA_MQTT_EVENTS', 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 client = mqtt_client.Client(client_id=CLIENT_ID)
 _connected = False
@@ -90,6 +91,8 @@ def connect_mqtt(wait_seconds: float = 3.0):
 
 def publish_json(topic: str, payload: dict, retain: bool = False):
     """Publish JSON payload to topic."""
+    if not EVENTS_ENABLED:
+        return False
     if not _connected and not connect_mqtt(wait_seconds=1.5):
         logger.warning(f"[MQTT] Not connected. Cannot publish to {topic}")
         return False

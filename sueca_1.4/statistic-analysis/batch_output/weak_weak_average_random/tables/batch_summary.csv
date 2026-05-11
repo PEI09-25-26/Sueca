@@ -1,3 +1,0 @@
-game_number,game_id,match_number,rounds_played,winner_team,winner_label,team1_score,team2_score,trump_card,trump_suit,phase,finished_at
-1,F3316F,1,10,team2,Team 2 (E/W),37,83,38,♠,finished,2026-05-01T13:54:27.759452+00:00
-2,00F4E7,1,10,team2,Team 2 (E/W),43,77,9,♣,finished,2026-05-01T13:55:04.375701+00:00

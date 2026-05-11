@@ -90,12 +90,18 @@ class DataGatherer:
         base_url="http://127.0.0.1:5000",
         poll_interval=0.05,
         capture_timeline=True,
+        fetch_hands=False,
+        fast_mode=False,
+        use_inproc=False,
     ):
         self.game_number = game_number
         self.agents = agents or []
         self.base_url = base_url.rstrip("/")
         self.poll_interval = float(poll_interval)
         self.capture_timeline = bool(capture_timeline)
+        self.fetch_hands = bool(fetch_hands)
+        self.fast_mode = bool(fast_mode)
+        self.use_inproc = bool(use_inproc)
         self.game_id = None
         self.action_data = []
         self._last_round_plays_len = 0
@@ -268,6 +274,28 @@ class DataGatherer:
         return snapshot
 
     def create_bot_match(self, bots=None, join_timeout_sec=8.0, fast_mode=False):
+        # Support in-process simulation for very fast batch runs
+        if self.use_inproc:
+            # Ensure repository root is on sys.path so 'apps' package imports work
+            import sys
+            from pathlib import Path
+
+            repo_root = Path(__file__).resolve().parents[1]
+            if str(repo_root) not in sys.path:
+                sys.path.insert(0, str(repo_root))
+
+            from apps.virtual_engine.core.inproc_simulator import simulate_match
+
+            result = simulate_match(self.game_number, bots=bots, fast_mode=fast_mode)
+            # Populate internal gatherer structures from result
+            self.game_id = result.get("game_data", {}).get("game_id")
+            self.game_data.update(result.get("game_data", {}))
+            self.round_data = result.get("round_data", {})
+            # ingest any per-action rows provided by inproc simulator
+            self.action_data = result.get("action_data", []) or []
+            # keep match_history if present
+            return {"game_id": self.game_id, "bots": bots}
+
         payload = {"join_timeout_sec": join_timeout_sec}
         if bots is not None:
             payload["bots"] = bots
@@ -516,7 +544,7 @@ class DataGatherer:
                 break
             state = self.get_status(target_game_id)
             last_state = state
-            hands_snapshot = self._fetch_hands_snapshot(state)
+            hands_snapshot = self._fetch_hands_snapshot(state) if self.fetch_hands else {}
             self._ingest_state(state, current_hands_by_player_id=hands_snapshot)
 
             if self._is_finished_state(state):
@@ -527,8 +555,10 @@ class DataGatherer:
 
             phase = str(state.get("phase") or "").strip().lower()
             effective_interval = self.poll_interval
+            if self.fast_mode:
+                effective_interval = min(effective_interval, 0.005)
             if phase in {"waiting", "deck_cutting", "trump_selection"}:
-                effective_interval = min(self.poll_interval, 0.1)
+                effective_interval = min(effective_interval, 0.01 if self.fast_mode else 0.1)
             time.sleep(max(0.01, float(effective_interval)))
 
         if last_state is None:
@@ -749,7 +779,23 @@ class DataGatherer:
             data = self.round_data[round_key]
             before = data.get("team_scores_before") or {}
             after = data.get("team_scores_after") or {}
-            cards = data.get("cards_played") or []
+            cards = data.get("cards_played") or data.get("actions") or []
+            cards_played_count = len(cards)
+            round_actions = []
+            for play in cards:
+                round_actions.append(
+                    {
+                        "player": play.get("player") or play.get("player_name"),
+                        "position": play.get("position"),
+                        "card": play.get("card") or play.get("card_played"),
+                        "cards_in_trick": play.get("cards_in_trick"),
+                        "position_in_trick": play.get("position_in_trick"),
+                        "lead_suit": play.get("lead_suit"),
+                        "trump": play.get("trump"),
+                        "hand_before": play.get("hand_before"),
+                        "legal_moves": play.get("legal_moves"),
+                    }
+                )
             rows.append(
                 {
                     "game_number": self.game_data.get("game_number"),
@@ -761,8 +807,9 @@ class DataGatherer:
                     "team2_before": before.get("team2"),
                     "team1_after": after.get("team1"),
                     "team2_after": after.get("team2"),
-                    "cards_played_count": len(cards),
+                    "cards_played_count": cards_played_count,
                     "cards_played": self._compact_cards(cards),
+                    "round_actions": json.dumps(round_actions, ensure_ascii=False),
                 }
             )
 
@@ -812,6 +859,7 @@ class DataGatherer:
             "team2_after",
             "cards_played_count",
             "cards_played",
+            "round_actions",
         ]
 
         self._write_csv(summary_path, summary_fields, [self._summary_row_compact()])
@@ -839,24 +887,30 @@ class DataGatherer:
         server_recovery_wait_sec=30.0,
         save_game_files=True,
         run_metadata=None,
+        fetch_hands=False,
+        capture_timeline=False,
+        fast_mode=True,
+        use_inproc=False,
     ):
+        write_outputs = bool(save_game_files or split_csv)
         output_root = Path(output_dir)
-        output_root.mkdir(parents=True, exist_ok=True)
         tables_dir = output_root / "tables"
         manifests_dir = output_root / "manifests"
         metadata_dir = output_root / "metadata"
         games_dir = output_root / "games"
 
-        tables_dir.mkdir(parents=True, exist_ok=True)
-        manifests_dir.mkdir(parents=True, exist_ok=True)
-        metadata_dir.mkdir(parents=True, exist_ok=True)
-        if save_game_files:
-            games_dir.mkdir(parents=True, exist_ok=True)
+        if write_outputs:
+            output_root.mkdir(parents=True, exist_ok=True)
+            tables_dir.mkdir(parents=True, exist_ok=True)
+            manifests_dir.mkdir(parents=True, exist_ok=True)
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+            if save_game_files:
+                games_dir.mkdir(parents=True, exist_ok=True)
 
-        if run_metadata is not None:
-            run_metadata_path = metadata_dir / "run_config.json"
-            with open(run_metadata_path, "w", encoding="utf-8") as f:
-                json.dump(run_metadata, f, indent=2, ensure_ascii=False)
+            if run_metadata is not None:
+                run_metadata_path = metadata_dir / "run_config.json"
+                with open(run_metadata_path, "w", encoding="utf-8") as f:
+                    json.dump(run_metadata, f, indent=2, ensure_ascii=False)
 
         bots_payload = bots or _default_bots()
         manifest = []
@@ -895,20 +949,38 @@ class DataGatherer:
             _update_progress()
 
         def _run_single_match(i):
+            effective_poll_interval = min(float(poll_interval), 0.005 if fast_mode else float(poll_interval))
+            match_start = time.monotonic()
             gatherer = DataGatherer(
                 game_number=i,
                 agents=deepcopy(bots_payload),
                 base_url=base_url,
-                poll_interval=poll_interval,
-                capture_timeline=save_game_files,
+                poll_interval=effective_poll_interval,
+                capture_timeline=capture_timeline,
+                fetch_hands=fetch_hands,
+                fast_mode=fast_mode,
+                use_inproc=use_inproc,
             )
+            create_start = time.monotonic()
             create_resp = gatherer.create_bot_match(
                 bots=deepcopy(bots_payload),
                 join_timeout_sec=join_timeout_sec,
-                fast_mode=False,
+                fast_mode=fast_mode,
             )
             game_id = create_resp.get("game_id") or f"match_{i}"
-            gatherer.collect_until_finished(timeout_sec=timeout_sec)
+            create_elapsed = time.monotonic() - create_start
+            
+            collect_start = time.monotonic()
+            if gatherer.use_inproc:
+                # In-process simulation already populated gatherer during create_bot_match
+                collect_elapsed = 0.0
+            else:
+                gatherer.collect_until_finished(timeout_sec=timeout_sec)
+                collect_elapsed = time.monotonic() - collect_start
+            
+            total_elapsed = time.monotonic() - match_start
+            sys.stderr.write(f"  Game {i+1}: {game_id} - create={create_elapsed:.3f}s, collect={collect_elapsed:.3f}s, total={total_elapsed:.3f}s (FAST_MODE={fast_mode})\n")
+            sys.stderr.flush()
 
             json_path = None
             if save_game_files:
@@ -929,6 +1001,9 @@ class DataGatherer:
                 actions_csv_path = games_dir / f"actions_{i:03d}_{game_id}.csv"
                 gatherer.save_actions_csv(str(actions_csv_path))
 
+            summary_row = gatherer._summary_row_compact() if split_csv else None
+            round_rows = gatherer._round_rows_compact() if split_csv else None
+
             return {
                 "game_number": i,
                 "game_id": game_id,
@@ -938,8 +1013,8 @@ class DataGatherer:
                 "winner_label": gatherer.game_data.get("winner_label"),
                 "final_scores": gatherer.game_data.get("final_scores"),
                 "redis_key": redis_key,
-                "summary_row": gatherer._summary_row_compact(),
-                "round_rows": gatherer._round_rows_compact(),
+                "summary_row": summary_row,
+                "round_rows": round_rows,
                 "actions_csv": str(actions_csv_path) if actions_csv_path else None,
             }
 
@@ -1076,7 +1151,7 @@ class DataGatherer:
                 )
             )
 
-        if split_csv:
+        if split_csv and write_outputs:
             summary_path = tables_dir / "batch_summary.csv"
             rounds_path = tables_dir / "batch_rounds.csv"
             summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1113,14 +1188,17 @@ class DataGatherer:
                     "team2_after",
                     "cards_played_count",
                     "cards_played",
+                    "round_actions",
                 ],
                 batch_round_rows,
             )
 
-        manifest_path = manifests_dir / "batch_manifest.json"
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            json.dump(manifest, f, indent=2, ensure_ascii=False)
+        manifest_path = None
+        if write_outputs:
+            manifest_path = manifests_dir / "batch_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                json.dump(manifest, f, indent=2, ensure_ascii=False)
 
         if interrupted:
             print("Batch interrupted. Partial outputs were saved.")
@@ -1128,7 +1206,7 @@ class DataGatherer:
         if progress_enabled and progress_inline:
             _finish_progress_line()
 
-        return manifest, str(manifest_path)
+        return manifest, (str(manifest_path) if manifest_path else None)
 
 
 def _load_json_file(path):
@@ -1364,6 +1442,7 @@ def main():
         default=30.0,
         help="Wait up to N seconds for server recovery after connection errors",
     )
+    parser.add_argument("--slow-mode", action="store_true", help="Disable fast mode and preserve round pacing")
     parser.add_argument("--bots-json", default=None, help="JSON string with 4 bot specs")
     parser.add_argument("--bots-file", default=None, help="Path to JSON file with 4 bot specs")
     parser.add_argument("--combinations-json", default=None, help="JSON list of bot combinations")
@@ -1377,11 +1456,15 @@ def main():
     parser.add_argument("--redis-db", type=int, default=0)
     parser.add_argument("--redis-password", default=None)
     parser.add_argument("--redis-key-prefix", default="sueca:game")
+    parser.add_argument("--fetch-hands", action="store_true", help="Fetch player hand info during polling (slower, detailed actions)")
+    parser.add_argument("--capture-timeline", action="store_true", help="Capture full state timeline during polling (slower, detailed analysis)")
+    parser.add_argument("--fast-inproc", action="store_true", help="Run matches in-process without HTTP/threads (very fast)")
     args = parser.parse_args()
 
     redis_client = _make_redis_client(args)
     combinations = _parse_combinations_from_args(args)
     selected_bots = _parse_bots_from_args(args)
+    fast_mode = not args.slow_mode
 
     if combinations:
         root_output = Path(args.output_dir)
@@ -1415,7 +1498,11 @@ def main():
                     max_consecutive_connection_errors=args.max_consecutive_connection_errors,
                     server_recovery_wait_sec=args.server_recovery_wait_sec,
                     save_game_files=not args.no_game_files,
-                    run_metadata={
+                    fetch_hands=args.fetch_hands,
+                    capture_timeline=args.capture_timeline,
+                    fast_mode=fast_mode,
+                    use_inproc=args.fast_inproc,
+                    run_metadata=(None if (args.no_game_files and not args.split_csv) else {
                         "mode": "combinations",
                         "generation": generation_name,
                         "split_by_generation": split_by_generation,
@@ -1430,8 +1517,10 @@ def main():
                         "save_to_redis": args.save_to_redis,
                         "redis_key_prefix": args.redis_key_prefix,
                         "bots": combo.get("bots"),
-                        "fast_mode": False,
-                    },
+                        "fetch_hands": args.fetch_hands,
+                        "capture_timeline": args.capture_timeline,
+                        "fast_mode": fast_mode,
+                    }),
                 )
                 all_manifests.append(
                     {
@@ -1477,7 +1566,11 @@ def main():
                 max_consecutive_connection_errors=args.max_consecutive_connection_errors,
                 server_recovery_wait_sec=args.server_recovery_wait_sec,
                 save_game_files=not args.no_game_files,
-                run_metadata={
+                fetch_hands=args.fetch_hands,
+                capture_timeline=args.capture_timeline,
+                fast_mode=fast_mode,
+                use_inproc=args.fast_inproc,
+                run_metadata=(None if (args.no_game_files and not args.split_csv) else {
                     "mode": "batch",
                     "generation": generation_name,
                     "matches": args.matches,
@@ -1490,8 +1583,10 @@ def main():
                     "save_to_redis": args.save_to_redis,
                     "redis_key_prefix": args.redis_key_prefix,
                     "bots": selected_bots,
-                    "fast_mode": False,
-                },
+                    "fetch_hands": args.fetch_hands,
+                    "capture_timeline": args.capture_timeline,
+                    "fast_mode": fast_mode,
+                }),
             )
             generation_reports.append(
                 {
@@ -1518,15 +1613,20 @@ def main():
         base_url=args.base_url,
         poll_interval=args.poll_interval,
     )
+    # Ensure DataGatherer knows whether to use in-process simulation
+    gatherer.use_inproc = bool(args.fast_inproc)
 
     if args.create_match:
-        create_resp = gatherer.create_bot_match(bots=selected_bots)
+        create_resp = gatherer.create_bot_match(bots=selected_bots, fast_mode=fast_mode)
         print(f"Created game: {create_resp.get('game_id')}")
 
     if args.game_id and not gatherer.game_id:
         gatherer.game_id = args.game_id
 
-    payload = gatherer.collect_until_finished(timeout_sec=args.timeout_sec)
+    if getattr(gatherer, "use_inproc", False):
+        payload = gatherer.to_dict()
+    else:
+        payload = gatherer.collect_until_finished(timeout_sec=args.timeout_sec)
     gatherer.save_json(args.output)
     redis_key = None
     if redis_client is not None:
