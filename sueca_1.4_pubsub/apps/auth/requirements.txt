@@ -1,0 +1,11 @@
+fastapi==0.135.1
+uvicorn==0.18.3
+python-dotenv==1.0.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+firebase-admin==7.4.0
+PyJWT==2.10.1
+cryptography==44.0.3
+sendgrid==6.11.0
+requests==2.31.0
+redis>=4.6.0

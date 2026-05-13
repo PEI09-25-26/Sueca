@@ -14,8 +14,8 @@ from pydantic import BaseModel
 try:
     from cv import CardDetector, CardClassifier
 except ImportError:
-    from cv.opencv import CardDetector
-    from cv.yolo import CardClassifier
+    from ..cv.opencv import CardDetector
+    from ..cv.yolo import CardClassifier
 
 
 detector: Optional[CardDetector] = None

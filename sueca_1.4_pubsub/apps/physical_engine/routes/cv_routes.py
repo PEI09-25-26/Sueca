@@ -3,7 +3,7 @@ from fastapi import APIRouter, WebSocket
 try:
     from ..core.cv_core import StartCVRequest, health_status, start_cv, stop_cv, stream_cv
 except ImportError:
-    from core.cv_core import StartCVRequest, health_status, start_cv, stop_cv, stream_cv
+    from ..core.cv_core import StartCVRequest, health_status, start_cv, stop_cv, stream_cv
 
 
 router = APIRouter()

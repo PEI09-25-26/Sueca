@@ -12,6 +12,7 @@ import com.example.MVP.models.HandResponse
 import com.example.MVP.models.JoinGameRequest
 import com.example.MVP.models.JoinGameResponse
 import com.example.MVP.models.MatchPointsResponse
+import com.example.MVP.models.LeaveRoomRequest
 import com.example.MVP.models.RemoveParticipantRequest
 import com.example.MVP.models.RoomModeRequest
 import com.example.MVP.models.SelectTrumpRequest
@@ -124,6 +125,36 @@ object GatewayClient {
         )
     }
 
+    suspend fun leaveRoom(gameId: String, playerId: String): GenericResponse {
+        val response = RetrofitClient.api.leaveRoom(
+            LeaveRoomRequest(
+                gameId = gameId,
+                playerId = playerId
+            )
+        )
+
+        return GenericResponse(
+            success = response.success,
+            message = response.message ?: "Saida da sala processada."
+        )
+    }
+
+    suspend fun updateRoomVisibility(playerId: String, gameId: String, isPublic: Boolean): GenericResponse {
+        val payload = mapOf(
+            "player_id" to playerId,
+            "game_id" to gameId,
+            "is_public" to isPublic
+        )
+
+        val envelope = command("room_visibility", gameId = gameId, payload = payload)
+        val response = envelope.response
+
+        return GenericResponse(
+            success = response.bool("success") ?: false,
+            message = response.string("message") ?: fallbackMessage(envelope)
+        )
+    }
+
     suspend fun cutDeck(request: CutDeckRequest): GenericResponse {
         val payload = mapOf(
             "player_id" to request.playerId,
@@ -166,6 +197,16 @@ object GatewayClient {
         val envelope = command("play", gameId = request.gameId, payload = payload)
         val response = envelope.response
 
+        return GenericResponse(
+            success = response.bool("success") ?: false,
+            message = response.string("message") ?: fallbackMessage(envelope)
+        )
+    }
+
+    suspend fun startGame(gameId: String): GenericResponse {
+        val payload = mapOf("game_id" to gameId)
+        val envelope = command("start", gameId = gameId, payload = payload)
+        val response = envelope.response
         return GenericResponse(
             success = response.bool("success") ?: false,
             message = response.string("message") ?: fallbackMessage(envelope)

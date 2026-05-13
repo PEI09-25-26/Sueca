@@ -7,6 +7,8 @@ from ..positions import Positions
 from ..card_mapper import CardMapper
 from ..agents.random_agent.random_agent import RandomAgent
 from ..agents.weak_agent import WeakAgent
+from apps.agents.agents import AverageAgent
+from apps.agents.agents import SmartAgent
 import logging
 import requests
 import threading
@@ -15,6 +17,7 @@ import queue
 from datetime import datetime, timezone
 
 from apps.emqx import mqtt_client
+from ..event_publisher import publish_room_event
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,7 +101,8 @@ class GameState:
         self.deck = Deck()
         self.players = []
         self.max_players = 4
-        self.creator_id = None  # Track who created/owns the room
+        self.creator_id = None
+        self.is_public = True
         self.trump_card = None
         self.trump_suit = None
         self.teams = [[], []]
@@ -249,6 +253,51 @@ class GameState:
 
         self._push_state('player_removed')
         return True, f'Player {target.player_name} removed successfully'
+
+    def leave(self, player_id):
+        """
+        Voluntary leave by a player. This removes the player from the room,
+        frees their seat, reassigns creator if needed, and emits state.
+        Returns (success: bool, message: str).
+        """
+        target = self.get_player(player_id)
+        if not target:
+            return False, 'Player not found'
+
+        # Do not allow leaving while a game is actively in progress
+        if self.game_started and self.phase != 'finished':
+            return False, 'Cannot leave while game is in progress'
+
+        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+        # Free up the position
+        if target.position not in self.available_team_positions[team_key]:
+            self.available_team_positions[team_key].append(target.position)
+
+        try:
+            self.players.remove(target)
+        except ValueError:
+            pass
+
+        if target in self.teams[0]:
+            self.teams[0].remove(target)
+        elif target in self.teams[1]:
+            self.teams[1].remove(target)
+
+        if target.player_id in self.scores:
+            del self.scores[target.player_id]
+
+        # If the leaving player was the creator, assign a new creator if any players remain
+        if self.creator_id == player_id:
+            if len(self.players) > 0:
+                # pick first player as new creator
+                new_creator = self.players[0]
+                self.creator_id = getattr(new_creator, 'player_id', None)
+            else:
+                self.creator_id = None
+
+        logger.info('Player %s left game %s', target.player_name, self.game_id)
+        self._push_state('player_left')
+        return True, f'Player {target.player_name} left the game'
 
     def get_player(self, player_id):
         for player in self.players:
@@ -570,6 +619,8 @@ class GameState:
             'player_count': len(self.players),
             'game_started': self.game_started,
             'phase': self.phase,
+            'creator_id': self.creator_id,
+            'is_public': getattr(self, 'is_public', True),
             # Backward-compatible keys consumed by existing clients.
             'north_player': cutter_player_name,
             'north_player_id': cutter_player_id,
@@ -619,6 +670,12 @@ class GameState:
         EVENT_DISPATCHER.dispatch(event)
 
         try:
+            if getattr(self, 'is_public', True):
+                publish_room_event('room_updated', game_id=self.game_id, state=state_snapshot)
+        except Exception:
+            pass
+
+        try:
             hands_by_player = {
                 player.player_id: [str(card) for card in player.hand]
                 for player in self.players
@@ -657,7 +714,14 @@ def create_weak_bot(bot_name, position=None, game_id=None):
     return agent
 
 def create_average_bot(bot_name, position=None, game_id=None):
-    agent = WeakAgent()
+    agent = AverageAgent()
+    agent.agent_name = bot_name
+    agent.position = position
+    agent.game_id = game_id
+    return agent
+
+def create_smart_bot(bot_name, position=None, game_id=None):
+    agent = SmartAgent()
     agent.agent_name = bot_name
     agent.position = position
     agent.game_id = game_id
@@ -671,7 +735,9 @@ class BotFactory:
         'weak': create_weak_bot,
         'weak_agent': create_weak_bot,
         'average': create_average_bot,
-        'average_agent': create_average_bot
+        'average_agent': create_average_bot,
+        'smart': create_smart_bot,
+        'smart_agent': create_smart_bot
     }
     
     @classmethod
@@ -717,7 +783,16 @@ class GameManager:
         with self._lock:
             game_id = self._generate_game_id()
             self.games[game_id] = GameState(game_id)
+            publish_room_event('room_created', game_id=game_id)
             return game_id
+
+    def delete_room(self, game_id: str):
+        with self._lock:
+            if game_id in self.games and game_id != self.default_game_id:
+                del self.games[game_id]
+                publish_room_event('room_deleted', game_id=game_id)
+                return True
+        return False
 
     def create_game(self, creator_name, position_choice):
         with self._lock:
@@ -729,6 +804,7 @@ class GameManager:
 
             game.creator_id = player_id  # Creator is the first player of this room
             self.games[game_id] = game
+            publish_room_event('room_created', game_id=game_id)
             return True, message, game_id, player_id
 
 manager = GameManager()

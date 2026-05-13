@@ -1,9 +1,10 @@
 tunnel: sueca-api
-credentials-file: apps/cloudflare/9282ae9d-2ebc-4626-a8c3-a1e4e7801886.json
+credentials-file: /etc/cloudflared/9282ae9d-2ebc-4626-a8c3-a1e4e7801886.json
+origincert: /etc/cloudflared/cert.pem
 
 ingress:
   - hostname: api.suecadaojogo.com
-    service: http://localhost:8080
+    service: http://gateway:8080
   - hostname: mqtt.suecadaojogo.com
-    service: http://localhost:8083
+    service: http://emqx:8083
   - service: http_status:404

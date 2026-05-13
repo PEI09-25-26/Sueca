@@ -367,7 +367,7 @@ class VisionActivity : AppCompatActivity() {
             }
         }
         
-        val builder = AlertDialog.Builder(this)
+        val builder = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
         builder.setTitle(title)
         builder.setMessage(message)
         builder.setCancelable(false)
