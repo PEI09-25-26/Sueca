@@ -183,7 +183,7 @@ class MainMenuActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val response = RetrofitClient.api.startGame(
+                val response = RetrofitClient.api.startPhysicalGame(
                     StartGameRequest(playerName = name, roomId = roomId)
                 )
 

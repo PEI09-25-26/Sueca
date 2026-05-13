@@ -87,13 +87,15 @@ class DecisionMaker:
         non_trumps = [c for c in legal_plays if CardMapper.get_card_suit(c) != self.state.trump_suit]
         trumps = [c for c in legal_plays if CardMapper.get_card_suit(c) == self.state.trump_suit]
         trick_points = self.state.get_trick_points()
+        opp = None
         for p in self.state.get_players_after_self():
             if p in self.state.opponents:
                 opp = p
         danger_suits = []
-        for suit in CardMapper.SUITS:
-            if self.state.is_player_void(opp, suit) and suit not in danger_suits:
-                danger_suits.append(suit)
+        if opp is not None:
+            for suit in CardMapper.SUITS:
+                if self.state.is_player_void(opp, suit) and suit not in danger_suits:
+                    danger_suits.append(suit)
         if num_played == 1:
             return self.choose_middle_second(legal_plays, trumps, non_trumps, trick_points, danger_suits)
         elif num_played == 2:

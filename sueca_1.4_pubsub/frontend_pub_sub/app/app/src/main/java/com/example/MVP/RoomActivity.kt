@@ -148,7 +148,10 @@ class RoomActivity : AppCompatActivity() {
             lastRealtimeUpdateMs = 0L
             showMqttConnectingOverlay()
             lifecycleScope.launch {
-                GatewayClient.setRoomMode(roomId, "virtual")
+                val currentMode = GatewayClient.getRoomMode(roomId)
+                if (currentMode != "physical") {
+                    GatewayClient.setRoomMode(roomId, "virtual")
+                }
             }
             startRealtimeUpdates()
             startPolling()

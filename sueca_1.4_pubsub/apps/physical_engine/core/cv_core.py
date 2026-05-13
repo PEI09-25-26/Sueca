@@ -7,6 +7,7 @@ from PIL import Image
 import json
 import os
 from pathlib import Path
+import jwt
 
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -112,6 +113,24 @@ async def start_cv(request: StartCVRequest):
 async def stream_cv(websocket: WebSocket, game_id: str):
     global detector, classifier
 
+    token = websocket.query_params.get("token")
+    secret = os.getenv("SUECA_JWT_SECRET", "dev-secret")
+    if not token:
+        await websocket.close(code=4001)
+        print(f"[CV Service] Missing token for game: {game_id}")
+        return
+
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        if payload.get("game_id") != game_id:
+            await websocket.close(code=4003)
+            print(f"[CV Service] Token game_id mismatch for game: {game_id}")
+            return
+    except Exception as error:
+        print(f"[CV Service] Token validation failed: {error}")
+        await websocket.close(code=4002)
+        return
+
     await websocket.accept()
     print(f"[CV Service] WebSocket connected for game: {game_id}")
 
@@ -124,15 +143,24 @@ async def stream_cv(websocket: WebSocket, game_id: str):
         active_games[game_id] = {
             "last_labels": {},
             "sent_labels": set(),
+            "frames_received": 0,
+            "frames_decoded": 0,
+            "frames_with_cards": 0,
         }
 
     game_state = active_games[game_id]
+    game_state.setdefault("last_labels", {})
+    game_state.setdefault("sent_labels", set())
+    game_state.setdefault("frames_received", 0)
+    game_state.setdefault("frames_decoded", 0)
+    game_state.setdefault("frames_with_cards", 0)
     last_labels = game_state["last_labels"]
     sent_labels = game_state["sent_labels"]
 
     try:
         while True:
             message = await websocket.receive_text()
+            game_state["frames_received"] += 1
 
             if message.startswith("{"):
                 try:
@@ -145,21 +173,51 @@ async def stream_cv(websocket: WebSocket, game_id: str):
                             "success": True,
                             "message": "cards_reset",
                         })
+                        print("[CV Service] Reset complete - ready for new frames")
                         continue
                 except json.JSONDecodeError:
                     pass
+
+            # Log frame arrival every 30 frames for debugging
+            if game_state["frames_received"] % 30 == 0:
+                print(f"[CV Service] Frame batch received: total_frames={game_state['frames_received']}")
 
             frame_base64 = message
 
             frame = base64_to_image(frame_base64)
             if frame is None:
+                if game_state["frames_received"] % 100 == 0:
+                    print(f"[CV Service] Warning: received frame {game_state['frames_received']} was None after decode")
                 continue
+            game_state["frames_decoded"] += 1
 
             flatten_cards, _, _ = detector.detect_cards_from_frame(frame)
+            if flatten_cards:
+                game_state["frames_with_cards"] += 1
+            
+            # Log detection attempts every 30 frames
+            if game_state["frames_received"] % 30 == 0:
+                print(
+                    f"[CV Service] Detection check: frame={game_state['frames_received']} "
+                    f"cards_found={len(flatten_cards) if flatten_cards else 0} "
+                    f"sent_labels={sent_labels} last_labels={last_labels}"
+                )
 
             if flatten_cards and classifier:
+                # Debug: log when we have cards to classify
+                if game_state["frames_received"] < 750:
+                    print(f"[CV DEBUG] Frame {game_state['frames_received']}: Found {len(flatten_cards)} cards, about to classify...")
+                
                 for i, flat_card in enumerate(flatten_cards):
-                    class_label, conf = classifier.classify(flat_card)
+                    try:
+                        class_label, conf = classifier.classify(flat_card)
+                        # Log card classification attempts for debugging
+                        if game_state["frames_received"] < 750:
+                            print(f"[CV DEBUG] Frame {game_state['frames_received']}, Card {i}: class_label={class_label}, conf={conf:.2f}, sent_labels={sent_labels}")
+                    except Exception as e:
+                        print(f"[CV Service] ERROR classifying card {i}: {e}")
+                        class_label, conf = None, 0.0
+                    
                     label_str = f"{class_label} ({conf:.2f})" if class_label else "Unknown"
 
                     prev_label = last_labels.get(i)
@@ -186,7 +244,9 @@ async def stream_cv(websocket: WebSocket, game_id: str):
     except WebSocketDisconnect:
         print(f"[CV Service] WebSocket disconnected for game: {game_id}")
     except Exception as error:
-        print(f"[CV Service] Error in WebSocket stream: {error}")
+        print(f"[CV Service] CRITICAL ERROR in WebSocket stream: {type(error).__name__}: {error}")
+        import traceback
+        print(f"[CV Service] Traceback: {traceback.format_exc()}")
         await websocket.close()
 
 

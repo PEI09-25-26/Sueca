@@ -16,6 +16,6 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-EXPOSE 8001 8002
+EXPOSE 8001
 ENV PYTHONPATH=/app
-CMD ["uvicorn", "apps.physical_engine.cv_service:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "apps.physical_engine.main:app", "--host", "0.0.0.0", "--port", "8001"]

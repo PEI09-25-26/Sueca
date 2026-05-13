@@ -16,6 +16,11 @@ def get_state():
     return get_state_data()
 
 
+@router.get("/status")
+def get_status():
+    return get_state_data()
+
+
 @router.post("/reset")
 def reset_game():
     result = reset_game_state()
@@ -34,5 +39,5 @@ def new_round():
 def receive_card(card: CardDTO):
     result = process_card(card)
     card_payload = card.model_dump() if hasattr(card, 'model_dump') else card.dict()
-    publish_physical_event('default', 'physical_card_received', card=card_payload)
+    publish_physical_event(card.game_id or 'default', 'physical_card_received', card=card_payload)
     return result

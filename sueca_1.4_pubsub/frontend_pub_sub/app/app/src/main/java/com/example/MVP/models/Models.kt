@@ -536,6 +536,21 @@ data class RoomModeRequest(
     val mode: String
 )
 
+data class RoomModeResponse(
+    val success: Boolean,
+    @SerializedName("game_id") val gameId: String? = null,
+    val mode: String? = null
+)
+
+data class GameTokenRequest(
+    @SerializedName("game_id") val gameId: String
+)
+
+data class GameTokenResponse(
+    val token: String,
+    @SerializedName("expires_at") val expiresAt: String
+)
+
 data class GatewayCommandRequest(
     @SerializedName("game_id") val gameId: String? = null,
     val mode: String? = null,
