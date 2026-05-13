@@ -167,8 +167,15 @@ interface ApiService {
     @POST("/api/start")
     suspend fun startGame(@Body request: StartGameRequest): StartGameResponse
 
+    @POST("/game/start")
+    suspend fun startPhysicalGame(@Body request: StartGameRequest): StartGameResponse
+
     @POST("/api/add_bot")
     suspend fun addBot(@Body request: AddBotRequest): AddBotResponse
+
+    // Issue short-lived token for camera websocket streaming
+    @POST("/auth/game_token")
+    suspend fun getGameToken(@Body request: GameTokenRequest): GameTokenResponse
 
     @POST("/api/the_council_has_decided_your_fate")
     suspend fun removeParticipant(@Body request: RemoveParticipantRequest): GenericResponse
@@ -239,6 +246,11 @@ interface ApiService {
         @Path("gameId") gameId: String,
         @Body request: RoomModeRequest
     ): GenericResponse
+
+    @GET("/game/room_mode/{gameId}")
+    suspend fun getRoomMode(
+        @Path("gameId") gameId: String
+    ): RoomModeResponse
 
     @POST("/game/command/{command}")
     suspend fun routeCommand(

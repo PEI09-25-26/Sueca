@@ -5,6 +5,8 @@ origincert: /etc/cloudflared/cert.pem
 ingress:
   - hostname: api.suecadaojogo.com
     service: http://gateway:8080
+  - hostname: ws.suecadaojogo.com
+    service: http://gateway:8080
   - hostname: mqtt.suecadaojogo.com
     service: http://emqx:8083
   - service: http_status:404

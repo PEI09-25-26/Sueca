@@ -10,7 +10,7 @@ from ..referee import Referee
 ref = Referee()
 state_sync_lock = threading.Lock()
 
-MIDDLEWARE_URL = "http://localhost:8000/game/state"
+MIDDLEWARE_URL = "http://localhost:8000/game/physical/state"
 MIDDLEWARE_ROUND_END_URL = "http://localhost:8000/game/round_end"
 
 # Game constants
@@ -24,24 +24,28 @@ class CardDTO(BaseModel):
 	rank: str
 	suit: str
 	confidence: Optional[float] = None
+	game_id: Optional[str] = None
 
 
 def get_state_data():
 	return ref.state()
 
 
-def _send_state_to_middleware():
+def _send_state_to_middleware(game_id: Optional[str] = None):
 	with state_sync_lock:
 		time.sleep(0.05)
 		try:
-			requests.post(MIDDLEWARE_URL, json=ref.state(), timeout=1.0)
+			state_payload = ref.state()
+			if game_id:
+				state_payload["game_id"] = game_id
+			requests.post(MIDDLEWARE_URL, json=state_payload, timeout=1.0)
 			print("[SYNC] State pushed to middleware")
 		except requests.exceptions.RequestException as error:
 			print(f"[WARN] State sync failed: {error}")
 
 
-def _push_state():
-	threading.Thread(target=_send_state_to_middleware, daemon=True).start()
+def _push_state(game_id: Optional[str] = None):
+	threading.Thread(target=_send_state_to_middleware, args=(game_id,), daemon=True).start()
 
 
 def reset_game_state():
@@ -68,6 +72,7 @@ def start_new_round():
 
 def process_card(card: CardDTO):
 	global current_hand
+	game_id = card.game_id or "default"
 	if len(ref.card_queue) == 0:
 		current_hand = ref.current_player - 1
 
@@ -87,7 +92,7 @@ def process_card(card: CardDTO):
 		print("[DEBUG] Setting trump...")
 		ref.set_trump()
 		print(f"[DEBUG] Trump now: {CardMapper.get_card(ref.trump)} (suit: {ref.trump_suit})")
-		_push_state()
+		_push_state(game_id)
 		current_hand -= 1
 		return {
 			"success": True,
@@ -139,7 +144,7 @@ def process_card(card: CardDTO):
 			except Exception as error:
 				print(f"[WARN] Failed to notify middleware: {error}")
 
-		_push_state()
+		_push_state(game_id)
 
 	return {
 		"success": True,

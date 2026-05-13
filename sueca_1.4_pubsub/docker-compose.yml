@@ -54,11 +54,15 @@ services:
     build:
       context: .
       dockerfile: apps/physical_engine/Dockerfile
+    gpus: all
     ports:
       - "8001:8001"
-      - "8002:8002"
     env_file:
       - ./.env
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - SUECA_YOLO_DEVICE=cuda:0
     depends_on:
       - auth
 
@@ -67,8 +71,11 @@ services:
       context: .
       dockerfile: apps/cloudflare/Dockerfile
     restart: unless-stopped
+    env_file:
+      - ./.env
     depends_on:
       - gateway
+      - emqx
 
   redis:
     image: redis:7-alpine
