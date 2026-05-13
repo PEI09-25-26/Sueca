@@ -1,6 +1,22 @@
 [
-  {"name": "BotNorth", "position": "NORTH", "difficulty": "weak"},
-  {"name": "BotEast", "position": "EAST", "difficulty": "weak"},
-  {"name": "BotSouth", "position": "SOUTH", "difficulty": "average"},
-  {"name": "BotWest", "position": "WEST", "difficulty": "random"}
+  {
+    "name": "BotNorth",
+    "position": "NORTH",
+    "difficulty": "weak"
+  },
+  {
+    "name": "BotEast",
+    "position": "EAST",
+    "difficulty": "average"
+  },
+  {
+    "name": "BotSouth",
+    "position": "SOUTH",
+    "difficulty": "weak"
+  },
+  {
+    "name": "BotWest",
+    "position": "WEST",
+    "difficulty": "average"
+  }
 ]
