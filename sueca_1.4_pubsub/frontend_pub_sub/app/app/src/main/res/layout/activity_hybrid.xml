@@ -55,13 +55,39 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/activity_hybrid_switch" />
 
+    <LinearLayout
+        android:id="@+id/trumpSelectionControls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/txtHybridMode">
+
+        <Button
+            android:id="@+id/btnTrumpTop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Trunfo: topo" />
+
+        <Button
+            android:id="@+id/btnTrumpBottom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="Trunfo: fundo" />
+    </LinearLayout>
+
     <FrameLayout
         android:id="@+id/hybridContentContainer"
         android:layout_width="382dp"
         android:layout_height="481dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/txtHybridMode">
+        app:layout_constraintTop_toBottomOf="@+id/trumpSelectionControls">
 
         <androidx.camera.view.PreviewView
             android:id="@+id/previewView"
@@ -109,7 +135,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="Mesa mockada (cartas pre-definidas)"
+                android:text="Mesa do jogo (tempo real)"
                 android:textColor="@android:color/white"
                 android:textSize="14sp"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -156,7 +182,7 @@
                 android:layout_height="100dp"
                 android:contentDescription="Carta sul"
                 android:src="@drawable/card_back"
-                app:layout_constraintBottom_toBottomOf="@+id/txtMockLegend"
+                app:layout_constraintBottom_toBottomOf="@+id/txtTableLegend"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/trump_card"
@@ -175,12 +201,12 @@
                 app:layout_constraintVertical_bias="0.505" />
 
             <TextView
-                android:id="@+id/txtMockLegend"
+                android:id="@+id/txtTableLegend"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="20dp"
                 android:gravity="center"
-                android:text="Norte: 2 de paus | Oeste: Rei de copas | Trunfo: As de paus"
+                android:text="A mesa mostra as cartas da ronda atual"
                 android:textColor="@android:color/white"
                 android:textSize="12sp"
                 app:layout_constraintBottom_toBottomOf="parent"

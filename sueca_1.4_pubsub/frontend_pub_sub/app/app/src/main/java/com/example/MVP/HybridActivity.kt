@@ -2,23 +2,47 @@ package com.example.MVP
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Base64
+import android.util.Log
 import android.view.View
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.MVP.models.Card
+import com.example.MVP.models.GameStatusResponse
+import com.example.MVP.models.HybridConfirmCaptureRequest
+import com.example.MVP.models.HybridConfirmTrumpCaptureRequest
+import com.example.MVP.models.HybridDealRecognizeRequest
+import com.example.MVP.models.HybridDealResetRequest
+import com.example.MVP.models.HybridRegisterPlayerRequest
+import com.example.MVP.models.HybridRuntimeState
+import com.example.MVP.models.HybridSelectCardRequest
+import com.example.MVP.models.SelectTrumpRequest
+import com.example.MVP.network.RetrofitClient
+import com.example.MVP.utils.CardMapper
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -33,37 +57,55 @@ class HybridActivity : AppCompatActivity() {
     private lateinit var recognitionOverlay: View
     private lateinit var recognitionStateImage: ImageView
     private lateinit var recognitionProgressText: TextView
+    private lateinit var trumpSelectionControls: View
+    private lateinit var btnTrumpTop: Button
+    private lateinit var btnTrumpBottom: Button
 
     private lateinit var handAdapter: CardsAdapter
+
+    private lateinit var roomId: String
+    private lateinit var playerName: String
+    private lateinit var playerId: String
     private var isHost: Boolean = false
-    private var virtualPhonePlayers: Int = 0
-    private var isRecognitionRunning: Boolean = false
-    private var recognitionJob: Job? = null
+    private var isVirtualPlayer: Boolean = false
 
-    private val cardsPerVirtualPlayer = 10
-    private val virtualHands = mutableMapOf<Int, MutableList<Card>>()
+    private var gameState: GameStatusResponse? = null
+    private var hybridState: HybridRuntimeState? = null
 
+    private var isRunning = false
+    private var pollHybridJob: Job? = null
+    private var pollGameJob: Job? = null
+    private var flashJob: Job? = null
+
+    private var inFlightRecognition = false
+    private var lastFrameSentAt = 0L
+    private var dealResetRequested = false
+    private var hybridRoleRegistered = false
+
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var camera: Camera? = null
+    private var frameExecutor: ExecutorService? = null
+
+    private val cardsPerVirtual = 10
+    private val minFrameIntervalMs = 700L
     private val cameraPermissionRequestCode = 11
-
-    private val recognitionPool = listOf(
-        Card("1", "clubs", "ace"),
-        Card("2", "hearts", "7"),
-        Card("3", "spades", "king"),
-        Card("4", "diamonds", "2"),
-        Card("5", "hearts", "jack"),
-        Card("6", "clubs", "5"),
-        Card("7", "spades", "3"),
-        Card("8", "diamonds", "queen"),
-        Card("9", "clubs", "6"),
-        Card("10", "hearts", "ace")
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_hybrid)
 
+        roomId = intent.getStringExtra("roomId")?.trim().orEmpty()
+        playerName = intent.getStringExtra("playerName") ?: "Player"
+        playerId = intent.getStringExtra("playerId") ?: ""
         isHost = intent.getBooleanExtra("isHost", false)
-        virtualPhonePlayers = intent.getIntExtra("virtualPhonePlayers", if (isHost) 1 else 0)
+        isVirtualPlayer = intent.getBooleanExtra("isVirtualPlayer", !isHost)
+
+        if (roomId.isBlank()) {
+            recognitionProgressText = findViewById(R.id.txtRecognitionProgress)
+            recognitionProgressText.text = "Sala invalida para modo hibrido"
+            finish()
+            return
+        }
 
         findViewById<ImageView>(R.id.backButton).setOnClickListener { finish() }
 
@@ -75,28 +117,44 @@ class HybridActivity : AppCompatActivity() {
         recognitionOverlay = findViewById(R.id.recognitionOverlay)
         recognitionStateImage = findViewById(R.id.imgRecognitionState)
         recognitionProgressText = findViewById(R.id.txtRecognitionProgress)
+        trumpSelectionControls = findViewById(R.id.trumpSelectionControls)
+        btnTrumpTop = findViewById(R.id.btnTrumpTop)
+        btnTrumpBottom = findViewById(R.id.btnTrumpBottom)
 
-        setupMockedTable()
-        setupMockedPhoneHand()
+        clearTableCards()
+        setupHand()
         setupSwitch()
+        setupTrumpControls()
 
-        if (shouldRunRecognitionFlow()) {
-            startRecognitionMock()
+        if (isHost) {
+            ensureCameraPermissionsAndStart()
+        } else {
+            previewView.visibility = View.GONE
+            modeSwitch.isChecked = true
+            modeSwitch.isEnabled = false
         }
 
-        if (allPermissionsGranted()) {
-            startCameraPreview()
-        } else {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.CAMERA),
-                cameraPermissionRequestCode
-            )
+        lifecycleScope.launch {
+            hybridRoleRegistered = registerHybridRole()
+            startRuntimeLoops()
         }
     }
 
+    private fun setupTrumpControls() {
+        btnTrumpTop.setOnClickListener { submitTrumpChoice("top") }
+        btnTrumpBottom.setOnClickListener { submitTrumpChoice("bottom") }
+    }
+
+    private fun setupHand() {
+        handAdapter = CardsAdapter(emptyList()) { card ->
+            onVirtualCardTap(card)
+        }
+        handRecyclerView.layoutManager = GridLayoutManager(this, 5)
+        handRecyclerView.adapter = handAdapter
+        handAdapter.isEnabled = false
+    }
+
     private fun setupSwitch() {
-        // false -> camera; true -> mesa
         modeSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 modeSwitch.text = "Mesa ativa"
@@ -108,129 +166,563 @@ class HybridActivity : AppCompatActivity() {
                 modeSwitch.text = "Camera ativa"
                 modeText.text = "Modo atual: camera"
                 mesaContainer.visibility = View.GONE
-
-                if (isRecognitionRunning) {
-                    previewView.visibility = View.GONE
-                    recognitionOverlay.visibility = View.VISIBLE
-                } else {
-                    previewView.visibility = View.VISIBLE
-                    recognitionOverlay.visibility = View.GONE
-                }
-
-                if (allPermissionsGranted()) {
-                    startCameraPreview()
-                } else {
-                    ActivityCompat.requestPermissions(
-                        this,
-                        arrayOf(Manifest.permission.CAMERA),
-                        cameraPermissionRequestCode
-                    )
-                }
+                previewView.visibility = if (isHost) View.VISIBLE else View.GONE
+                recognitionOverlay.visibility = if (isRunning) View.VISIBLE else View.GONE
             }
         }
     }
 
-    private fun setupMockedTable() {
-        // Mocked cards that represent a fixed table state.
-        setCardResource(R.id.card_north, "clubs_2")
-        setCardResource(R.id.card_west, "hearts_king")
-        // Requested: no mocked card on the right player (east) and phone player (south).
-        setCardBack(R.id.card_east)
-        setCardBack(R.id.card_south)
-        setCardResource(R.id.trump_card, "clubs_ace")
+    private suspend fun registerHybridRole(): Boolean {
+        if (playerId.isBlank()) {
+            syncPlayerIdFromStatus()
+        }
+
+        if (playerId.isBlank()) {
+            recognitionProgressText.text = "Nao foi possivel identificar o jogador nesta sala"
+            return false
+        }
+
+        try {
+            RetrofitClient.api.hybridRegisterPlayer(
+                HybridRegisterPlayerRequest(
+                    gameId = roomId,
+                    playerId = playerId,
+                    role = if (isVirtualPlayer) "virtual" else "real",
+                    isHost = isHost
+                )
+            )
+            return true
+        } catch (e: Exception) {
+            Log.w("HybridActivity", "registerHybridRole failed: ${e.message}")
+            return false
+        }
     }
 
-    private fun setupMockedPhoneHand() {
-        // In hybrid recognition flow, cards are appended one-by-one as they are recognized.
-        val handCards = emptyList<Card>()
+    private suspend fun resetDealForHost() {
+        if (playerId.isBlank()) {
+            return
+        }
+        try {
+            val response = RetrofitClient.api.hybridDealReset(
+                HybridDealResetRequest(
+                    gameId = roomId,
+                    playerId = playerId,
+                    cardsPerVirtual = cardsPerVirtual
+                )
+            )
+            hybridState = response.state
+            updateUiFromHybridState(response.state)
+            dealResetRequested = true
+        } catch (e: Exception) {
+            Log.w("HybridActivity", "resetDealForHost failed: ${e.message}")
+            dealResetRequested = false
+        }
+    }
 
-        handAdapter = CardsAdapter(
-            handCards
-        ) {
-            // Mock hand only; no action yet.
+    private fun startRuntimeLoops() {
+        if (isRunning) {
+            return
+        }
+        isRunning = true
+        recognitionOverlay.visibility = View.VISIBLE
+        modeSwitch.isEnabled = false
+
+        pollHybridJob?.cancel()
+        pollGameJob?.cancel()
+
+        pollHybridJob = lifecycleScope.launch {
+            while (isRunning) {
+                try {
+                    if (!hybridRoleRegistered) {
+                        hybridRoleRegistered = registerHybridRole()
+                    }
+                    val response = RetrofitClient.api.hybridState(roomId)
+                    hybridState = response.state
+                    updateUiFromHybridState(response.state)
+                } catch (e: Exception) {
+                    Log.w("HybridActivity", "hybridState poll failed: ${e.message}")
+                }
+                delay(700)
+            }
+        }
+
+        pollGameJob = lifecycleScope.launch {
+            while (isRunning) {
+                try {
+                    if (!hybridRoleRegistered) {
+                        hybridRoleRegistered = registerHybridRole()
+                    }
+                    val state = RetrofitClient.api.getStatus(roomId)
+                    gameState = state
+                    updateUiFromGameState(state)
+                } catch (e: Exception) {
+                    Log.w("HybridActivity", "game status poll failed: ${e.message}")
+                }
+                delay(700)
+            }
+        }
+    }
+
+    private fun updateUiFromHybridState(state: HybridRuntimeState) {
+        if (gameState?.phase != "playing") {
+            handAdapter.isEnabled = false
+            return
+        }
+
+        if (!state.dealDone) {
+            showDealPhase(state)
+            return
+        }
+
+        showPlayPhase(state)
+    }
+
+    private fun showDealPhase(state: HybridRuntimeState) {
+        recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+
+        if (isHost) {
+            val nextTarget = state.virtualPlayers.firstOrNull { it.cardsCount < state.cardsPerVirtual }
+            if (nextTarget != null) {
+                recognitionProgressText.text =
+                    "Distribui para ${nextTarget.playerName}: ${nextTarget.cardsCount + 1}/${state.cardsPerVirtual}"
+                val hostViewCards = List(nextTarget.cardsCount) { idx -> Card(idx.toString(), "hidden", "hidden") }
+                handAdapter.updateCards(hostViewCards)
+            } else {
+                recognitionProgressText.text = "Distribuicao concluida"
+            }
+            handAdapter.isEnabled = false
+            return
+        }
+
+        if (isVirtualPlayer) {
+            val me = state.virtualPlayers.firstOrNull { it.playerId == playerId }
+            if (me != null) {
+                val cards = me.cards.map { id -> cardIdToCard(id) }
+                handAdapter.updateCards(cards)
+                recognitionProgressText.text = "A receber cartas: ${me.cardsCount}/${state.cardsPerVirtual}"
+            } else {
+                handAdapter.updateCards(emptyList())
+                recognitionProgressText.text = "Aguardando configuracao do host"
+            }
+        } else {
+            handAdapter.updateCards(emptyList())
+            recognitionProgressText.text = "Jogador real: aguarda distribuicao dos virtuais"
         }
 
         handAdapter.isEnabled = false
-        handRecyclerView.layoutManager = GridLayoutManager(this, 5)
-        handRecyclerView.adapter = handAdapter
     }
 
-    private fun shouldRunRecognitionFlow(): Boolean {
-        // Host: receives cards for each virtual phone player.
-        // Virtual phone player: receives own 10 cards one by one.
-        return if (isHost) virtualPhonePlayers > 0 else true
-    }
+    private fun showPlayPhase(state: HybridRuntimeState) {
+        val pending = state.pendingVirtualPlay
+        val currentPlayerId = gameState?.currentPlayerId
 
-    private fun startRecognitionMock() {
-        if (isRecognitionRunning) return
-
-        isRecognitionRunning = true
-        modeSwitch.isEnabled = false
-        modeSwitch.isChecked = false
-        modeSwitch.text = "Camera ativa"
-        modeText.text = "Modo atual: camera"
-
-        previewView.visibility = View.GONE
-        mesaContainer.visibility = View.GONE
-        recognitionOverlay.visibility = View.VISIBLE
-
-        recognitionJob = lifecycleScope.launch {
-            var recognizedTotal = 0
-            val playersToProcess = if (isHost) {
-                virtualPhonePlayers.coerceAtLeast(1)
+        if (isHost) {
+            if (pending != null) {
+                recognitionProgressText.text =
+                    "Carta escolhida por ${pending.playerName}. Joga-a na mesa para confirmar"
+                handAdapter.updateCards(buildRealCopyHand(state, currentPlayerId, pending))
             } else {
-                1
+                val current = gameState?.currentPlayer ?: "-"
+                recognitionProgressText.text = "Aguardar jogada captada. Vez: $current"
+                handAdapter.updateCards(buildRealCopyHand(state, currentPlayerId, pending))
             }
-            val totalToRecognize = playersToProcess * cardsPerVirtualPlayer
+            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+            handAdapter.isEnabled = false
+            return
+        }
 
-            for (playerIndex in 1..playersToProcess) {
-                val hand = virtualHands.getOrPut(playerIndex) { mutableListOf() }
+        if (isVirtualPlayer) {
+            val me = state.virtualPlayers.firstOrNull { it.playerId == playerId }
+            val cards = me?.cards?.map { id ->
+                if (pending != null && pending.playerId == playerId) {
+                    if (pending.cardId == id) cardIdToCard(id) else Card(id.toString(), "hidden", "hidden")
+                } else {
+                    cardIdToCard(id)
+                }
+            }.orEmpty()
+            handAdapter.updateCards(cards)
 
-                for (cardSlot in 1..cardsPerVirtualPlayer) {
-                    // Eye icon while waiting for the next card to be shown to camera.
-                    recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
-                    recognitionProgressText.text = if (isHost) {
-                        "Mostra ao telemovel a carta $cardSlot/$cardsPerVirtualPlayer"
-                    } else {
-                        "A aguardar carta $cardSlot/$cardsPerVirtualPlayer"
-                    }
-                    delay(600)
+            val isMyTurn = gameState?.currentPlayerId == playerId && pending == null
+            handAdapter.isEnabled = isMyTurn
 
-                    val card = recognitionPool[(recognizedTotal) % recognitionPool.size]
-                    hand.add(mapCardForCurrentRole(card))
-                    recognizedTotal += 1
+            recognitionProgressText.text = if (isMyTurn) {
+                "Escolhe a carta para o host jogar"
+            } else if (pending?.playerId == playerId) {
+                "Host a confirmar a tua carta na mesa"
+            } else {
+                "A aguardar a tua vez"
+            }
+            recognitionStateImage.setImageResource(
+                if (pending?.playerId == playerId) R.drawable.ic_hybrid_check else R.drawable.ic_hybrid_eye
+            )
+        } else {
+            handAdapter.updateCards(buildRealCopyHand(state, currentPlayerId, pending))
+            handAdapter.isEnabled = false
+            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+            recognitionProgressText.text = "Jogador real: acompanhar mao do jogador da vez"
+        }
 
-                    updateVirtualHandUI(playerIndex)
+        modeSwitch.isEnabled = isHost
+    }
 
-                    // Show success for 2 seconds after each recognized card.
-                    recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check)
-                    recognitionProgressText.text =
-                        "Carta reconhecida ($recognizedTotal/$totalToRecognize)"
-                    delay(2000)
+    private fun updateUiFromGameState(state: GameStatusResponse) {
+        updateTableFromGameState(state)
+
+        val phase = state.phase
+
+        if (phase == "trump_selection") {
+            showTrumpSelectionPhase(state)
+            return
+        }
+
+        trumpSelectionControls.visibility = View.GONE
+
+        if (isHost && state.phase == "playing" && !dealResetRequested) {
+            lifecycleScope.launch {
+                resetDealForHost()
+            }
+        }
+
+        if (phase != "playing") {
+            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+            handAdapter.isEnabled = false
+            handAdapter.updateCards(emptyList())
+            recognitionProgressText.text = when (phase) {
+                "deck_cutting" -> "Corte ignorado no hibrido. A preparar selecao de trunfo"
+                else -> "Aguardar inicio da partida"
+            }
+            return
+        }
+
+        if (!isHost) {
+            return
+        }
+
+        maybeHostAutoCapture(state)
+    }
+
+    private fun showTrumpSelectionPhase(state: GameStatusResponse) {
+        trumpSelectionControls.visibility = View.VISIBLE
+        recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+        handAdapter.isEnabled = false
+        handAdapter.updateCards(emptyList())
+
+        val selectorId = state.trumpSelectorPlayerId ?: state.westPlayerId
+        val selectorName = state.trumpSelectorPlayer ?: state.westPlayer ?: "jogador do trunfo"
+        val isSelector = !selectorId.isNullOrBlank() && selectorId == playerId
+
+        btnTrumpTop.isEnabled = isSelector
+        btnTrumpBottom.isEnabled = isSelector
+
+        // Host should keep camera mode in trump selection to allow physical capture.
+        if (isHost) {
+            modeSwitch.isEnabled = true
+            modeSwitch.isChecked = false
+        }
+
+        recognitionProgressText.text = if (isSelector) {
+            "E a tua vez de escolher o trunfo (topo/fundo)"
+        } else {
+            "Aguardar $selectorName escolher o trunfo"
+        }
+    }
+
+    private fun submitTrumpChoice(choice: String) {
+        if (playerId.isBlank()) {
+            recognitionProgressText.text = "Nao foi possivel identificar o teu jogador"
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                val response = RetrofitClient.api.selectTrump(
+                    SelectTrumpRequest(
+                        playerId = playerId,
+                        choice = choice,
+                        gameId = roomId
+                    )
+                )
+
+                if (!response.success) {
+                    recognitionProgressText.text = response.message ?: "Falha ao selecionar trunfo"
+                }
+            } catch (e: Exception) {
+                recognitionProgressText.text = "Erro ao selecionar trunfo"
+                Log.w("HybridActivity", "submitTrumpChoice failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun maybeHostAutoCapture(state: GameStatusResponse) {
+        if (!isRunning || inFlightRecognition) {
+            return
+        }
+        val currentPlayerId = state.currentPlayerId ?: return
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastFrameSentAt < minFrameIntervalMs) {
+            return
+        }
+
+        // Decision is executed by analyzer thread; this method only updates intent.
+    }
+
+    private fun onVirtualCardTap(card: Card) {
+        if (!isVirtualPlayer) {
+            return
+        }
+
+        val state = hybridState ?: return
+        val isMyTurn = gameState?.currentPlayerId == playerId && state.pendingVirtualPlay == null
+        if (!isMyTurn) {
+            return
+        }
+
+        val cardId = card.id.toIntOrNull() ?: return
+
+        lifecycleScope.launch {
+            try {
+                val response = RetrofitClient.api.hybridSelectCard(
+                    HybridSelectCardRequest(
+                        gameId = roomId,
+                        playerId = playerId,
+                        card = cardId
+                    )
+                )
+                hybridState = response.state
+                updateUiFromHybridState(response.state)
+            } catch (_: Exception) {
+                // Keep UI stable; next poll refreshes state.
+            }
+        }
+    }
+
+    private fun buildRealCopyHand(
+        state: HybridRuntimeState,
+        currentPlayerId: String?,
+        pending: com.example.MVP.models.HybridPendingPlay?
+    ): List<Card> {
+        if (currentPlayerId.isNullOrBlank()) {
+            return emptyList()
+        }
+
+        val currentVirtual = state.virtualPlayers.firstOrNull { it.playerId == currentPlayerId }
+        if (currentVirtual != null) {
+            return currentVirtual.cards.map { cardId ->
+                if (pending != null && pending.playerId == currentPlayerId && pending.cardId == cardId) {
+                    cardIdToCard(cardId)
+                } else {
+                    Card(cardId.toString(), "hidden", "hidden")
                 }
             }
+        }
 
-            isRecognitionRunning = false
-            modeSwitch.isEnabled = true
-            recognitionOverlay.visibility = View.GONE
-            previewView.visibility = View.VISIBLE
-            recognitionProgressText.text = "Reconhecimento terminado"
+        val realCurrent = gameState?.players?.firstOrNull { it.id == currentPlayerId }
+        val backCount = realCurrent?.cardsLeft?.coerceAtLeast(0) ?: 0
+        return List(backCount) { idx -> Card(idx.toString(), "hidden", "hidden") }
+    }
+
+    private suspend fun syncPlayerIdFromStatus() {
+        try {
+            val state = RetrofitClient.api.getStatus(roomId)
+            val me = state.players.firstOrNull { it.name == playerName }
+            playerId = me?.id ?: playerId
+        } catch (_: Exception) {
+            // Will retry from next polling cycle.
         }
     }
 
-    private fun updateVirtualHandUI(playerIndex: Int) {
-        val cards = virtualHands[playerIndex].orEmpty()
-        handAdapter.updateCards(cards)
+    private fun ensureCameraPermissionsAndStart() {
+        if (allPermissionsGranted()) {
+            startCameraPipeline()
+            return
+        }
+
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.CAMERA),
+            cameraPermissionRequestCode
+        )
     }
 
-    private fun mapCardForCurrentRole(card: Card): Card {
-        return if (isHost) {
-            // Host should only see card backs while helping to recognize virtual player's hand.
-            Card(card.id, "hidden", "hidden")
-        } else {
-            // Virtual player sees the actual recognized cards.
-            card
+    private fun startCameraPipeline() {
+        val providerFuture = ProcessCameraProvider.getInstance(this)
+        frameExecutor = Executors.newSingleThreadExecutor()
+
+        providerFuture.addListener({
+            cameraProvider = providerFuture.get()
+
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
+
+            val analyzer = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+
+            analyzer.setAnalyzer(frameExecutor!!) { imageProxy ->
+                analyzeFrameForHybrid(imageProxy)
+            }
+
+            try {
+                cameraProvider?.unbindAll()
+                camera = cameraProvider?.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    analyzer
+                )
+            } catch (e: Exception) {
+                Log.e("HybridActivity", "Failed to bind camera pipeline", e)
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun analyzeFrameForHybrid(imageProxy: ImageProxy) {
+        try {
+            if (!isHost || !isRunning || inFlightRecognition) {
+                return
+            }
+
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastFrameSentAt < minFrameIntervalMs) {
+                return
+            }
+
+            val frameBase64 = imageProxyToBase64(imageProxy) ?: return
+            lastFrameSentAt = now
+            inFlightRecognition = true
+
+            val localHybrid = hybridState
+            val localGame = gameState
+
+            lifecycleScope.launch {
+                try {
+                    if (localGame?.phase == "trump_selection") {
+                        val response = RetrofitClient.api.hybridConfirmTrumpCapture(
+                            HybridConfirmTrumpCaptureRequest(
+                                gameId = roomId,
+                                hostPlayerId = playerId,
+                                frameBase64 = frameBase64
+                            )
+                        )
+                        if (response.success) {
+                            response.gameState?.let {
+                                gameState = it
+                                updateUiFromGameState(it)
+                            }
+                            response.state?.let {
+                                hybridState = it
+                            }
+                            flashCheck("Trunfo captado")
+                        }
+                    } else if (localHybrid != null && !localHybrid.dealDone && localGame?.phase == "playing") {
+                        val response = RetrofitClient.api.hybridDealRecognize(
+                            HybridDealRecognizeRequest(
+                                gameId = roomId,
+                                playerId = playerId,
+                                frameBase64 = frameBase64,
+                                targetPlayerId = null
+                            )
+                        )
+                        hybridState = response.state
+                        updateUiFromHybridState(response.state)
+                        if (response.confirmed) {
+                            flashCheck("Carta distribuida")
+                        }
+                    } else if (localGame?.phase == "playing") {
+                        val pending = localHybrid?.pendingVirtualPlay
+                        val currentPlayerId = localGame.currentPlayerId
+
+                        val capturePlayerId = when {
+                            pending != null && pending.playerId == currentPlayerId -> pending.playerId
+                            !currentPlayerId.isNullOrBlank() -> currentPlayerId
+                            else -> null
+                        }
+
+                        if (!capturePlayerId.isNullOrBlank()) {
+                            val response = RetrofitClient.api.hybridConfirmCapture(
+                                HybridConfirmCaptureRequest(
+                                    gameId = roomId,
+                                    playerId = capturePlayerId,
+                                    hostPlayerId = playerId,
+                                    frameBase64 = frameBase64
+                                )
+                            )
+                            if (response.success) {
+                                response.state?.let {
+                                    hybridState = it
+                                    updateUiFromHybridState(it)
+                                }
+                                response.gameState?.let {
+                                    gameState = it
+                                }
+                                flashCheck("Carta captada")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w("HybridActivity", "Frame processing failed: ${e.message}")
+                } finally {
+                    inFlightRecognition = false
+                }
+            }
+        } finally {
+            imageProxy.close()
         }
+    }
+
+    private fun flashCheck(text: String) {
+        flashJob?.cancel()
+        flashJob = lifecycleScope.launch {
+            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check)
+            recognitionProgressText.text = text
+            delay(1200)
+            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+        }
+    }
+
+    private fun imageProxyToBase64(imageProxy: ImageProxy): String? {
+        if (imageProxy.format != ImageFormat.YUV_420_888) {
+            return null
+        }
+
+        val nv21 = yuv420ToNv21(imageProxy)
+        val yuvImage = YuvImage(nv21, ImageFormat.NV21, imageProxy.width, imageProxy.height, null)
+        val output = ByteArrayOutputStream()
+        val ok = yuvImage.compressToJpeg(
+            Rect(0, 0, imageProxy.width, imageProxy.height),
+            70,
+            output
+        )
+
+        if (!ok) {
+            return null
+        }
+
+        return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+    }
+
+    private fun yuv420ToNv21(image: ImageProxy): ByteArray {
+        val yBuffer = image.planes[0].buffer
+        val uBuffer = image.planes[1].buffer
+        val vBuffer = image.planes[2].buffer
+
+        val ySize = yBuffer.remaining()
+        val uSize = uBuffer.remaining()
+        val vSize = vBuffer.remaining()
+
+        val nv21 = ByteArray(ySize + uSize + vSize)
+        yBuffer.get(nv21, 0, ySize)
+        vBuffer.get(nv21, ySize, vSize)
+        uBuffer.get(nv21, ySize + vSize, uSize)
+        return nv21
+    }
+
+    private fun cardIdToCard(cardId: Int): Card {
+        val suit = CardMapper.getCardSuitName(cardId)
+        val rank = CardMapper.getCardRankName(cardId)
+        return Card(cardId.toString(), suit, rank)
     }
 
     private fun setCardResource(viewId: Int, cardName: String) {
@@ -247,26 +739,46 @@ class HybridActivity : AppCompatActivity() {
         findViewById<ImageView>(viewId).setImageResource(R.drawable.card_back)
     }
 
-    private fun startCameraPreview() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+    private fun clearTableCards() {
+        setCardBack(R.id.card_north)
+        setCardBack(R.id.card_west)
+        setCardBack(R.id.card_east)
+        setCardBack(R.id.card_south)
+        setCardBack(R.id.trump_card)
+    }
 
-        cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
+    private fun updateTableFromGameState(state: GameStatusResponse) {
+        clearTableCards()
 
-            try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    this,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview
-                )
-            } catch (_: Exception) {
-                // Keep the activity usable in mesa mode even when camera bind fails.
-            }
-        }, ContextCompat.getMainExecutor(this))
+        val trumpId = state.trump?.toIntOrNull()
+        if (trumpId != null) {
+            setCardResource(R.id.trump_card, CardMapper.getDrawableName(trumpId))
+        }
+
+        for (play in state.roundPlays) {
+            val cardId = play.card.toIntOrNull() ?: continue
+            val slotViewId = when (normalizePosition(play.position)) {
+                "NORTH" -> R.id.card_north
+                "EAST" -> R.id.card_east
+                "SOUTH" -> R.id.card_south
+                "WEST" -> R.id.card_west
+                else -> null
+            } ?: continue
+
+            setCardResource(slotViewId, CardMapper.getDrawableName(cardId))
+        }
+    }
+
+    private fun normalizePosition(pos: String?): String {
+        if (pos.isNullOrBlank()) return ""
+        val p = pos.uppercase()
+        return when {
+            p.contains("NORTH") -> "NORTH"
+            p.contains("SOUTH") -> "SOUTH"
+            p.contains("EAST") -> "EAST"
+            p.contains("WEST") -> "WEST"
+            else -> p
+        }
     }
 
     private fun allPermissionsGranted(): Boolean {
@@ -275,7 +787,12 @@ class HybridActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        recognitionJob?.cancel()
+        isRunning = false
+        pollHybridJob?.cancel()
+        pollGameJob?.cancel()
+        flashJob?.cancel()
+        frameExecutor?.shutdown()
+        cameraProvider?.unbindAll()
         super.onDestroy()
     }
 
@@ -288,7 +805,7 @@ class HybridActivity : AppCompatActivity() {
         if (requestCode == cameraPermissionRequestCode && grantResults.isNotEmpty() &&
             grantResults[0] == PackageManager.PERMISSION_GRANTED
         ) {
-            startCameraPreview()
+            startCameraPipeline()
         }
     }
 }
