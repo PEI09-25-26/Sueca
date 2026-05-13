@@ -1,0 +1,38 @@
+{
+  "mode": "batch",
+  "generation": "Gen1",
+  "matches": 1000,
+  "base_url": "http://127.0.0.1:5000",
+  "timeout_sec": 0,
+  "poll_interval": 0.0,
+  "join_timeout_sec": 2.0,
+  "split_csv": true,
+  "save_game_files": false,
+  "save_to_redis": false,
+  "redis_key_prefix": "sueca:game",
+  "bots": [
+    {
+      "name": "Rita",
+      "position": "NORTH",
+      "difficulty": "random"
+    },
+    {
+      "name": "Alyssa",
+      "position": "EAST",
+      "difficulty": "weak"
+    },
+    {
+      "name": "Ava",
+      "position": "SOUTH",
+      "difficulty": "average"
+    },
+    {
+      "name": "Serana",
+      "position": "WEST",
+      "difficulty": "random"
+    }
+  ],
+  "fetch_hands": false,
+  "capture_timeline": false,
+  "fast_mode": true
+}
