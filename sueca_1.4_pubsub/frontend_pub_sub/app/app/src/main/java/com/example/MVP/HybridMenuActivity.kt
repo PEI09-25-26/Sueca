@@ -230,35 +230,6 @@ class HybridMenuActivity : AppCompatActivity() {
             renderMockRooms(inputRoomId)
             Toast.makeText(this, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
             openHybridRoom(roomId = roomId, playerName = name, isHost = true)
-            val name = inputName.text.toString().ifBlank { randomName() }
-            lifecycleScope.launch {
-                try {
-                    val response = GatewayClient.createRoom()
-                    if (!response.success) {
-                        Toast.makeText(
-                            this@HybridMenuActivity,
-                            response.message ?: "Falha ao criar sala hibrida.",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        return@launch
-                    }
-
-                    val roomId = response.gameId ?: response.roomId
-                    if (roomId.isNullOrBlank()) {
-                        Toast.makeText(this@HybridMenuActivity, "Resposta invalida do servidor.", Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
-
-                    Toast.makeText(this@HybridMenuActivity, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
-                    openHybridRoom(roomId = roomId, playerName = name, isHost = true)
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        this@HybridMenuActivity,
-                        "Nao foi possivel criar sala. Verifica o servidor.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
         }
 
         btnJoinRoom.setOnClickListener {
@@ -362,19 +333,6 @@ class HybridMenuActivity : AppCompatActivity() {
             card.addView(topRow)
             card.addView(roomCreator)
             roomsListContainer.addView(card)
-            lifecycleScope.launch {
-                try {
-                    val status = GatewayClient.getStatus(roomId)
-                    if (status == null) {
-                        Toast.makeText(this@HybridMenuActivity, "Sala nao encontrada.", Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
-                    Toast.makeText(this@HybridMenuActivity, "Entraste na sala: $roomId", Toast.LENGTH_SHORT).show()
-                    openHybridRoom(roomId = roomId, playerName = name, isHost = false)
-                } catch (e: Exception) {
-                    Toast.makeText(this@HybridMenuActivity, "Sala nao encontrada.", Toast.LENGTH_SHORT).show()
-                }
-            }
         }
     }
 

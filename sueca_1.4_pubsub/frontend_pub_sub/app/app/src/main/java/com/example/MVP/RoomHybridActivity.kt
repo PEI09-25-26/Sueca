@@ -116,25 +116,6 @@ class RoomHybridActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun wireSeatSelection() {
-        btnSeatNorth.setOnClickListener { selectSeat("NORTH") }
-        btnSeatEast.setOnClickListener { selectSeat("EAST") }
-        btnSeatSouth.setOnClickListener { selectSeat("SOUTH") }
-        btnSeatWest.setOnClickListener { selectSeat("WEST") }
-    }
-
-    private fun selectSeat(seat: String) {
-        if (isHost) {
-            Toast.makeText(this, "O criador da mesa nao ocupa o lugar SOUTH.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (seat != "SOUTH") {
-            Toast.makeText(this, "No hibrido remoto, o lugar disponivel e SOUTH.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val currentlyOccupiedByBot = occupiedByBots.containsKey(seat)
     override fun onResume() {
         super.onResume()
         startPolling()
@@ -162,13 +143,6 @@ class RoomHybridActivity : AppCompatActivity() {
         }
     }
 
-        selectedSeat = seat
-        if (!isRegisteredInRoom) {
-            HybridMenuActivity.registerMockRoomPlayer(roomId, playerName)
-            isRegisteredInRoom = true
-        }
-        txtSeatHint.text = "Lugar escolhido: $seat"
-        txtSeatSouthPlayer.text = "Tu ($playerName)"
     private fun wireSeatSelection() {
         btnSeatNorth.setOnClickListener { joinWithPosition("north") }
         btnSeatEast.setOnClickListener { joinWithPosition("east") }
@@ -207,18 +181,6 @@ class RoomHybridActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderInitialState() {
-        txtSeatNorthPlayer.text = occupiedByBots["NORTH"] ?: "Livre"
-        txtSeatEastPlayer.text = occupiedByBots["EAST"] ?: "Livre"
-        txtSeatWestPlayer.text = occupiedByBots["WEST"] ?: "Livre"
-        txtSeatSouthPlayer.text = if (isRegisteredInRoom) "Tu ($playerName)" else "Waiting for player..."
-
-        if (isHost) {
-            hideAllSeatButtons()
-            btnStartHybridGame.visibility = View.GONE
-            txtSeatHint.text = "Aguardando por jogador"
-            return
-        }
     private fun updateUI(state: GameStatusResponse) {
         val occupied = state.players.associate { it.position.uppercase() to it.name }
         val available = state.availableSlots?.map { it.position.uppercase() }?.toSet() ?: emptySet()
