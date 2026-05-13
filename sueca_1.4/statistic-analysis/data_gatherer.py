@@ -783,12 +783,18 @@ class DataGatherer:
             cards_played_count = len(cards)
             round_actions = []
             for play in cards:
+                # Clean cards_in_trick to keep only card IDs
+                raw_trick = play.get("cards_in_trick") or []
+                clean_trick = []
+                for p in raw_trick:
+                    c = p.get("card") if isinstance(p, dict) else p
+                    if c is not None:
+                        clean_trick.append(str(c))
+
                 round_actions.append(
                     {
-                        "player": play.get("player") or play.get("player_name"),
                         "position": play.get("position"),
-                        "card": play.get("card") or play.get("card_played"),
-                        "cards_in_trick": play.get("cards_in_trick"),
+                        "cards_in_trick": clean_trick,
                         "position_in_trick": play.get("position_in_trick"),
                         "lead_suit": play.get("lead_suit"),
                         "trump": play.get("trump"),

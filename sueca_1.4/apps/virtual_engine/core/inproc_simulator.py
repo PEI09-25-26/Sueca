@@ -180,6 +180,51 @@ def simulate_match(game_number: int, bots: List[Dict[str, Any]] = None, fast_mod
             round_data[round_key]["actions"] = round_data[round_key]["cards_played"]
             round_data[round_key]["last_cards_before"] = cards_before
 
+        # Check if the round finished right after playing the card (e.g. 4th card played)
+        new_state = game.get_state()
+        new_round = int(new_state.get("current_round") or 0)
+
+        if (new_round > current_round) or (new_state.get("phase") == "finished" and current_round == 10):
+            finished_round_key = f"round_{current_round}"
+            if finished_round_key in round_data:
+                rd = round_data[finished_round_key]
+                # Set intermediate scores
+                rd["team_scores_after"] = deepcopy(new_state.get("team_scores", {}))
+
+                # Capture winner metadata from GameState
+                if game.last_winner:
+                    rd["winner_player"] = game.last_winner.player_name
+                    rd["winner_id"] = game.last_winner.player_id
+
+                # Derive points and team winner
+                before = rd.get("team_scores_before") or {}
+                after = rd.get("team_scores_after") or {}
+                t1_before = int(before.get("team1", 0) or 0)
+                t2_before = int(before.get("team2", 0) or 0)
+                t1_after = int(after.get("team1", 0) or 0)
+                t2_after = int(after.get("team2", 0) or 0)
+
+                delta_t1 = t1_after - t1_before
+                delta_t2 = t2_after - t2_before
+
+                if delta_t1 > delta_t2:
+                    rd["winner_team"] = "team1"
+                    rd["points"] = delta_t1
+                elif delta_t2 > delta_t1:
+                    rd["winner_team"] = "team2"
+                    rd["points"] = delta_t2
+                else:
+                    # In Sueca, even if 0 points are scored, a team wins the trick.
+                    # If we have winner_player, we can infer the team.
+                    if game.last_winner:
+                        from ..positions import Positions
+                        p_pos = game.last_winner.position
+                        if p_pos in [Positions.NORTH, Positions.SOUTH]:
+                            rd["winner_team"] = "team1"
+                        else:
+                            rd["winner_team"] = "team2"
+                    rd["points"] = 0
+
         timeline.append({"ts": time.time(), "phase": game.phase, "event": "card_played", "player": player.player_name, "card": str(card)})
 
     # Finalize
@@ -202,23 +247,18 @@ def simulate_match(game_number: int, bots: List[Dict[str, Any]] = None, fast_mod
             winner_team = "draw"
             winner_label = "draw"
 
-    # finalize last round scores if missing
+    # Fallback finalization for any rounds that might have missed their 'after' scores
     for round_key, rd in round_data.items():
         if rd.get("team_scores_after") is None:
-            rd["team_scores_after"] = deepcopy(final_state.get("team_scores", {}))
-            before = rd.get("team_scores_before") or {}
-            after = rd.get("team_scores_after") or {}
-            t1_before = int(before.get("team1", 0) or 0)
-            t2_before = int(before.get("team2", 0) or 0)
-            t1_after = int(after.get("team1", 0) or 0)
-            t2_after = int(after.get("team2", 0) or 0)
-            if t1_after - t1_before > t2_after - t2_before:
-                rd["winner_team"] = "team1"
-                rd["points"] = t1_after - t1_before
-            elif t2_after - t2_before > t1_after - t1_before:
-                rd["winner_team"] = "team2"
-                rd["points"] = t2_after - t2_before
-            else:
+            rd["team_scores_after"] = deepcopy(final_scores)
+            # Try to derive something if missing
+            if rd.get("points") is None:
+                before = rd.get("team_scores_before") or {}
+                after = rd.get("team_scores_after") or {}
+                t1_before = int(before.get("team1", 0) or 0)
+                t2_before = int(before.get("team2", 0) or 0)
+                t1_after = int(after.get("team1", 0) or 0)
+                t2_after = int(after.get("team2", 0) or 0)
                 rd["points"] = max(t1_after - t1_before, t2_after - t2_before)
 
     result = {
