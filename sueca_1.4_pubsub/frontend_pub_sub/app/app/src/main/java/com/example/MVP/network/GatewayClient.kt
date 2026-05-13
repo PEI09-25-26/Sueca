@@ -12,6 +12,7 @@ import com.example.MVP.models.HandResponse
 import com.example.MVP.models.JoinGameRequest
 import com.example.MVP.models.JoinGameResponse
 import com.example.MVP.models.MatchPointsResponse
+import com.example.MVP.models.LeaveRoomRequest
 import com.example.MVP.models.RemoveParticipantRequest
 import com.example.MVP.models.RoomModeRequest
 import com.example.MVP.models.SelectTrumpRequest
@@ -20,20 +21,25 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 
 object GatewayClient {
-    private const val MODE_VIRTUAL = "virtual"
     private val gson = Gson()
 
-    suspend fun setRoomMode(gameId: String, mode: String = MODE_VIRTUAL) {
+    suspend fun setRoomMode(gameId: String, mode: String) {
         runCatching {
             RetrofitClient.api.setRoomMode(gameId, RoomModeRequest(mode))
         }
     }
 
-    suspend fun getStatus(gameId: String?): GameStatusResponse? {
+    suspend fun getRoomMode(gameId: String): String? {
+        return runCatching {
+            RetrofitClient.api.getRoomMode(gameId).mode
+        }.getOrNull()
+    }
+
+    suspend fun getStatus(gameId: String?, mode: String? = null): GameStatusResponse? {
         val envelope = RetrofitClient.api.routeQuery(
             queryPath = "status",
             gameId = gameId,
-            mode = MODE_VIRTUAL
+            mode = mode
         )
 
         if (!envelope.success) return null
@@ -41,7 +47,7 @@ object GatewayClient {
     }
 
     suspend fun createRoom(): CreateRoomResponse {
-        val envelope = command("create_room", gameId = null, payload = emptyMap())
+        val envelope = command("create_room", gameId = null, mode = null, payload = emptyMap())
         val response = envelope.response
         val success = response.bool("success") ?: false
 
@@ -61,7 +67,7 @@ object GatewayClient {
         )
         request.gameId?.let { payload["game_id"] = it }
 
-        val envelope = command("join", gameId = request.gameId, payload = payload)
+        val envelope = command("join", gameId = request.gameId, mode = null, payload = payload)
         val response = envelope.response
 
         return JoinGameResponse(
@@ -81,7 +87,7 @@ object GatewayClient {
             "name" to request.name
         )
 
-        val envelope = command("add_bot", gameId = request.gameId, payload = payload)
+        val envelope = command("add_bot", gameId = request.gameId, mode = null, payload = payload)
         val response = envelope.response
 
         return AddBotResponse(
@@ -99,7 +105,7 @@ object GatewayClient {
             "position" to position
         )
 
-        val envelope = command("change_position", gameId = gameId, payload = payload)
+        val envelope = command("change_position", gameId = gameId, mode = null, payload = payload)
         val response = envelope.response
 
         return GenericResponse(
@@ -115,7 +121,37 @@ object GatewayClient {
             "game_id" to request.gameId
         )
 
-        val envelope = command("the_council_has_decided_your_fate", gameId = request.gameId, payload = payload)
+        val envelope = command("the_council_has_decided_your_fate", gameId = request.gameId, mode = null, payload = payload)
+        val response = envelope.response
+
+        return GenericResponse(
+            success = response.bool("success") ?: false,
+            message = response.string("message") ?: fallbackMessage(envelope)
+        )
+    }
+
+    suspend fun leaveRoom(gameId: String, playerId: String): GenericResponse {
+        val response = RetrofitClient.api.leaveRoom(
+            LeaveRoomRequest(
+                gameId = gameId,
+                playerId = playerId
+            )
+        )
+
+        return GenericResponse(
+            success = response.success,
+            message = response.message ?: "Saida da sala processada."
+        )
+    }
+
+    suspend fun updateRoomVisibility(playerId: String, gameId: String, isPublic: Boolean): GenericResponse {
+        val payload = mapOf(
+            "player_id" to playerId,
+            "game_id" to gameId,
+            "is_public" to isPublic
+        )
+
+        val envelope = command("room_visibility", gameId = gameId, mode = null, payload = payload)
         val response = envelope.response
 
         return GenericResponse(
@@ -131,7 +167,7 @@ object GatewayClient {
             "game_id" to request.gameId
         )
 
-        val envelope = command("cut_deck", gameId = request.gameId, payload = payload)
+        val envelope = command("cut_deck", gameId = request.gameId, mode = null, payload = payload)
         val response = envelope.response
 
         return GenericResponse(
@@ -147,7 +183,7 @@ object GatewayClient {
             "game_id" to request.gameId
         )
 
-        val envelope = command("select_trump", gameId = request.gameId, payload = payload)
+        val envelope = command("select_trump", gameId = request.gameId, mode = null, payload = payload)
         val response = envelope.response
 
         return GenericResponse(
@@ -163,9 +199,19 @@ object GatewayClient {
             "game_id" to request.gameId
         )
 
-        val envelope = command("play", gameId = request.gameId, payload = payload)
+        val envelope = command("play", gameId = request.gameId, mode = null, payload = payload)
         val response = envelope.response
 
+        return GenericResponse(
+            success = response.bool("success") ?: false,
+            message = response.string("message") ?: fallbackMessage(envelope)
+        )
+    }
+
+    suspend fun startGame(gameId: String): GenericResponse {
+        val payload = mapOf("game_id" to gameId)
+        val envelope = command("start", gameId = gameId, mode = null, payload = payload)
+        val response = envelope.response
         return GenericResponse(
             success = response.bool("success") ?: false,
             message = response.string("message") ?: fallbackMessage(envelope)
@@ -176,7 +222,7 @@ object GatewayClient {
         val envelope = RetrofitClient.api.routeQuery(
             queryPath = "hand/$playerId",
             gameId = gameId,
-            mode = MODE_VIRTUAL
+            mode = null
         )
 
         if (!envelope.success) {
@@ -191,7 +237,7 @@ object GatewayClient {
     }
 
     suspend fun requestRematch(gameId: String): GenericResponse {
-        val envelope = command("room/$gameId/rematch", gameId = gameId, payload = emptyMap())
+        val envelope = command("room/$gameId/rematch", gameId = gameId, mode = null, payload = emptyMap())
         val response = envelope.response
 
         return GenericResponse(
@@ -204,7 +250,7 @@ object GatewayClient {
         val envelope = RetrofitClient.api.routeQuery(
             queryPath = "room/$gameId/match_points",
             gameId = gameId,
-            mode = MODE_VIRTUAL
+            mode = null
         )
 
         if (!envelope.success) {
@@ -216,12 +262,12 @@ object GatewayClient {
             ?: MatchPointsResponse(success = false, message = "Invalid payload")
     }
 
-    private suspend fun command(command: String, gameId: String?, payload: Map<String, Any?>): GatewayEnvelope {
+    private suspend fun command(command: String, gameId: String?, mode: String?, payload: Map<String, Any?>): GatewayEnvelope {
         return RetrofitClient.api.routeCommand(
             command = command,
             request = GatewayCommandRequest(
                 gameId = gameId,
-                mode = MODE_VIRTUAL,
+                mode = mode,
                 payload = payload
             )
         )

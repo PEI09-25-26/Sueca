@@ -5,9 +5,17 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.example.MVP.models.GameStatusResponse
+import com.example.MVP.models.JoinGameRequest
+import com.example.MVP.network.GatewayClient
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class RoomHybridActivity : AppCompatActivity() {
 
@@ -15,6 +23,7 @@ class RoomHybridActivity : AppCompatActivity() {
     private lateinit var playerName: String
     private var isHost: Boolean = false
     private var selectedSeat: String = ""
+    private var playerId: String = ""
 
     private lateinit var btnSeatNorth: Button
     private lateinit var btnSeatEast: Button
@@ -26,22 +35,32 @@ class RoomHybridActivity : AppCompatActivity() {
     private lateinit var txtSeatSouthPlayer: TextView
     private lateinit var txtSeatWestPlayer: TextView
 
+    private lateinit var roomVisibilityContainer: View
+    private lateinit var imgRoomVisibilityLock: ImageView
+    private lateinit var txtRoomVisibilityHint: TextView
+
     private lateinit var txtSeatHint: TextView
     private lateinit var btnStartHybridGame: Button
+    private var isRegisteredInRoom: Boolean = false
+    private var gameStarted: Boolean = false
+    private var roomIsPublic: Boolean = true
+    private lateinit var switchVirtualRole: Switch
 
-    private val occupiedByBots = mutableMapOf(
-        "NORTH" to "Jogador Mesa 1",
-        "EAST" to "Jogador Mesa 2",
-        "WEST" to "Jogador Mesa 3"
-    )
+    private var pollingJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_room_hybrid)
 
-        roomId = intent.getStringExtra("roomId") ?: "HBMOCK"
-        playerName = intent.getStringExtra("playerName") ?: "Player"
+        roomId = intent.getStringExtra("roomId")?.trim().orEmpty()
+        playerName = intent.getStringExtra("playerName") ?: "Player${(1000..9999).random()}"
         isHost = intent.getBooleanExtra("isHost", false)
+
+        if (roomId.isBlank()) {
+            Toast.makeText(this, "Sala invalida para modo hibrido.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
 
         val txtRoom = findViewById<TextView>(R.id.txtRoom)
         val btnBack = findViewById<ImageView>(R.id.backButton)
@@ -56,12 +75,26 @@ class RoomHybridActivity : AppCompatActivity() {
         txtSeatSouthPlayer = findViewById(R.id.txtSeatSouthPlayer)
         txtSeatWestPlayer = findViewById(R.id.txtSeatWestPlayer)
 
+        roomVisibilityContainer = findViewById(R.id.roomVisibilityContainer)
+        imgRoomVisibilityLock = findViewById(R.id.imgRoomVisibilityLock)
+        txtRoomVisibilityHint = findViewById(R.id.txtRoomVisibilityHint)
+
         txtSeatHint = findViewById(R.id.txtSeatHint)
         btnStartHybridGame = findViewById(R.id.btnStartHybridGame)
+        switchVirtualRole = findViewById(R.id.switchVirtualRole)
 
         txtRoom.text = "Sala hibrida: $roomId"
+        roomIsPublic = HybridMenuActivity.isMockRoomPublic(roomId)
+
+        if (isHost) {
+            switchVirtualRole.isChecked = false
+            switchVirtualRole.isEnabled = false
+            switchVirtualRole.text = "Host (jogador real)"
+        }
 
         btnBack.setOnClickListener { finish() }
+        imgRoomVisibilityLock.setOnClickListener { toggleRoomVisibility() }
+        updateRoomVisibilityUi(canToggle = isHost)
         wireSeatSelection()
 
         btnStartHybridGame.setOnClickListener {
@@ -72,7 +105,15 @@ class RoomHybridActivity : AppCompatActivity() {
             goToHybridGame()
         }
 
-        renderInitialState()
+        renderSeatHint()
+        btnStartHybridGame.visibility = View.GONE
+    }
+
+    override fun onDestroy() {
+        if (isFinishing && isRegisteredInRoom && !gameStarted) {
+            HybridMenuActivity.unregisterMockRoomPlayer(roomId, playerName)
+        }
+        super.onDestroy()
     }
 
     private fun wireSeatSelection() {
@@ -83,41 +124,174 @@ class RoomHybridActivity : AppCompatActivity() {
     }
 
     private fun selectSeat(seat: String) {
-        val currentlyOccupiedByBot = occupiedByBots.containsKey(seat)
-
-        if (currentlyOccupiedByBot) {
-            Toast.makeText(this, "Lugar ocupado no mock.", Toast.LENGTH_SHORT).show()
+        if (isHost) {
+            Toast.makeText(this, "O criador da mesa nao ocupa o lugar SOUTH.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        selectedSeat = seat
-        txtSeatHint.text = "Lugar escolhido: $seat"
-        txtSeatSouthPlayer.text = if (seat == "SOUTH") "Tu ($playerName)" else txtSeatSouthPlayer.text
-        txtSeatNorthPlayer.text = if (seat == "NORTH") "Tu ($playerName)" else txtSeatNorthPlayer.text
-        txtSeatEastPlayer.text = if (seat == "EAST") "Tu ($playerName)" else txtSeatEastPlayer.text
-        txtSeatWestPlayer.text = if (seat == "WEST") "Tu ($playerName)" else txtSeatWestPlayer.text
+        if (seat != "SOUTH") {
+            Toast.makeText(this, "No hibrido remoto, o lugar disponivel e SOUTH.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        hideAllSeatButtons()
-        btnStartHybridGame.visibility = View.VISIBLE
+        val currentlyOccupiedByBot = occupiedByBots.containsKey(seat)
+    override fun onResume() {
+        super.onResume()
+        startPolling()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        pollingJob?.cancel()
+    }
+
+    private fun startPolling() {
+        pollingJob?.cancel()
+        pollingJob = lifecycleScope.launch {
+            while (true) {
+                try {
+                    val state = GatewayClient.getStatus(roomId)
+                    if (state != null) {
+                        updateUI(state)
+                    }
+                } catch (_: Exception) {
+                    // Keep current UI state if server temporarily fails.
+                }
+                delay(1000)
+            }
+        }
+    }
+
+        selectedSeat = seat
+        if (!isRegisteredInRoom) {
+            HybridMenuActivity.registerMockRoomPlayer(roomId, playerName)
+            isRegisteredInRoom = true
+        }
+        txtSeatHint.text = "Lugar escolhido: $seat"
+        txtSeatSouthPlayer.text = "Tu ($playerName)"
+    private fun wireSeatSelection() {
+        btnSeatNorth.setOnClickListener { joinWithPosition("north") }
+        btnSeatEast.setOnClickListener { joinWithPosition("east") }
+        btnSeatSouth.setOnClickListener { joinWithPosition("south") }
+        btnSeatWest.setOnClickListener { joinWithPosition("west") }
+    }
+
+    private fun joinWithPosition(position: String) {
+        lifecycleScope.launch {
+            try {
+                val response = GatewayClient.joinGame(
+                    JoinGameRequest(
+                        name = playerName,
+                        gameId = roomId,
+                        position = position
+                    )
+                )
+
+                if (!response.success) {
+                    Toast.makeText(
+                        this@RoomHybridActivity,
+                        response.message ?: "Nao foi possivel entrar no lugar.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                playerId = response.playerId ?: playerId
+                selectedSeat = position.uppercase()
+                btnStartHybridGame.visibility = View.VISIBLE
+                hideAllSeatButtons()
+                renderSeatHint()
+            } catch (_: Exception) {
+                Toast.makeText(this@RoomHybridActivity, "Erro a ligar ao servidor.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun renderInitialState() {
         txtSeatNorthPlayer.text = occupiedByBots["NORTH"] ?: "Livre"
         txtSeatEastPlayer.text = occupiedByBots["EAST"] ?: "Livre"
         txtSeatWestPlayer.text = occupiedByBots["WEST"] ?: "Livre"
-        txtSeatSouthPlayer.text = if (occupiedByBots.containsKey("SOUTH")) occupiedByBots["SOUTH"] else "Livre"
+        txtSeatSouthPlayer.text = if (isRegisteredInRoom) "Tu ($playerName)" else "Waiting for player..."
 
-        renderSeatButton(btnSeatNorth, !occupiedByBots.containsKey("NORTH"))
-        renderSeatButton(btnSeatEast, !occupiedByBots.containsKey("EAST"))
-        renderSeatButton(btnSeatSouth, !occupiedByBots.containsKey("SOUTH"))
-        renderSeatButton(btnSeatWest, !occupiedByBots.containsKey("WEST"))
+        if (isHost) {
+            hideAllSeatButtons()
+            btnStartHybridGame.visibility = View.GONE
+            txtSeatHint.text = "Aguardando por jogador"
+            return
+        }
+    private fun updateUI(state: GameStatusResponse) {
+        val occupied = state.players.associate { it.position.uppercase() to it.name }
+        val available = state.availableSlots?.map { it.position.uppercase() }?.toSet() ?: emptySet()
 
-        btnStartHybridGame.visibility = View.GONE
+        txtSeatNorthPlayer.text = occupied["NORTH"] ?: "Livre"
+        txtSeatEastPlayer.text = occupied["EAST"] ?: "Livre"
+        txtSeatSouthPlayer.text = occupied["SOUTH"] ?: "Livre"
+        txtSeatWestPlayer.text = occupied["WEST"] ?: "Livre"
+
+        val me = if (playerId.isNotBlank()) {
+            state.players.firstOrNull { it.id == playerId }
+        } else {
+            state.players.firstOrNull { it.name == playerName }
+        }
+
+        if (me != null) {
+            selectedSeat = me.position.uppercase()
+            playerId = me.id ?: playerId
+            hideAllSeatButtons()
+            btnStartHybridGame.visibility = View.VISIBLE
+        } else {
+            renderSeatButton(btnSeatNorth, "NORTH" in available)
+            renderSeatButton(btnSeatEast, "EAST" in available)
+            renderSeatButton(btnSeatSouth, "SOUTH" in available)
+            renderSeatButton(btnSeatWest, "WEST" in available)
+            btnStartHybridGame.visibility = View.GONE
+        }
+
+        renderSeatHint()
     }
 
     private fun renderSeatButton(button: Button, available: Boolean) {
         button.visibility = if (available) View.VISIBLE else View.GONE
         button.isEnabled = available
+    }
+
+    private fun toggleRoomVisibility() {
+        if (!isHost) {
+            Toast.makeText(this, "So o criador da sala pode alterar a visibilidade.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val newVisibility = !roomIsPublic
+        val updated = HybridMenuActivity.setMockRoomVisibility(roomId, newVisibility)
+        if (!updated) {
+            Toast.makeText(this, "Nao foi possivel alterar a visibilidade da sala.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        roomIsPublic = newVisibility
+        updateRoomVisibilityUi(canToggle = true)
+
+        val feedback = if (roomIsPublic) {
+            "Sala publica no menu hibrido."
+        } else {
+            "Sala privada. Entrada apenas por codigo."
+        }
+        Toast.makeText(this, feedback, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateRoomVisibilityUi(canToggle: Boolean) {
+        roomVisibilityContainer.visibility = View.VISIBLE
+        imgRoomVisibilityLock.setImageResource(
+            if (roomIsPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed
+        )
+        txtRoomVisibilityHint.text = if (roomIsPublic) {
+            "Qualquer pessoa pode entrar"
+        } else {
+            "Necessario codigo para entrar"
+        }
+
+        imgRoomVisibilityLock.isEnabled = canToggle
+        imgRoomVisibilityLock.alpha = if (canToggle) 1f else 0.55f
     }
 
     private fun hideAllSeatButtons() {
@@ -127,14 +301,23 @@ class RoomHybridActivity : AppCompatActivity() {
         btnSeatWest.visibility = View.GONE
     }
 
+    private fun renderSeatHint() {
+        txtSeatHint.text = if (selectedSeat.isBlank()) {
+            "Escolhe o teu lugar (+)"
+        } else {
+            "Lugar escolhido: $selectedSeat"
+        }
+    }
+
     private fun goToHybridGame() {
+        gameStarted = true
         val intent = Intent(this, HybridActivity::class.java)
         intent.putExtra("roomId", roomId)
         intent.putExtra("playerName", playerName)
+        intent.putExtra("playerId", playerId)
         intent.putExtra("seat", selectedSeat)
         intent.putExtra("isHost", isHost)
-        // Mock value for now. Later this should come from room state/backend.
-        intent.putExtra("virtualPhonePlayers", if (isHost) 1 else 0)
+        intent.putExtra("isVirtualPlayer", !isHost && switchVirtualRole.isChecked)
         startActivity(intent)
         finish()
     }

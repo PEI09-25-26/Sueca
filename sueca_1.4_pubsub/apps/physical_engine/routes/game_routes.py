@@ -4,8 +4,8 @@ try:
     from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
     from ..event_publisher import publish_physical_event
 except ImportError:
-    from core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
-    from event_publisher import publish_physical_event
+    from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round
+    from ..event_publisher import publish_physical_event
 
 
 router = APIRouter()
@@ -13,6 +13,11 @@ router = APIRouter()
 
 @router.get("/state")
 def get_state():
+    return get_state_data()
+
+
+@router.get("/status")
+def get_status():
     return get_state_data()
 
 
@@ -34,5 +39,5 @@ def new_round():
 def receive_card(card: CardDTO):
     result = process_card(card)
     card_payload = card.model_dump() if hasattr(card, 'model_dump') else card.dict()
-    publish_physical_event('default', 'physical_card_received', card=card_payload)
+    publish_physical_event(card.game_id or 'default', 'physical_card_received', card=card_payload)
     return result

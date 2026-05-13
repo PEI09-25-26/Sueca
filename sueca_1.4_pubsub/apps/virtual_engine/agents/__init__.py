@@ -1,5 +1,5 @@
-from .random_agent import RandomAgent
-from .weak_agent import WeakAgent
-from .average_agent import AverageAgent
+"""Compatibility shim: expose agent classes from the central agents service package."""
+
+from apps.agents.agents import RandomAgent, WeakAgent, AverageAgent
 
 __all__ = ["RandomAgent", "WeakAgent", "AverageAgent"]
