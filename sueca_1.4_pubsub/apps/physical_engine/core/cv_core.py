@@ -113,7 +113,12 @@ async def start_cv(request: StartCVRequest):
 async def stream_cv(websocket: WebSocket, game_id: str):
     global detector, classifier
 
-    token = websocket.query_params.get("token")
+    authorization = websocket.headers.get("authorization")
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    if not token:
+        token = websocket.query_params.get("token")
     secret = os.getenv("SUECA_JWT_SECRET", "dev-secret")
     if not token:
         await websocket.close(code=4001)

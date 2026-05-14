@@ -1,5 +1,4 @@
 package com.example.MVP.network
-
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -17,8 +16,9 @@ object RetrofitClient {
     const val MQTT_PROTOCOL = "wss"   // WebSocket Secure
     private const val BASE_URL = "https://$API_HOST/"
 
+    // Use BASIC logging by default to avoid depending on generated BuildConfig
     private val logger = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = HttpLoggingInterceptor.Level.BASIC
     }
 
     private val client = OkHttpClient.Builder()

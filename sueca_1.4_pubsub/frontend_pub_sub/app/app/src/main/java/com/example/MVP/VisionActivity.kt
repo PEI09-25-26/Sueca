@@ -315,7 +315,15 @@ class VisionActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 Log.d("VisionActivity", "Requesting game token for gameId: $gameId")
-                val tokenResp = RetrofitClient.api.getGameToken(GameTokenRequest(gameId))
+                val sessionAuth = GameSessionManager.getAuthHeader(gameId)
+                val authHeader = sessionAuth ?: AuthManager.getAuthHeader()
+                if (authHeader.isNullOrBlank()) {
+                    runOnUiThread {
+                        Toast.makeText(this@VisionActivity, "Autenticacao necessaria para ligar a camara.", Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+                val tokenResp = RetrofitClient.api.getGameToken(GameTokenRequest(gameId), authHeader)
                 val token = tokenResp.token
                 Log.d("VisionActivity", "Token received, connecting to WebSocket...")
 
@@ -328,11 +336,12 @@ class VisionActivity : AppCompatActivity() {
                     .pingInterval(30, TimeUnit.SECONDS) // Keep-alive
                     .build()
 
-                wsEndpoint = "$wsBase$gameId?token=$token"
+                wsEndpoint = "$wsBase$gameId"
                 Log.d("VisionActivity", "Connecting WebSocket to $wsEndpoint")
                 val request = Request.Builder()
                     .url(wsEndpoint)
                     .addHeader("Origin", "https://suecadaojogo.com") // Some WS servers require Origin
+                    .addHeader("Authorization", "Bearer $token")
                     .build()
 
                 webSocket = client.newWebSocket(request, object : WebSocketListener() {

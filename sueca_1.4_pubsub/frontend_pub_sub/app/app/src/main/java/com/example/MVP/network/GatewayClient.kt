@@ -2,6 +2,7 @@ package com.example.MVP.network
 
 import com.example.MVP.models.AddBotRequest
 import com.example.MVP.models.AddBotResponse
+import com.example.MVP.models.CreateRoomRequest
 import com.example.MVP.models.CreateRoomResponse
 import com.example.MVP.models.CutDeckRequest
 import com.example.MVP.models.GameStatusResponse
@@ -17,6 +18,7 @@ import com.example.MVP.models.RemoveParticipantRequest
 import com.example.MVP.models.RoomModeRequest
 import com.example.MVP.models.SelectTrumpRequest
 import com.example.MVP.models.PlayRequest
+import com.example.MVP.GameSessionManager
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 
@@ -46,18 +48,15 @@ object GatewayClient {
         return parseJson(envelope.response, GameStatusResponse::class.java)
     }
 
-    suspend fun createRoom(): CreateRoomResponse {
-        val envelope = command("create_room", gameId = null, mode = null, payload = emptyMap())
-        val response = envelope.response
-        val success = response.bool("success") ?: false
-
-        return CreateRoomResponse(
-            success = success,
-            gameId = response.string("game_id"),
-            roomId = response.string("game_id"),
-            playerId = response.string("player_id"),
-            message = response.string("message") ?: fallbackMessage(envelope)
-        )
+    suspend fun createRoom(playerName: String): CreateRoomResponse {
+        val response = RetrofitClient.api.createRoomV2(CreateRoomRequest(name = playerName))
+        if (response.success) {
+            val gameId = response.gameId ?: response.roomId
+            if (!gameId.isNullOrBlank()) {
+                GameSessionManager.saveToken(gameId, response.token)
+            }
+        }
+        return response
     }
 
     suspend fun joinGame(request: JoinGameRequest): JoinGameResponse {
@@ -70,17 +69,23 @@ object GatewayClient {
         val envelope = command("join", gameId = request.gameId, mode = null, payload = payload)
         val response = envelope.response
 
-        return JoinGameResponse(
+        val joinResponse = JoinGameResponse(
             success = response.bool("success") ?: false,
             message = response.string("message") ?: fallbackMessage(envelope),
             gameId = response.string("game_id") ?: request.gameId,
-            playerId = response.string("player_id")
+            playerId = response.string("player_id"),
+            token = response.string("token")
         )
+        if (joinResponse.success) {
+            joinResponse.gameId?.let { gid ->
+                GameSessionManager.saveToken(gid, joinResponse.token)
+            }
+        }
+        return joinResponse
     }
 
     suspend fun addBot(request: AddBotRequest): AddBotResponse {
         val payload = mapOf(
-            "player_id" to request.playerId,
             "game_id" to request.gameId,
             "position" to request.position,
             "difficulty" to request.difficulty,
@@ -100,7 +105,6 @@ object GatewayClient {
 
     suspend fun changePosition(playerId: String, gameId: String, position: String): GenericResponse {
         val payload = mapOf(
-            "player_id" to playerId,
             "game_id" to gameId,
             "position" to position
         )
@@ -116,7 +120,6 @@ object GatewayClient {
 
     suspend fun removeParticipant(request: RemoveParticipantRequest): GenericResponse {
         val payload = mapOf(
-            "actor_id" to request.actorId,
             "target_id" to request.targetId,
             "game_id" to request.gameId
         )
@@ -135,8 +138,12 @@ object GatewayClient {
             LeaveRoomRequest(
                 gameId = gameId,
                 playerId = playerId
-            )
+            ),
+            GameSessionManager.getAuthHeader(gameId)
         )
+        if (response.success) {
+            GameSessionManager.clearToken(gameId)
+        }
 
         return GenericResponse(
             success = response.success,
@@ -162,7 +169,6 @@ object GatewayClient {
 
     suspend fun cutDeck(request: CutDeckRequest): GenericResponse {
         val payload = mapOf(
-            "player_id" to request.playerId,
             "index" to request.index,
             "game_id" to request.gameId
         )
@@ -178,7 +184,6 @@ object GatewayClient {
 
     suspend fun selectTrump(request: SelectTrumpRequest): GenericResponse {
         val payload = mapOf(
-            "player_id" to request.playerId,
             "choice" to request.choice,
             "game_id" to request.gameId
         )
@@ -194,7 +199,6 @@ object GatewayClient {
 
     suspend fun playCard(request: PlayRequest): GenericResponse {
         val payload = mapOf(
-            "player_id" to request.playerId,
             "card" to request.card,
             "game_id" to request.gameId
         )
@@ -222,7 +226,8 @@ object GatewayClient {
         val envelope = RetrofitClient.api.routeQuery(
             queryPath = "hand/$playerId",
             gameId = gameId,
-            mode = null
+            mode = null,
+            token = GameSessionManager.getAuthHeader(gameId)
         )
 
         if (!envelope.success) {
@@ -269,7 +274,8 @@ object GatewayClient {
                 gameId = gameId,
                 mode = mode,
                 payload = payload
-            )
+            ),
+            token = GameSessionManager.getAuthHeader(gameId)
         )
     }
 

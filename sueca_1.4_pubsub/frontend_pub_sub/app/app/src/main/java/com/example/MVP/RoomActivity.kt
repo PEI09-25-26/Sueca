@@ -39,6 +39,7 @@ class RoomActivity : AppCompatActivity() {
     private var hasRealtimeState: Boolean = false
     private var hasBrokerRoundTrip: Boolean = false
     private var usingPollingFallback: Boolean = false
+    private var sessionBootstrapInFlight: Boolean = false
     private var latestRoomState: GameStatusResponse? = null
     private lateinit var roomId: String
     private lateinit var playerId: String
@@ -153,6 +154,7 @@ class RoomActivity : AppCompatActivity() {
                     GatewayClient.setRoomMode(roomId, "virtual")
                 }
             }
+            ensureRoomSession()
             startRealtimeUpdates()
             startPolling()
         }
@@ -296,6 +298,32 @@ class RoomActivity : AppCompatActivity() {
         val gameProgressed = state.phase != "waiting"
         if (state.gameStarted || (gameProgressed && playerSeated)) {
             goToGame(state)
+        }
+    }
+
+    private fun ensureRoomSession() {
+        if (playerId.isNotBlank()) return
+        if (GameSessionManager.getToken(roomId) != null) return
+        if (sessionBootstrapInFlight) return
+
+        sessionBootstrapInFlight = true
+        lifecycleScope.launch {
+            try {
+                val response = GatewayClient.joinGame(
+                    JoinGameRequest(
+                        name = playerName,
+                        gameId = roomId,
+                        position = null
+                    )
+                )
+                if (response.success) {
+                    playerId = response.playerId ?: playerId
+                }
+            } catch (_: Exception) {
+                // Polling and manual join actions can still recover later.
+            } finally {
+                sessionBootstrapInFlight = false
+            }
         }
     }
 
@@ -729,6 +757,7 @@ class RoomActivity : AppCompatActivity() {
 
                 if (response.success) {
                     playerId = response.playerId ?: playerId
+                    GameSessionManager.saveToken(roomId, response.token)
                     Toast.makeText(this@RoomActivity, response.message ?: "Entraste na sala.", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(this@RoomActivity, response.message ?: "Nao foi possivel escolher esse lugar.", Toast.LENGTH_SHORT).show()

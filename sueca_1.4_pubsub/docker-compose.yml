@@ -16,7 +16,7 @@ services:
       context: .
       dockerfile: apps/auth/Dockerfile
     ports:
-      - "5010:5010"
+      - "127.0.0.1:5010:5010"
     env_file:
       - ./.env
 
@@ -26,7 +26,7 @@ services:
       dockerfile: apps/auth/Dockerfile
     command: ["uvicorn", "apps.auth.friends.main:app", "--host", "0.0.0.0", "--port", "5020"]
     ports:
-      - "5020:5020"
+      - "127.0.0.1:5020:5020"
     env_file:
       - ./.env
 
@@ -35,7 +35,7 @@ services:
       context: .
       dockerfile: apps/agents/Dockerfile
     ports:
-      - "5030:5030"
+      - "127.0.0.1:5030:5030"
     env_file:
       - ./.env
 
@@ -44,7 +44,7 @@ services:
       context: .
       dockerfile: apps/virtual_engine/Dockerfile
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     env_file:
       - ./.env
     depends_on:
@@ -56,7 +56,7 @@ services:
       dockerfile: apps/physical_engine/Dockerfile
     gpus: all
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     env_file:
       - ./.env
     environment:

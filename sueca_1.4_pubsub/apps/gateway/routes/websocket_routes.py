@@ -12,13 +12,21 @@ from .. import state
 router = APIRouter()
 
 
+def _extract_ws_token(websocket: WebSocket) -> str | None:
+    authorization = websocket.headers.get("authorization")
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+        if token:
+            return token
+    try:
+        return websocket.query_params.get("token")
+    except Exception:
+        return None
+
+
 @router.websocket("/ws/camera/{game_id}")
 async def websocket_camera(websocket: WebSocket, game_id: str):
-    # Validate short-lived token passed as query param: ?token=...
-    try:
-        token = websocket.query_params.get("token")
-    except Exception:
-        token = None
+    token = _extract_ws_token(websocket)
 
     secret = os.getenv("SUECA_JWT_SECRET", "dev-secret")
     if not token:
@@ -43,7 +51,10 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
 
     cv_ws = None
     try:
-        cv_ws = await websockets.connect(f"{state.CV_SERVICE_WS_URL}/cv/stream/{game_id}?token={token}")
+        cv_ws = await websockets.connect(
+            f"{state.CV_SERVICE_WS_URL}/cv/stream/{game_id}",
+            additional_headers={"Authorization": f"Bearer {token}"},
+        )
         state.cv_connections[game_id] = cv_ws
         print(f"[Middleware] Connected to CV Service WebSocket for game: {game_id}")
 

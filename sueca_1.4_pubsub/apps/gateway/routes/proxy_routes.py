@@ -14,6 +14,14 @@ logger = logging.getLogger(__name__)
 APPLICATION_JSON = "application/json"
 
 
+def _forward_headers(request: Request) -> dict[str, str]:
+    forwarded = {}
+    authorization = request.headers.get("authorization")
+    if authorization:
+        forwarded["Authorization"] = authorization
+    return forwarded
+
+
 def _decode_backend_response(response: requests.Response):
     if not response.content:
         return {"success": response.ok}
@@ -30,7 +38,7 @@ def _decode_backend_response(response: requests.Response):
 
 
 @router.post("/game/command/{command:path}")
-def route_command(command: str, request_data: CommandRequestDTO):
+def route_command(command: str, request_data: CommandRequestDTO, request: Request):
     game_id = request_data.game_id
     mode = request_data.mode or state.room_modes.get(game_id, "virtual")
     mode = normalize_mode(mode)
@@ -47,7 +55,12 @@ def route_command(command: str, request_data: CommandRequestDTO):
         target_url = f"{target}/{command}"
 
     try:
-        response = state.INTERNAL_HTTP.post(target_url, json=payload, timeout=5)
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=payload,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         data = _decode_backend_response(response)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
@@ -61,6 +74,7 @@ def route_command(command: str, request_data: CommandRequestDTO):
 @router.get("/game/query/{query_path:path}")
 def route_query(
     query_path: str,
+    request: Request,
     game_id: Annotated[Optional[str], Query()] = None,
     mode: Annotated[Optional[str], Query()] = None,
 ):
@@ -77,7 +91,12 @@ def route_query(
         params["game_id"] = game_id
 
     try:
-        response = state.INTERNAL_HTTP.get(target_url, params=params, timeout=5)
+        response = state.INTERNAL_HTTP.get(
+            target_url,
+            params=params,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         data = _decode_backend_response(response)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
@@ -105,9 +124,13 @@ def route_stats(game_id: str):
 
 
 @router.get("/presence")
-def route_presence():
+def route_presence(request: Request):
     try:
-        response = state.INTERNAL_HTTP.get(f"{state.PRESENCE_SERVICE_URL.rstrip('/')}/status", timeout=5)
+        response = state.INTERNAL_HTTP.get(
+            f"{state.PRESENCE_SERVICE_URL.rstrip('/')}/status",
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(status_code=502, content=json.dumps({"success": False, "message": str(error)}), media_type=APPLICATION_JSON)
@@ -120,7 +143,12 @@ def proxy_api_status(request: Request):
     target = target_base_for_mode(mode)
     target_url = f"{target}/api/status"
     try:
-        response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+        response = state.INTERNAL_HTTP.get(
+            target_url,
+            params=dict(request.query_params),
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -134,7 +162,12 @@ def proxy_api_rooms(request: Request):
     target = target_base_for_mode("virtual")
     target_url = f"{target}/api/rooms"
     try:
-        response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+        response = state.INTERNAL_HTTP.get(
+            target_url,
+            params=dict(request.query_params),
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -145,11 +178,17 @@ def proxy_api_rooms(request: Request):
 
 
 @router.post("/api/create_room")
-def proxy_api_create_room(request: Request):
+async def proxy_api_create_room(request: Request):
     target = target_base_for_mode("virtual")
     target_url = f"{target}/api/create_room"
     try:
-        response = state.INTERNAL_HTTP.post(target_url, timeout=5)
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=body,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -167,7 +206,12 @@ async def proxy_api_start(request: Request):
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
         if isinstance(body, dict) and "roomId" in body and "game_id" not in body:
             body["game_id"] = body.get("roomId")
-        response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=body,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -183,7 +227,12 @@ async def proxy_api_leave(request: Request):
     target_url = f"{target}/api/leave"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
-        response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=body,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -199,15 +248,16 @@ async def proxy_api_auth(path: str, request: Request):
     target_url = f"{target}/{path}"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
+        headers = _forward_headers(request)
         method = request.method.upper()
         if method == "POST":
-            response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.post(target_url, json=body, headers=headers, timeout=5)
         elif method == "PUT":
-            response = state.INTERNAL_HTTP.put(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.put(target_url, json=body, headers=headers, timeout=5)
         elif method == "DELETE":
-            response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.delete(target_url, json=body, headers=headers, timeout=5)
         else:
-            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -223,15 +273,16 @@ async def proxy_auth(path: str, request: Request):
     target_url = f"{target}/{path}"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
+        headers = _forward_headers(request)
         method = request.method.upper()
         if method == "POST":
-            response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.post(target_url, json=body, headers=headers, timeout=5)
         elif method == "PUT":
-            response = state.INTERNAL_HTTP.put(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.put(target_url, json=body, headers=headers, timeout=5)
         elif method == "DELETE":
-            response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.delete(target_url, json=body, headers=headers, timeout=5)
         else:
-            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -247,15 +298,16 @@ async def proxy_api_friends(path: str, request: Request):
     target_url = f"{target}/{path}"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
+        headers = _forward_headers(request)
         method = request.method.upper()
         if method == "POST":
-            response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.post(target_url, json=body, headers=headers, timeout=5)
         elif method == "PUT":
-            response = state.INTERNAL_HTTP.put(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.put(target_url, json=body, headers=headers, timeout=5)
         elif method == "DELETE":
-            response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.delete(target_url, json=body, headers=headers, timeout=5)
         else:
-            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -272,15 +324,16 @@ async def proxy_api_friends_root(request: Request):
     target_url = f"{target}"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
+        headers = _forward_headers(request)
         method = request.method.upper()
         if method == "POST":
-            response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.post(target_url, json=body, headers=headers, timeout=5)
         elif method == "PUT":
-            response = state.INTERNAL_HTTP.put(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.put(target_url, json=body, headers=headers, timeout=5)
         elif method == "DELETE":
-            response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.delete(target_url, json=body, headers=headers, timeout=5)
         else:
-            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
@@ -296,15 +349,16 @@ async def proxy_friends(path: str, request: Request):
     target_url = f"{target}/{path}"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else None
+        headers = _forward_headers(request)
         method = request.method.upper()
         if method == "POST":
-            response = state.INTERNAL_HTTP.post(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.post(target_url, json=body, headers=headers, timeout=5)
         elif method == "PUT":
-            response = state.INTERNAL_HTTP.put(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.put(target_url, json=body, headers=headers, timeout=5)
         elif method == "DELETE":
-            response = state.INTERNAL_HTTP.delete(target_url, json=body, timeout=5)
+            response = state.INTERNAL_HTTP.delete(target_url, json=body, headers=headers, timeout=5)
         else:
-            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
+            response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
     except requests.RequestException as error:
         return Response(
