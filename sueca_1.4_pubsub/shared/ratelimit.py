@@ -26,6 +26,8 @@ def rate_limit_dependency(limit: int = 60, window_seconds: int = 60):
             if count > limit:
                 ttl = await redis.ttl(key)
                 raise HTTPException(status_code=429, detail=f"rate limit exceeded, retry in {ttl}s")
+        except HTTPException:
+            raise
         except Exception as e:
             # On Redis failure, allow requests but log to stdout
             print(f"[ratelimit] Redis error: {e}")

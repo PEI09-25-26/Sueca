@@ -4,13 +4,14 @@ import secrets
 import uuid
 
 import jwt
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from passlib.hash import bcrypt_sha256
 from pydantic import BaseModel, Field
 
 from apps.auth.twilio.email_service import EmailService
+from shared.auth import get_authenticated_payload, get_authenticated_uid
 from shared.firebase_client import (
-    check_verification,
+    consume_verification,
     create_user,
     delete_user,
     find_user_by_email,
@@ -65,6 +66,7 @@ class DeleteRequest(BaseModel):
 
 class ConfirmDeleteRequest(BaseModel):
     uid: str
+    verification_id: str = Field(alias="verification_id")
     code: str
 
 
@@ -129,6 +131,35 @@ def _build_user_response(uid: str, user: dict, *, last_login_at: str | None = No
     }
 
 
+def _build_public_user_response(uid: str, user: dict) -> dict:
+    return {
+        "uid": uid,
+        "username": user.get("username", ""),
+        "email": "",
+        "emailVerified": bool(user.get("verified", False)),
+        "description": user.get("description", ""),
+        "photoURL": user.get("photoURL", ""),
+        "bannerURL": user.get("bannerURL", ""),
+        "createdAt": user.get("createdAt") or _now_iso(),
+        "updatedAt": user.get("updatedAt") or user.get("createdAt") or _now_iso(),
+        "lastLoginAt": None,
+        "privacy": user.get("privacy", "public"),
+        "friendsCount": int(user.get("friendsCount", 0)),
+        "status": user.get("status", "offline"),
+        "friendCode": user.get("friendCode", ""),
+    }
+
+
+def _ensure_password_strength(password: str):
+    if len(password or "") < 8:
+        raise HTTPException(status_code=400, detail="password must be at least 8 characters")
+
+
+def _ensure_same_user(requested_uid: str, authenticated_uid: str):
+    if requested_uid != authenticated_uid:
+        raise HTTPException(status_code=403, detail="forbidden")
+
+
 def _pick_login_user(identifier: str, password: str) -> tuple[str, dict] | None:
     identifier = identifier.strip()
     if "@" in identifier:
@@ -173,6 +204,7 @@ def register(req: RegisterRequest):
     username = req.username.strip()
     if not username:
         raise HTTPException(status_code=400, detail="username required")
+    _ensure_password_strength(req.password)
 
     email = (req.email or "").strip().lower()
     if email:
@@ -204,10 +236,10 @@ def register(req: RegisterRequest):
     }
     create_user(uid, user_doc)
 
-    verification_id = uid
+    verification_id = uuid.uuid4().hex
     if email:
         code = f"{secrets.randbelow(1000000):06d}"
-        set_verification(verification_id, code, kind="register", ttl_seconds=600)
+        set_verification(verification_id, code, kind="register", ttl_seconds=600, subject=uid, max_attempts=5)
         try:
             EmailService().send_verification_code(email, code, username)
         except Exception:
@@ -227,11 +259,9 @@ def register(req: RegisterRequest):
 @app.post("/verify-register", dependencies=[Depends(rate_limit_dependency(limit=10, window_seconds=60))])
 @app.post("/verify-email", dependencies=[Depends(rate_limit_dependency(limit=10, window_seconds=60))])
 def verify_register(req: VerifyRequest):
-    ok = check_verification(req.verification_id, req.code, kind="register")
-    if not ok:
+    uid = consume_verification(req.verification_id, req.code, kind="register")
+    if not uid:
         raise HTTPException(status_code=400, detail="invalid or expired code")
-
-    uid = req.verification_id
     user = get_user(uid)
     if not user:
         raise HTTPException(status_code=404, detail="not found")
@@ -267,7 +297,8 @@ def login(req: LoginRequest):
 
 
 @app.get("/user/{uid}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
-def get_user_endpoint(uid: str):
+def get_user_endpoint(uid: str, authenticated_uid: str = Depends(get_authenticated_uid)):
+    _ensure_same_user(uid, authenticated_uid)
     user = get_user(uid)
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
@@ -275,7 +306,7 @@ def get_user_endpoint(uid: str):
 
 
 @app.get("/user/by-friend-code/{friend_code}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
-def get_user_by_friend_code(friend_code: str) -> FriendCodeLookupResponse:
+def get_user_by_friend_code(friend_code: str, _: str = Depends(get_authenticated_uid)) -> FriendCodeLookupResponse:
     user_with_uid = find_user_by_friend_code(friend_code)
     if not user_with_uid:
         raise HTTPException(status_code=404, detail="user not found")
@@ -283,11 +314,12 @@ def get_user_by_friend_code(friend_code: str) -> FriendCodeLookupResponse:
     user = get_user(uid) if uid else None
     if not uid or not user:
         raise HTTPException(status_code=404, detail="user not found")
-    return FriendCodeLookupResponse(success=True, user=_build_user_response(uid, user))
+    return FriendCodeLookupResponse(success=True, user=_build_public_user_response(uid, user))
 
 
 @app.put("/user/{uid}", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
-def update_user_endpoint(uid: str, req: UpdateUserRequest):
+def update_user_endpoint(uid: str, req: UpdateUserRequest, authenticated_uid: str = Depends(get_authenticated_uid)):
+    _ensure_same_user(uid, authenticated_uid)
     user = get_user(uid)
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
@@ -309,28 +341,19 @@ def update_user_endpoint(uid: str, req: UpdateUserRequest):
 
 
 @app.post("/logout", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
-def logout(req: LogoutRequest, authorization: str | None = Header(default=None)):
-    token = req.token
-    if not token and authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
-
-    if not token:
-        return {"success": True}
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
-    except Exception:
-        raise HTTPException(status_code=401, detail="invalid token")
-
-    jti = payload.get("jti")
+def logout(req: LogoutRequest, auth_payload: dict = Depends(get_authenticated_payload)):
+    if req.uid:
+        _ensure_same_user(req.uid, str(auth_payload.get("uid") or auth_payload.get("sub") or ""))
+    jti = auth_payload.get("jti")
     if jti:
         revoke_token(jti)
     return {"success": True}
 
 
 @app.post("/request-delete", dependencies=[Depends(rate_limit_dependency(limit=5, window_seconds=60))])
-def request_delete(req: DeleteRequest):
-    user = get_user(req.uid)
+def request_delete(req: DeleteRequest, authenticated_uid: str = Depends(get_authenticated_uid)):
+    _ensure_same_user(req.uid, authenticated_uid)
+    user = get_user(authenticated_uid)
     if not user:
         raise HTTPException(status_code=404, detail="not found")
     email = (user.get("email") or "").strip()
@@ -338,21 +361,24 @@ def request_delete(req: DeleteRequest):
         raise HTTPException(status_code=400, detail="email required for delete verification")
 
     code = f"{secrets.randbelow(1000000):06d}"
-    set_verification(req.uid, code, kind="delete", ttl_seconds=600)
+    verification_id = uuid.uuid4().hex
+    set_verification(verification_id, code, kind="delete", ttl_seconds=600, subject=authenticated_uid, max_attempts=5)
     try:
         EmailService().send_verification_code(email, code, user.get("username", "user"))
     except Exception:
         pass
-    return {"success": True}
+    return {"success": True, "verificationId": verification_id}
 
 
 @app.post("/confirm-delete", dependencies=[Depends(rate_limit_dependency(limit=5, window_seconds=60))])
-def confirm_delete(req: ConfirmDeleteRequest):
-    ok = check_verification(req.uid, req.code, kind="delete")
-    if not ok:
+def confirm_delete(req: ConfirmDeleteRequest, authenticated_uid: str = Depends(get_authenticated_uid)):
+    _ensure_same_user(req.uid, authenticated_uid)
+    verified_uid = consume_verification(req.verification_id, req.code, kind="delete")
+    if not verified_uid:
         raise HTTPException(status_code=400, detail="invalid or expired code")
+    _ensure_same_user(verified_uid, authenticated_uid)
 
-    delete_user(req.uid)
+    delete_user(authenticated_uid)
     return {"success": True}
 
 @app.get("/recover-password", dependencies=[Depends(rate_limit_dependency(limit=5, window_seconds=60))])
@@ -362,44 +388,44 @@ def recover_password(email: str):
         raise HTTPException(status_code=400, detail="email required")
 
     user = find_user_by_email(email)
-    if not user:
-        raise HTTPException(status_code=404, detail="user not found")
+    verification_id = uuid.uuid4().hex
 
-    uid = user.get("uid")
-    if not uid:
-        raise HTTPException(status_code=404, detail="user not found")
+    if user:
+        uid = user.get("uid")
+        if uid:
+            code = f"{secrets.randbelow(1000000):06d}"
+            set_verification(verification_id, code, kind="recover", ttl_seconds=600, subject=uid, max_attempts=5)
+            try:
+                EmailService().send_password_recovery_code(email, code, user.get("username", "user"))
+            except Exception:
+                pass
 
-    code = f"{secrets.randbelow(1000000):06d}"
-    set_verification(uid, code, kind="recover", ttl_seconds=600)
-    try:
-        sent_status = EmailService().send_password_recovery_code(email, code, user.get("username", "user"))
-        if not sent_status:
-            raise HTTPException(status_code=502, detail="failed to send recovery email")
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=502, detail="failed to send recovery email")
-    return {"success": True, "verificationId": uid, "message": "recovery code sent"}
+    return {
+        "success": True,
+        "verificationId": verification_id,
+        "message": "If the account exists, a recovery code has been sent",
+    }
 
 @app.post("/reset-password", dependencies=[Depends(rate_limit_dependency(limit=5, window_seconds=60))])
 def reset_password(req: ResetPasswordRequest):
-    ok = check_verification(req.verification_id, req.code, kind="recover")
-    if not ok:
+    verified_uid = consume_verification(req.verification_id, req.code, kind="recover")
+    if not verified_uid:
         raise HTTPException(status_code=400, detail="invalid or expired code")
 
-    user = get_user(req.verification_id)
+    user = get_user(verified_uid)
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
 
     new_password = req.new_password.strip()
     if not new_password:
         raise HTTPException(status_code=400, detail="new password required")
+    _ensure_password_strength(new_password)
 
     salt = secrets.token_hex(16)
     salted = f"{salt}{new_password}"
     user["salt"] = salt
     user["password"] = bcrypt_sha256.hash(salted)
     user["updatedAt"] = _now_iso()
-    create_user(req.verification_id, user)
+    create_user(verified_uid, user)
 
     return {"success": True, "message": "Password updated"}

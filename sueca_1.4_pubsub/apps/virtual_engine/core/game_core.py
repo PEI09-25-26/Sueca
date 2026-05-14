@@ -183,13 +183,28 @@ class GameState:
             return None
         return self._POSITION_MAP.get(str(position_choice).strip().lower())
 
+    def _pick_first_available_position(self):
+        ordered_positions = [
+            Positions.NORTH,
+            Positions.EAST,
+            Positions.SOUTH,
+            Positions.WEST,
+        ]
+        for position in ordered_positions:
+            team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+            if position in self.available_team_positions[team_key]:
+                return position
+        return None
+
     def add_player(self, name, position_choice):
         if len(self.players) >= self.max_players:
             return False, 'Game is full', None
 
         position = self._normalize_position(position_choice)
         if not position:
-            return False, 'Invalid position. Choose NORTH, SOUTH, EAST, or WEST', None
+            position = self._pick_first_available_position()
+        if not position:
+            return False, 'No seats available', None
 
         team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
         if position not in self.available_team_positions[team_key]:
@@ -785,6 +800,19 @@ class GameManager:
             self.games[game_id] = GameState(game_id)
             publish_room_event('room_created', game_id=game_id)
             return game_id
+
+    def create_room_with_host(self, creator_name, position_choice=None):
+        with self._lock:
+            game_id = self._generate_game_id()
+            game = GameState(game_id)
+            success, message, player_id = game.add_player(creator_name, position_choice)
+            if not success:
+                return False, message, None, None
+
+            game.creator_id = player_id
+            self.games[game_id] = game
+            publish_room_event('room_created', game_id=game_id)
+            return True, message, game_id, player_id
 
     def delete_room(self, game_id: str):
         with self._lock:

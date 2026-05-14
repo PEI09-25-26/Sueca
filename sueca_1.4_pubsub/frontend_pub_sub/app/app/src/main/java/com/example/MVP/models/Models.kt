@@ -46,6 +46,7 @@ data class DeleteAccountRequest(
 
 data class ConfirmDeleteAccountRequest(
     val uid: String,
+    @SerializedName("verification_id") val verificationId: String,
     val code: String
 )
 
@@ -270,7 +271,8 @@ data class LeaveRoomRequest(
 // ============ Responses ============
 data class GenericResponse(
     val success: Boolean,
-    val message: String?
+    val message: String?,
+    @SerializedName("verificationId") val verificationId: String? = null
 )
 
 data class JoinResponse(
@@ -298,7 +300,8 @@ data class RoomState(
 )
 
 data class CreateRoomRequest(
-    val playerName: String
+    val name: String,
+    val position: String? = null
 )
 
 data class CreateRoomResponse(
@@ -306,6 +309,7 @@ data class CreateRoomResponse(
     @SerializedName("room_id") val roomId: String? = null,
     @SerializedName("player_id") val playerId: String? = null,
     @SerializedName("game_id") val gameId: String? = null,
+    val token: String? = null,
     val message: String? = null
 )
 
@@ -358,7 +362,8 @@ data class JoinGameResponse(
     val success: Boolean,
     val message: String?,
     @SerializedName("game_id") val gameId: String?,
-    @SerializedName("player_id") val playerId: String?
+    @SerializedName("player_id") val playerId: String?,
+    val token: String? = null
 )
 
 data class AddBotRequest(

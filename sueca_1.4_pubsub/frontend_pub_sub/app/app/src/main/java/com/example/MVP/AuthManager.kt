@@ -21,6 +21,12 @@ object AuthManager {
 	private val GUEST_NAME_REGEX = Regex("^Guest\\s+\\d+$")
 
 	private lateinit var prefs: SharedPreferences
+	private var secureStorageAvailable: Boolean = false
+	private var runtimeToken: String? = null
+	private var runtimeUid: String? = null
+	private var runtimeUsername: String? = null
+	private var runtimeEmail: String? = null
+	private var runtimeFriendCode: String? = null
 
 	private fun isInitialized(): Boolean = ::prefs.isInitialized
 
@@ -34,40 +40,45 @@ object AuthManager {
 				EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
 				EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
 			)
+			secureStorageAvailable = true
 		} catch (e: Exception) {
-			// Fallback to regular prefs if encryption fails (e.g. key store issues)
 			prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+			secureStorageAvailable = false
 		}
 	}
 
 	fun getToken(): String? {
 		if (!isInitialized()) return null
-		return prefs.getString(KEY_TOKEN, null)
+		return if (secureStorageAvailable) prefs.getString(KEY_TOKEN, null) else runtimeToken
 	}
 
 	fun getUid(): String? {
 		if (!isInitialized()) return null
-		return prefs.getString(KEY_UID, null)
+		return if (secureStorageAvailable) prefs.getString(KEY_UID, null) else runtimeUid
 	}
 
 	fun getUsername(): String? {
 		if (!isInitialized()) return null
-		return prefs.getString(KEY_USERNAME, null)
+		return if (secureStorageAvailable) prefs.getString(KEY_USERNAME, null) else runtimeUsername
 	}
 
 	fun getEmail(): String? {
 		if (!isInitialized()) return null
-		return prefs.getString(KEY_EMAIL, null)
+		return if (secureStorageAvailable) prefs.getString(KEY_EMAIL, null) else runtimeEmail
 	}
 
 	fun getSavedFriendCode(): String? {
 		if (!isInitialized()) return null
-		return prefs.getString(KEY_FRIEND_CODE, null)
+		return if (secureStorageAvailable) prefs.getString(KEY_FRIEND_CODE, null) else runtimeFriendCode
 	}
 
 	fun saveFriendCode(code: String) {
 		if (!isInitialized()) return
-		prefs.edit().putString(KEY_FRIEND_CODE, code).apply()
+		if (secureStorageAvailable) {
+			prefs.edit().putString(KEY_FRIEND_CODE, code).apply()
+		} else {
+			runtimeFriendCode = code
+		}
 	}
 
 	fun isAnonymous(): Boolean {
@@ -295,6 +306,9 @@ object AuthManager {
 			val token = getAuthHeader() ?: return Result.failure(Exception("No auth token"))
 			val response = RetrofitClient.api.requestDeleteAccount(DeleteAccountRequest(uid), token)
 			if (response.success) {
+				response.verificationId?.let {
+					prefs.edit().putString("pending_delete_verification_id", it).apply()
+				}
 				Result.success(Unit)
 			} else {
 				Result.failure(Exception(response.message ?: "Failed to request delete"))
@@ -307,8 +321,11 @@ object AuthManager {
 	suspend fun confirmAccountDelete(uid: String, code: String): Result<Unit> {
 		return try {
 			val token = getAuthHeader() ?: return Result.failure(Exception("No auth token"))
-			val response = RetrofitClient.api.confirmDeleteAccount(ConfirmDeleteAccountRequest(uid, code), token)
+			val verificationId = prefs.getString("pending_delete_verification_id", null)
+				?: return Result.failure(Exception("Missing delete verification context"))
+			val response = RetrofitClient.api.confirmDeleteAccount(ConfirmDeleteAccountRequest(uid, verificationId, code), token)
 			if (response.success) {
+				prefs.edit().remove("pending_delete_verification_id").apply()
 				clearUserData()
 				Result.success(Unit)
 			} else {
@@ -337,22 +354,40 @@ object AuthManager {
 
 	private fun saveUserData(user: UserData, token: String) {
 		if (!isInitialized()) return
-		prefs.edit().apply {
-			putString(KEY_TOKEN, token)
-			putString(KEY_UID, user.uid)
-			putString(KEY_USERNAME, user.username)
-			putString(KEY_EMAIL, user.email)
-			if (user.friendCode != null) {
-				putString(KEY_FRIEND_CODE, user.friendCode)
+		runtimeToken = token
+		runtimeUid = user.uid
+		runtimeUsername = user.username
+		runtimeEmail = user.email
+		runtimeFriendCode = user.friendCode
+		if (secureStorageAvailable) {
+			prefs.edit().apply {
+				putString(KEY_TOKEN, token)
+				putString(KEY_UID, user.uid)
+				putString(KEY_USERNAME, user.username)
+				putString(KEY_EMAIL, user.email)
+				if (user.friendCode != null) {
+					putString(KEY_FRIEND_CODE, user.friendCode)
+				}
+				putBoolean(KEY_IS_ANONYMOUS, false)
+				remove(KEY_ANONYMOUS_NAME)
+				apply()
 			}
-			putBoolean(KEY_IS_ANONYMOUS, false)
-			remove(KEY_ANONYMOUS_NAME)
-			apply()
+		} else {
+			prefs.edit().apply {
+				putBoolean(KEY_IS_ANONYMOUS, false)
+				remove(KEY_ANONYMOUS_NAME)
+				apply()
+			}
 		}
 	}
 
 	private fun clearUserData() {
 		if (!isInitialized()) return
+		runtimeToken = null
+		runtimeUid = null
+		runtimeUsername = null
+		runtimeEmail = null
+		runtimeFriendCode = null
 		prefs.edit().apply {
 			remove(KEY_TOKEN)
 			remove(KEY_UID)

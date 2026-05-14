@@ -1,12 +1,16 @@
 """Session and token management for player-room binding."""
 
+import os
 import jwt
-import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-SECRET_KEY = "your-secret-key-change-in-production"
+SECRET_KEY = os.getenv("SUECA_PLAYER_SESSION_SECRET") or os.getenv("SUECA_JWT_SECRET", "dev-secret")
 TOKEN_EXPIRY_MINUTES = 30
+
+
+def decode_session_token(token: str) -> dict:
+    return jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
 
 
 class Session:
@@ -34,7 +38,7 @@ class Session:
     def is_valid(self) -> bool:
         """Check if session is still active."""
         try:
-            jwt.decode(self.token, SECRET_KEY, algorithms=['HS256'])
+            decode_session_token(self.token)
             return True
         except jwt.ExpiredSignatureError:
             return False
@@ -67,16 +71,15 @@ class SessionManager:
     def validate_token(self, token: str) -> Optional[dict]:
         """Validate token and return session data."""
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            payload = decode_session_token(token)
             session = self.sessions.get(token)
             if session and session.is_valid():
                 session.update_activity()
-                return {
-                    'game_id': payload['game_id'],
-                    'player_id': payload['player_id'],
-                    'player_name': payload['player_name'],
-                }
-            return None
+            return {
+                'game_id': payload['game_id'],
+                'player_id': payload['player_id'],
+                'player_name': payload['player_name'],
+            }
         except jwt.InvalidTokenError:
             return None
     
@@ -93,6 +96,16 @@ class SessionManager:
         """Get token for a player in a game."""
         key = f"{game_id}:{player_id}"
         return self.player_sessions.get(key)
+
+    def delete_sessions_for_player(self, player_id: str):
+        """Delete every active session for a player across rooms."""
+        tokens_to_remove = [
+            token
+            for key, token in self.player_sessions.items()
+            if key.split(":", 1)[-1] == player_id
+        ]
+        for token in tokens_to_remove:
+            self.revoke_session(token)
 
 
 # Global session manager

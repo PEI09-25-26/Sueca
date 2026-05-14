@@ -1,7 +1,8 @@
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Header, Query
 
+from ..auth import authorize_header, check_host
 from ..core import manager
 from ..session import session_manager
 from .common import error, get_game_from_request
@@ -120,10 +121,12 @@ def get_room_match_points(game_id: str):
 
 
 @router.post("/api/room/{game_id}/rematch")
-def start_room_rematch(game_id: str):
+def start_room_rematch(game_id: str, authorization: str = Header(default=None)):
     game = manager.get_game(game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
+    session_data = authorize_header(authorization, game_id)
+    check_host(game_id, session_data["player_id"])
 
     success, message = game.rematch()
     if not success:
@@ -132,7 +135,23 @@ def start_room_rematch(game_id: str):
 
 
 @router.post("/api/create_room")
-def create_room_endpoint():
+def create_room_endpoint(data: dict = Body(default_factory=dict)):
+    name = str(data.get("name", "")).strip()
+    position = data.get("position")
+    if name:
+        success, message, game_id, player_id = manager.create_room_with_host(name, position)
+        if not success:
+            return error(message, 400)
+
+        token = session_manager.create_session(game_id, player_id, name)
+        return {
+            "success": True,
+            "message": message,
+            "game_id": game_id,
+            "player_id": player_id,
+            "token": token,
+        }
+
     game_id = manager.create_room()
     return {"success": True, "game_id": game_id}
 
@@ -183,16 +202,17 @@ def join_game(data: dict = Body(default_factory=dict)):
     return {"success": False, "message": message}
 
 @router.post("/api/room_visibility")
-def update_room_visibility(data: dict = Body(default_factory=dict)):
+def update_room_visibility(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    actor_id = data.get("player_id") or data.get("actor_id")
-    if not actor_id:
-        return error("player_id required", 400)
-    if not game.creator_id or game.creator_id != actor_id:
-        return error("Only room creator can change room visibility", 403)
+    session_data = authorize_header(authorization, game_id)
+    actor_id = session_data["player_id"]
+    check_host(game_id, actor_id)
 
     if "is_public" not in data:
         return error("is_public required", 400)
@@ -216,14 +236,16 @@ def update_room_visibility(data: dict = Body(default_factory=dict)):
     return {"success": True, "message": message, "game_id": game_id, "is_public": is_public}
 
 @router.post("/api/leave")
-def leave_game(data: dict = Body(default_factory=dict)):
+def leave_game(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    player_id = data.get("player_id") or data.get("actor_id")
-    if not player_id:
-        return error("player_id required", 400)
+    session_data = authorize_header(authorization, game_id)
+    player_id = session_data["player_id"]
 
     # Voluntary leave: allow leaving if game not started, or if finished (e.g. before rematch)
     success, message = game.leave(player_id)

@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Header, Query
 
+from ..auth import authorize_header, check_host
 from ..core import BotFactory, launch_bot_thread
 from ..event_publisher import publish_bot_added, publish_position_changed
 from .common import error, get_game_from_request
@@ -9,12 +10,16 @@ router = APIRouter()
 
 
 @router.post("/api/change_position")
-def change_position(data: dict = Body(default_factory=dict)):
+def change_position(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    player_id = data.get("player_id") or data.get("player")
+    session_data = authorize_header(authorization, game_id)
+    player_id = session_data["player_id"]
     new_position = data.get("position")
     if not player_id or not new_position:
         return error("Player and new position required", 400)
@@ -59,16 +64,17 @@ def change_position(data: dict = Body(default_factory=dict)):
 
 
 @router.post("/api/add_bot")
-def add_bot(data: dict = Body(default_factory=dict)):
+def add_bot(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    requester_id = data.get("player_id")
-    if not requester_id:
-        return error("player_id required", 400)
-    if game.creator_id != requester_id:
-        return error("Only room creator can add bots", 403)
+    session_data = authorize_header(authorization, game_id)
+    requester_id = session_data["player_id"]
+    check_host(game_id, requester_id)
 
     position = data.get("position")
     if not position:
@@ -111,10 +117,17 @@ def add_bot(data: dict = Body(default_factory=dict)):
 
 
 @router.get("/api/hand/{player_id}")
-def get_hand(player_id: str, game_id: str | None = Query(default=None)):
+def get_hand(
+    player_id: str,
+    game_id: str | None = Query(default=None),
+    authorization: str = Header(default=None),
+):
     game, resolved_game_id = get_game_from_request(game_id_query=game_id)
     if not game:
         return error(f"Game {resolved_game_id} not found", 404)
+    session_data = authorize_header(authorization, resolved_game_id)
+    if session_data["player_id"] != player_id:
+        return error("Forbidden", 403)
 
     player = game.get_player(player_id)
     if not player:
@@ -124,12 +137,17 @@ def get_hand(player_id: str, game_id: str | None = Query(default=None)):
 
 @router.post("/api/remove_player")
 @router.post("/api/the_council_has_decided_your_fate")
-def remove_player_endpoint(data: dict = Body(default_factory=dict)):
+def remove_player_endpoint(
+    data: dict = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
     game, game_id = get_game_from_request(data)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    actor_id = data.get("actor_id")
+    session_data = authorize_header(authorization, game_id)
+    actor_id = session_data["player_id"]
+    check_host(game_id, actor_id)
     target_id = data.get("target_id")
     if not actor_id or not target_id:
         return error("Both actor_id and target_id are required", 400)
