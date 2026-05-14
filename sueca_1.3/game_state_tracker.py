@@ -29,6 +29,7 @@ class GameStateTracker:
         self.cards_played_by_player = defaultdict(list)  # player -> [cards]
         self.trick_history = []  # completed tricks
         self.current_trick = []  # (player, card_id) tuples for current trick
+        self.aces_played = set() # list of all aces that have been played
         
         # Round state
         self.current_round = 1
@@ -152,6 +153,11 @@ class GameStateTracker:
         """
         self.remaining_cards.discard(card_id)
         card_suit = CardMapper.get_card_suit(card_id)
+
+        rank = CardMapper.get_card_rank(card_id)
+        if rank == "A":
+            self.aces_played.add(card_suit)
+
         if self.trump_suit == card_suit:
             self.remaining_trumps.discard(card_id)
 
@@ -216,3 +222,36 @@ class GameStateTracker:
             total += CardMapper.get_card_points(card_id)
             
         return total
+    
+    def is_player_void(self, player, suit):
+        """
+        Check if a player is known to be void in a given suit.
+        """
+        return suit in self.void_suits_by_player.get(player, set())
+
+    def get_players_after_self(self):
+        """
+        Returns players who still have to play in the current trick.
+        """
+        played_players = [p for p, _ in self.current_trick]
+        
+        all_players_in_order = [p["name"] for p in self._get_players_in_order()]
+        
+        my_index = all_players_in_order.index(self.player_name)
+        
+        return [
+            p for p in all_players_in_order[my_index+1:]
+            if p not in played_players
+        ]
+    
+    def get_aces_played(self):
+        """
+        Returns the suits of all the aces that have been played
+        """
+        return self.aces_played
+    
+    def is_ace_gone(self, suit):
+        """
+        Checks if the ace in that suit has been played
+        """
+        return suit in self.aces_played
