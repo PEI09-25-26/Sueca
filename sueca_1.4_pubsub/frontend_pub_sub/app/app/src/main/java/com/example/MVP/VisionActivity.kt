@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
@@ -22,8 +25,10 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import okhttp3.*
 import com.example.MVP.network.RetrofitClient
+import com.example.MVP.models.*
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import androidx.appcompat.app.AlertDialog
 import org.json.JSONObject
 
@@ -31,9 +36,12 @@ class VisionActivity : AppCompatActivity() {
 
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var webSocket: WebSocket
+    @Volatile private var isWebSocketOpen: Boolean = false
+    private var wsEndpoint: String = ""
 
-    private val wsUrl = "ws://192.168.176.252:8000/ws/camera/"  // IP do Mac na rede local
-    // For emulator use: "ws://10.0.2.2:8000/ws/camera/"
+    // Use secure public WSS endpoint via Cloudflare Tunnel
+    private val wsBase = "wss://api.suecadaojogo.com/ws/camera/"
+    // For emulator/testing local host use: "ws://10.0.2.2:8000/ws/camera/"
 
     private var gameId: String = "default"
 
@@ -97,7 +105,7 @@ class VisionActivity : AppCompatActivity() {
                 startCamera()
                 // Delay WebSocket connection to ensure everything is initialized
                 Handler(Looper.getMainLooper()).postDelayed({
-                    connectWebSocket()
+                    connectWebSocketWithToken()
                 }, 500)
             } else {
                 ActivityCompat.requestPermissions(
@@ -130,7 +138,6 @@ class VisionActivity : AppCompatActivity() {
 
             imageAnalyzer.setAnalyzer(executor) { imageProxy ->
                 sendFrameToBackend(imageProxy)
-                imageProxy.close()
             }
 
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -151,33 +158,91 @@ class VisionActivity : AppCompatActivity() {
 
     // ------- CONVERTER FRAME -> JPEG -> BASE64 -------
     private fun sendFrameToBackend(imageProxy: ImageProxy) {
-        val bitmap = imageProxy.toBitmap() ?: return
+        try {
+            if (!::webSocket.isInitialized || !isWebSocketOpen) {
+                return
+            }
+            val bitmap = imageProxy.toBitmap() ?: return
 
-        val output = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, output)
-        val base64 = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+            val output = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, output)
+            val base64 = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
 
-        // Send frame via WebSocket to middleware
-        if (::webSocket.isInitialized) {
             try {
-                webSocket.send(base64)
-                // Log less frequently to avoid spam
-                if (System.currentTimeMillis() % 1000 < 100) {
-                    Log.d("VisionActivity", "Frame sent via WebSocket")
+                val sent = webSocket.send(base64)
+                if (!sent) {
+                    Log.w("VisionActivity", "Frame NOT sent (socket not writable/open) -> $wsEndpoint")
+                    return
+                }
+                // Log less frequently to avoid spam and include destination.
+                if (System.currentTimeMillis() % 1000 < 120) {
+                    Log.d("VisionActivity", "Frame sent via WebSocket -> $wsEndpoint")
                 }
             } catch (e: Exception) {
-                Log.e("VisionActivity", "Error sending frame: ${e.message}")
+                Log.e("VisionActivity", "Error sending frame to $wsEndpoint: ${e.message}", e)
+            }
+        } finally {
+            try {
+                imageProxy.close()
+            } catch (e: Exception) {
+                Log.w("VisionActivity", "Error closing imageProxy: ${e.message}")
             }
         }
     }
 
     // ------- EXTENSÃO PARA CONVERTER IMAGEPROXY -------
     private fun ImageProxy.toBitmap(): Bitmap? {
-        val planeProxy = planes.firstOrNull() ?: return null
-        val buffer = planeProxy.buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        if (format != ImageFormat.YUV_420_888 || planes.size < 3) {
+            return null
+        }
+
+        val nv21 = yuv420888ToNv21(this)
+        val yuvImage = YuvImage(nv21, ImageFormat.NV21, width, height, null)
+        val out = ByteArrayOutputStream()
+        yuvImage.compressToJpeg(Rect(0, 0, width, height), 85, out)
+        val imageBytes = out.toByteArray()
+        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+    }
+
+    private fun yuv420888ToNv21(image: ImageProxy): ByteArray {
+        val yBuffer = image.planes[0].buffer
+        val uBuffer = image.planes[1].buffer
+        val vBuffer = image.planes[2].buffer
+
+        val ySize = yBuffer.remaining()
+        val uSize = uBuffer.remaining()
+        val vSize = vBuffer.remaining()
+
+        val nv21 = ByteArray(ySize + uSize + vSize)
+
+        yBuffer.get(nv21, 0, ySize)
+
+        // NV21 expects interleaved VU data.
+        val uvPixelStride = image.planes[1].pixelStride
+        val uvRowStride = image.planes[1].rowStride
+        val width = image.width
+        val height = image.height
+        val chromaHeight = height / 2
+        val chromaWidth = width / 2
+
+        val uBytes = ByteArray(uSize)
+        val vBytes = ByteArray(vSize)
+        uBuffer.get(uBytes)
+        vBuffer.get(vBytes)
+
+        var outputOffset = ySize
+        for (row in 0 until chromaHeight) {
+            val rowStart = row * uvRowStride
+            for (col in 0 until chromaWidth) {
+                val uvOffset = rowStart + col * uvPixelStride
+                if (uvOffset < vBytes.size && uvOffset < uBytes.size) {
+                    nv21[outputOffset++] = vBytes[uvOffset]
+                    nv21[outputOffset++] = uBytes[uvOffset]
+                }
+            }
+        }
+
+        return nv21
     }
 
     /**
@@ -246,104 +311,119 @@ class VisionActivity : AppCompatActivity() {
     }
 
     // ------------------ WEBSOCKET ---------------------
-    private fun connectWebSocket() {
-        val client = OkHttpClient()
+    private fun connectWebSocketWithToken() {
+        lifecycleScope.launch {
+            try {
+                Log.d("VisionActivity", "Requesting game token for gameId: $gameId")
+                val tokenResp = RetrofitClient.api.getGameToken(GameTokenRequest(gameId))
+                val token = tokenResp.token
+                Log.d("VisionActivity", "Token received, connecting to WebSocket...")
 
-        val request = Request.Builder()
-            .url(wsUrl + gameId)
-            .build()
+                // Use the configured OkHttpClient from RetrofitClient for consistent security/logging
+                // We create a new one based on it to set specific WS timeouts if needed
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(0, TimeUnit.SECONDS) // WS needs no read timeout
+                    .writeTimeout(0, TimeUnit.SECONDS)
+                    .pingInterval(30, TimeUnit.SECONDS) // Keep-alive
+                    .build()
 
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(ws: WebSocket, response: Response) {
-                Log.d("WS", "WebSocket connected to ${wsUrl + gameId}")
-                runOnUiThread {
-                    Toast.makeText(this@VisionActivity, "Vision AI Connected", Toast.LENGTH_SHORT).show()
-                }
-            }
+                wsEndpoint = "$wsBase$gameId?token=$token"
+                Log.d("VisionActivity", "Connecting WebSocket to $wsEndpoint")
+                val request = Request.Builder()
+                    .url(wsEndpoint)
+                    .addHeader("Origin", "https://suecadaojogo.com") // Some WS servers require Origin
+                    .build()
 
-            override fun onMessage(ws: WebSocket, text: String) {
-                Log.d("WS", "Response: $text")
-                runOnUiThread {
-                    // Tentar parsear como JSON para detectar mensagens especiais
-                    try {
-                        val json = JSONObject(text)
-                        if (json.has("type") && json.getString("type") == "round_end") {
-                            // Fim de ronda
-                            handleRoundEnd(json)
-                            return@runOnUiThread
-                        }
-                    } catch (e: Exception) {
-                        // Não é JSON, tratar como mensagem de carta normal
-                    }
-
-                    lastWebSocketMessage = text
-
-                    Toast.makeText(this@VisionActivity, "Card: $text", Toast.LENGTH_SHORT).show()
-
-                    val json = JSONObject(text)
-
-                    val detectionjson = json.optString("detection", "{}")
-                    val detection = JSONObject(detectionjson)
-
-                    val rankjson = detection.optString("rank", "").lowercase()
-                    Toast.makeText(this@VisionActivity, "Rank: $rankjson", Toast.LENGTH_SHORT).show()
-                    val suit = detection.optString("suit", "").lowercase()
-                    Toast.makeText(this@VisionActivity, "Suit: $suit", Toast.LENGTH_SHORT).show()
-
-
-                    if (rankjson.isEmpty() || suit.isEmpty()) {
-                        Log.w("VisionActivity", "Incomplete card detection data.")
-                    }
-
-                    val rank = when (rankjson) {
-                        "k" -> "king"
-                        "q" -> "queen"
-                        "j" -> "jack"
-                        else -> rankjson
-                    }
-
-                    val cardIdentifier = "${suit}_$rank"
-
-                    Toast.makeText(this@VisionActivity, "Card: $cardIdentifier", Toast.LENGTH_SHORT).show()
-                    val state = json.optString("game_state", "{}")
-                    val game_state = JSONObject(state)
-                    val message = game_state.optString("message", "{}")
-                    if (message == "Trump card set"){
-                        Toast.makeText(this@VisionActivity, "Trump card set", Toast.LENGTH_SHORT).show()
-                        updateCardView(cardIdentifier, trumpCard)
-                    }
-                    val player = game_state.optString("current_player", "")
-                    val queue_size = game_state.optString("queue_size", "{}")
-                    if (queue_size == "1"){
-                        resetCardsToBack()
-                    }
-
-                    when (player) {
-                        "1" -> {
-                            updateCardView(cardIdentifier, cardNorth)
-                        }
-                        "2" -> updateCardView(cardIdentifier, cardWest)
-                        "3" -> updateCardView(cardIdentifier, cardSouth)
-                        "0" -> updateCardView(cardIdentifier, cardEast)
-                        else -> {
-                            // Opcional: caso o valor não seja 1-4
-                            println("Jogador desconhecido: $player")
+                webSocket = client.newWebSocket(request, object : WebSocketListener() {
+                    override fun onOpen(ws: WebSocket, response: Response) {
+                        isWebSocketOpen = true
+                        Log.d("WS", "WebSocket connected successfully to $wsEndpoint. Status: ${response.code}")
+                        runOnUiThread {
+                            Toast.makeText(this@VisionActivity, "Vision AI Connected", Toast.LENGTH_SHORT).show()
                         }
                     }
-                }
-            }
 
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                Log.e("WS", "WebSocket error", t)
+                    override fun onMessage(ws: WebSocket, text: String) {
+                        Log.d("WS", "Message received: $text")
+                        runOnUiThread {
+                            try {
+                                val json = JSONObject(text)
+                                if (json.has("type") && json.getString("type") == "round_end") {
+                                    handleRoundEnd(json)
+                                    return@runOnUiThread
+                                }
+
+                                lastWebSocketMessage = text
+                                // Toast.makeText(this@VisionActivity, "Card: $text", Toast.LENGTH_SHORT).show()
+
+                                val detectionjson = json.optString("detection", "{}")
+                                val detection = JSONObject(detectionjson)
+                                val rankjson = detection.optString("rank", "").lowercase()
+                                val suit = detection.optString("suit", "").lowercase()
+
+                                if (rankjson.isEmpty() || suit.isEmpty()) {
+                                    Log.w("VisionActivity", "Incomplete card detection data: $text")
+                                    return@runOnUiThread
+                                }
+
+                                val rank = when (rankjson) {
+                                    "k" -> "king"
+                                    "q" -> "queen"
+                                    "j" -> "jack"
+                                    else -> rankjson
+                                }
+
+                                val cardIdentifier = "${suit}_$rank"
+                                val state = json.optString("game_state", "{}")
+                                val gameState = JSONObject(state)
+                                val message = gameState.optString("message", "")
+                                if (message == "Trump card set") {
+                                    updateCardView(cardIdentifier, trumpCard)
+                                }
+
+                                val player = gameState.optString("current_player", "")
+                                val queueSize = gameState.optString("queue_size", "{}")
+                                if (queueSize == "1") {
+                                    resetCardsToBack()
+                                }
+
+                                when (player) {
+                                    "1" -> updateCardView(cardIdentifier, cardNorth)
+                                    "2" -> updateCardView(cardIdentifier, cardWest)
+                                    "3" -> updateCardView(cardIdentifier, cardSouth)
+                                    "0" -> updateCardView(cardIdentifier, cardEast)
+                                    else -> Log.w("VisionActivity", "Unknown player: $player")
+                                }
+                            } catch (e: Exception) {
+                                Log.e("VisionActivity", "Error parsing WebSocket message: $text", e)
+                            }
+                        }
+                    }
+
+                    override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                        isWebSocketOpen = false
+                        val errorMsg = t.message ?: "Unknown error"
+                        val code = response?.code ?: -1
+                        Log.e("WS", "WebSocket connection failure. Code: $code, Message: $errorMsg", t)
+                        runOnUiThread {
+                            Toast.makeText(this@VisionActivity, "Erro de ligação Vision: $errorMsg", Toast.LENGTH_LONG).show()
+                        }
+                    }
+
+                    override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                        isWebSocketOpen = false
+                        Log.d("WS", "WebSocket closed. Code: $code, Reason: $reason")
+                    }
+                })
+            } catch (e: Exception) {
+                isWebSocketOpen = false
+                Log.e("VisionActivity", "Fatal error connecting WebSocket", e)
                 runOnUiThread {
-                    Toast.makeText(this@VisionActivity, "Connection error: ${t.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@VisionActivity, "Falha crítica na Vision: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
-
-            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                Log.d("WS", "WebSocket closed: $reason")
-            }
-        })
+        }
     }
 
     private fun handleRoundEnd(json: JSONObject) {
@@ -367,7 +447,7 @@ class VisionActivity : AppCompatActivity() {
             }
         }
         
-        val builder = AlertDialog.Builder(this)
+        val builder = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
         builder.setTitle(title)
         builder.setMessage(message)
         builder.setCancelable(false)
@@ -423,7 +503,7 @@ class VisionActivity : AppCompatActivity() {
         if (requestCode == 10) {
             if (allPermissionsGranted()) {
                 startCamera()
-                connectWebSocket()
+                connectWebSocketWithToken()
             } else {
                 Toast.makeText(this, "Permissions not granted by the user.", Toast.LENGTH_SHORT).show()
                 finish()
@@ -444,6 +524,7 @@ class VisionActivity : AppCompatActivity() {
 
         // Close WebSocket connection
         if (::webSocket.isInitialized) {
+            isWebSocketOpen = false
             webSocket.close(1000, "Activity Destroyed")
         }
     }

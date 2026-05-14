@@ -5,6 +5,116 @@ import retrofit2.http.*
 
 interface ApiService {
 
+    // ============ /api/auth Endpoints ============
+
+    @POST("/api/auth/register")
+    suspend fun registerUser(@Body request: RegisterRequest): RegisterResponse
+
+    @POST("/api/auth/verify-email")
+    suspend fun verifyEmail(@Body request: VerifyEmailRequest): AuthResponse
+
+    @POST("/api/auth/login")
+    suspend fun loginUser(@Body request: LoginRequest): AuthResponse
+
+    @GET("/api/auth/recover-password")
+    suspend fun recoverPassword(@Query("email") email: String): RecoverPasswordResponse
+
+    @POST("/api/auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequest): GenericResponse
+
+    @GET("/api/auth/user/{uid}")
+    suspend fun getUser(
+        @Path("uid") uid: String,
+        @Header("Authorization") token: String
+    ): UserResponse
+
+    @GET("/api/auth/user/by-friend-code/{friendCode}")
+    suspend fun getUserByFriendCode(
+        @Path("friendCode") friendCode: String,
+        @Header("Authorization") token: String
+    ): UserResponse
+
+    @PUT("/api/auth/user/{uid}")
+    suspend fun updateUser(
+        @Path("uid") uid: String,
+        @Body request: UpdateUserRequest,
+        @Header("Authorization") token: String
+    ): UserResponse
+
+    @DELETE("/api/auth/user/{uid}")
+    suspend fun deleteUser(
+        @Path("uid") uid: String,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/auth/logout")
+    suspend fun logoutUser(
+        @Body request: LogoutRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/auth/request-delete")
+    suspend fun requestDeleteAccount(
+        @Body request: DeleteAccountRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/auth/confirm-delete")
+    suspend fun confirmDeleteAccount(
+        @Body request: ConfirmDeleteAccountRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    // ============ /api/friends Endpoints ============
+
+    @POST("/api/friends/request")
+    suspend fun sendFriendRequest(
+        @Body request: SendFriendRequestRequest,
+        @Header("Authorization") token: String
+    ): FriendRequestResponse
+
+    @POST("/api/friends/request-by-username")
+    suspend fun sendFriendRequestByUsername(
+        @Body request: SendFriendRequestByUsernameRequest,
+        @Header("Authorization") token: String
+    ): FriendRequestResponse
+
+    @POST("/api/friends/accept")
+    suspend fun acceptFriendRequest(
+        @Body request: AcceptFriendRequestRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/friends/decline")
+    suspend fun declineFriendRequest(
+        @Body request: DeclineFriendRequestRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @HTTP(method = "DELETE", path = "/api/friends", hasBody = true)
+    suspend fun removeFriend(
+        @Body request: FriendRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @GET("/api/friends/list")
+    suspend fun listFriends(
+        @Query("uid") uid: String,
+        @Header("Authorization") token: String
+    ): FriendsListResponse
+
+    @GET("/api/friends/requests")
+    suspend fun listFriendRequests(
+        @Query("uid") uid: String,
+        @Header("Authorization") token: String
+    ): FriendRequestsListResponse
+
+    @GET("/api/friends/get_code")
+    suspend fun getFriendCode(
+        @Query("uid") uid: String,
+        @Header("Authorization") token: String
+    ): FriendCodeResponse
+
     // ============ /api Endpoints ============
 
     @GET("/api/status")
@@ -18,6 +128,9 @@ interface ApiService {
 
     @POST("/api/create_room")
     suspend fun createRoomV2(): CreateRoomResponse
+
+    @GET("/api/rooms")
+    suspend fun getRooms(): RoomsResponse
 
     @GET("/api/hand/{playerId}")
     suspend fun getHand(
@@ -37,6 +150,12 @@ interface ApiService {
     @POST("/api/reset")
     suspend fun resetGame(): GenericResponse
 
+    @POST("/api/room_visibility")
+    suspend fun setRoomVisibility(@Body request: RoomVisibilityRequest): retrofit2.Response<GenericResponse>
+
+    @POST("/api/leave")
+    suspend fun leaveRoom(@Body request: LeaveRoomRequest): GenericResponse
+
     // =========== /api/room Endpoints ============
 
     @GET("/api/room/{gameId}/match_points")
@@ -48,8 +167,15 @@ interface ApiService {
     @POST("/api/start")
     suspend fun startGame(@Body request: StartGameRequest): StartGameResponse
 
+    @POST("/game/start")
+    suspend fun startPhysicalGame(@Body request: StartGameRequest): StartGameResponse
+
     @POST("/api/add_bot")
     suspend fun addBot(@Body request: AddBotRequest): AddBotResponse
+
+    // Issue short-lived token for camera websocket streaming
+    @POST("/auth/game_token")
+    suspend fun getGameToken(@Body request: GameTokenRequest): GameTokenResponse
 
     @POST("/api/the_council_has_decided_your_fate")
     suspend fun removeParticipant(@Body request: RemoveParticipantRequest): GenericResponse
@@ -120,6 +246,11 @@ interface ApiService {
         @Path("gameId") gameId: String,
         @Body request: RoomModeRequest
     ): GenericResponse
+
+    @GET("/game/room_mode/{gameId}")
+    suspend fun getRoomMode(
+        @Path("gameId") gameId: String
+    ): RoomModeResponse
 
     @POST("/game/command/{command}")
     suspend fun routeCommand(

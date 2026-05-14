@@ -20,6 +20,10 @@ def publish_physical_event(game_id: str, event_type: str, **data):
         **data,
     }
 
-    topic = f'sueca/physical/{game_id}/events'
-    mqtt_client.publish_json(topic, payload)
+    topics = [
+        f'sueca/physical/{game_id}/events',
+        f'sueca/games/{game_id}/events',
+    ]
+    for topic in topics:
+        mqtt_client.publish_json(topic, payload)
     logger.info('[MQTT] Published physical event %s for game %s', event_type, game_id)
