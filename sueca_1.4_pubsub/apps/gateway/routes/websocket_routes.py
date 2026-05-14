@@ -1,8 +1,6 @@
 import asyncio
 import json
-import os
 
-import jwt
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -14,36 +12,13 @@ router = APIRouter()
 
 @router.websocket("/ws/camera/{game_id}")
 async def websocket_camera(websocket: WebSocket, game_id: str):
-    # Validate short-lived token passed as query param: ?token=...
-    try:
-        token = websocket.query_params.get("token")
-    except Exception:
-        token = None
-
-    secret = os.getenv("SUECA_JWT_SECRET", "dev-secret")
-    if not token:
-        await websocket.close(code=4001)
-        print(f"[Middleware] Missing token for game {game_id}")
-        return
-
-    try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore
-        if payload.get("game_id") != game_id:
-            await websocket.close(code=4003)
-            print(f"[Middleware] Token game_id mismatch for {game_id}")
-            return
-    except Exception as e:
-        print(f"[Middleware] Token validation failed: {e}")
-        await websocket.close(code=4002)
-        return
-
     await websocket.accept()
     state.active_connections[game_id] = websocket
     print(f"[Middleware] Mobile WebSocket connected for game: {game_id}")
 
     cv_ws = None
     try:
-        cv_ws = await websockets.connect(f"{state.CV_SERVICE_WS_URL}/cv/stream/{game_id}?token={token}")
+        cv_ws = await websockets.connect(f"{state.CV_SERVICE_WS_URL}/cv/stream/{game_id}")
         state.cv_connections[game_id] = cv_ws
         print(f"[Middleware] Connected to CV Service WebSocket for game: {game_id}")
 
@@ -65,7 +40,6 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                                     "rank": detection["rank"],
                                     "suit": suit_symbol,
                                     "confidence": detection.get("confidence", 1.0),
-                                    "game_id": game_id,
                                 },
                                 timeout=2,
                             )

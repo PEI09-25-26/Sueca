@@ -1,5 +1,0 @@
-fastapi[all]
-uvicorn[standard]
-requests
-paho-mqtt
-PyJWT

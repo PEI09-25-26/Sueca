@@ -92,20 +92,6 @@ async def game_ready(game_id: str):
             reset_command = json.dumps({"action": "reset_cards"})
             await cv_ws.send(reset_command)
             print(f"[Middleware] Game started for {game_id} - CV history reset")
-            
-            # Notify mobile client that game is ready for next player
-            if game_id in state.active_connections:
-                mobile_ws = state.active_connections[game_id]
-                try:
-                    await mobile_ws.send_json({
-                        "success": True,
-                        "message": "game_ready",
-                        "status": "Ready for next player's card"
-                    })
-                    print(f"[Middleware] Notified mobile client for {game_id}: game ready")
-                except Exception as e:
-                    print(f"[Middleware] Failed to notify mobile: {e}")
-            
             return {"success": True, "message": "Game started, ready for cards"}
         except Exception as error:
             print(f"[Middleware] Error resetting CV: {error}")

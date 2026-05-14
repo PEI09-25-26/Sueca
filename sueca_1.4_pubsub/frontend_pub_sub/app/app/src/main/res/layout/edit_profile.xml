@@ -74,10 +74,7 @@
                 android:layout_height="54dp"
                 android:layout_marginTop="16dp"
                 android:background="@drawable/edittext_bg"
-                android:enabled="false"
                 android:ems="10"
-                android:focusable="false"
-                android:focusableInTouchMode="false"
                 android:gravity="center"
                 android:hint="Nome"
                 android:inputType="text"
@@ -98,10 +95,10 @@
                 android:background="@drawable/edittext_bg"
                 android:ems="10"
                 android:gravity="start|top"
-                android:hint="Descricao"
+                android:hint="Descrição"
                 android:inputType="textMultiLine"
                 android:padding="12dp"
-                android:text="isto aqui e uma descicao super fixe. Qual e a tua opiniao sobre descricoes grandes? concordo!"
+                android:text="isto aqui é uma descição super fixe. Qual é a tua opinião sobre descrições grandes? concordo!"
                 android:textColor="@android:color/white"
                 android:textColorHint="@color/white_50_percent_opacity"
                 android:textSize="17sp" />
@@ -111,7 +108,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
-                android:text="Estatisticas:"
+                android:text="Estatísticas:"
                 android:textColor="@android:color/white"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -130,7 +127,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Vitorias: x"
+                    android:text="Vitórias: x"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
 
@@ -157,7 +154,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Streak de Vitorias: x"
+                    android:text="Streak de Vitórias: x"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
             </LinearLayout>
@@ -172,23 +169,11 @@
                 android:layout_height="54dp"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
-                android:text="Salvar Alteracoes"
+                android:text="Salvar Alterações"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
                 android:textSize="19sp"
                 app:backgroundTint="@color/teal_700"
-                app:cornerRadius="12dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/edit_delete_account"
-                android:layout_width="match_parent"
-                android:layout_height="54dp"
-                android:layout_marginTop="8dp"
-                android:text="Apagar Conta"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textSize="18sp"
-                app:backgroundTint="@android:color/holo_red_dark"
                 app:cornerRadius="12dp" />
 
         </LinearLayout>

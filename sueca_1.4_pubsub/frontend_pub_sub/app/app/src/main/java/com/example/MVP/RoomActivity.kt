@@ -4,14 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.GameStatusResponse
@@ -66,9 +62,6 @@ class RoomActivity : AppCompatActivity() {
     private lateinit var btnRemoveEast: Button
     private lateinit var btnRemoveSouth: Button
     private lateinit var btnRemoveWest: Button
-    private lateinit var roomVisibilityContainer: View
-    private lateinit var imgRoomVisibilityLock: ImageButton
-    private lateinit var txtRoomVisibilityHint: TextView
 
     private var isHost: Boolean = false
     private var botPlacementMode: Boolean = false
@@ -106,18 +99,10 @@ class RoomActivity : AppCompatActivity() {
         btnRemoveEast = findViewById(R.id.btnRemoveEast)
         btnRemoveSouth = findViewById(R.id.btnRemoveSouth)
         btnRemoveWest = findViewById(R.id.btnRemoveWest)
-        roomVisibilityContainer = findViewById(R.id.roomVisibilityContainer)
-        imgRoomVisibilityLock = findViewById(R.id.imgRoomVisibilityLock)
-        txtRoomVisibilityHint = findViewById(R.id.txtRoomVisibilityHint)
 
         txtRoom.text = "Sala: $roomId"
 
-        btnBack.setOnClickListener { leaveRoomAndExit() }
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                leaveRoomAndExit()
-            }
-        })
+        btnBack.setOnClickListener { finish() }
 
         if (roomId == "SALA_LOCAL") {
             hideAllSeatButtons()
@@ -133,7 +118,6 @@ class RoomActivity : AppCompatActivity() {
             }
             wireSeatSelection()
             wireBotActions()
-            wireVisibilityToggle()
         }
 
     }
@@ -148,10 +132,7 @@ class RoomActivity : AppCompatActivity() {
             lastRealtimeUpdateMs = 0L
             showMqttConnectingOverlay()
             lifecycleScope.launch {
-                val currentMode = GatewayClient.getRoomMode(roomId)
-                if (currentMode != "physical") {
-                    GatewayClient.setRoomMode(roomId, "virtual")
-                }
+                GatewayClient.setRoomMode(roomId, "virtual")
             }
             startRealtimeUpdates()
             startPolling()
@@ -286,11 +267,6 @@ class RoomActivity : AppCompatActivity() {
         }
         updateUI(state)
 
-        val isHost = state.creatorId == playerId && playerId.isNotBlank()
-        if (state.players.size == 4 && !state.gameStarted && isHost) {
-            lifecycleScope.launch { GatewayClient.startGame(roomId) }
-        }
-
         // Move to game as soon as lobby is complete (deck_cutting and beyond).
         val playerSeated = state.players.any { it.name == playerName || (playerId.isNotBlank() && it.id == playerId) }
         val gameProgressed = state.phase != "waiting"
@@ -317,33 +293,20 @@ class RoomActivity : AppCompatActivity() {
         val mySeat = normalizePosition(me?.position)
         val hasSelectedSeat = mySeat.isNotBlank()
 
-        if (playerId.isNotBlank() && meById == null && meByName == null) {
-            playerId = ""
-        }
-
-        val isHost = state.players.firstOrNull()?.id?.let { it == playerId } == true ||
+        isHost = state.players.firstOrNull()?.id?.let { it == playerId } == true ||
             state.players.firstOrNull()?.name == playerName
-        this.isHost = isHost
 
         val canUseBotActions = state.phase == "waiting" && isHost && available.isNotEmpty()
         val canRemovePlayers = state.phase == "waiting" && isHost && !botPlacementMode
-
-        // Keep the old bot actions hidden; seat management now happens from the seat popup.
-        botActionsContainer.visibility = View.GONE
-
-        roomVisibilityContainer.visibility = if (isHost) View.VISIBLE else View.GONE
-        if (isHost) {
-            val isPublic = state.isPublic ?: true
-            imgRoomVisibilityLock.setImageResource(if (isPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed)
-            imgRoomVisibilityLock.alpha = if (isPublic) 1.0f else 0.7f
-            txtRoomVisibilityHint.text = if (isPublic) "Qualquer pessoa pode entrar" else "Necessario codigo para entrar"
-        }
+        botActionsContainer.visibility = if (canUseBotActions) View.VISIBLE else View.GONE
+        btnAddRandomBot.isEnabled = canUseBotActions
+        btnAddAgent2Bot.isEnabled = canUseBotActions
+        btnAddAgent1Bot.isEnabled = canUseBotActions
 
         if (!canUseBotActions && botPlacementMode) {
             exitBotPlacementMode()
         }
 
-        val hostCanManageSeats = isHost && state.phase == "waiting"
         val seatButtonsForBotPlacement = botPlacementMode && canUseBotActions
 
         renderSeat(
@@ -395,10 +358,11 @@ class RoomActivity : AppCompatActivity() {
             playerLabel = txtSeatWestPlayer
         )
 
-        if (seatButtonsForBotPlacement) {
-            txtSeatHint.text = "Escolhe onde colocar o bot"
-        } else if (hasSelectedSeat) {
+        if (hasSelectedSeat && !seatButtonsForBotPlacement) {
+            hideAllSeatButtons()
             txtSeatHint.text = "Lugar escolhido: $mySeat"
+        } else if (seatButtonsForBotPlacement) {
+            txtSeatHint.text = "Escolhe onde colocar o bot"
         } else {
             txtSeatHint.text = "Escolhe o teu lugar (+)"
         }
@@ -449,201 +413,12 @@ class RoomActivity : AppCompatActivity() {
         }
     }
 
-    private fun wireVisibilityToggle() {
-        imgRoomVisibilityLock.setOnClickListener {
-            if (!isHost) return@setOnClickListener
-
-            val currentIsPublic = latestRoomState?.isPublic ?: true
-            val nextIsPublic = !currentIsPublic
-
-            lifecycleScope.launch {
-                try {
-                    val response = GatewayClient.updateRoomVisibility(
-                        playerId = playerId,
-                        gameId = roomId,
-                        isPublic = nextIsPublic
-                    )
-
-                    if (response.success) {
-                        Toast.makeText(
-                            this@RoomActivity,
-                            if (nextIsPublic) "Sala agora é pública" else "Sala agora é privada",
-                            Toast.LENGTH_SHORT
-                        ).show()
-
-                        // Update UI immediately
-                        imgRoomVisibilityLock.setImageResource(if (nextIsPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed)
-                        imgRoomVisibilityLock.alpha = if (nextIsPublic) 1.0f else 0.7f
-                        txtRoomVisibilityHint.text = if (nextIsPublic) "Qualquer pessoa pode entrar" else "Necessario codigo para entrar"
-
-                    } else {
-                        Toast.makeText(
-                            this@RoomActivity,
-                            "Erro ao mudar visibilidade: ${response.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                } catch (e: Exception) {
-                    Toast.makeText(this@RoomActivity, "Erro de ligação.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        // Also allow tapping the whole container
-        roomVisibilityContainer.setOnClickListener { imgRoomVisibilityLock.performClick() }
-    }
-
     private fun onSeatActionClick(position: String) {
         if (botPlacementMode) {
             addBotAtPosition(position)
             return
         }
-
-        if (playerId.isNotBlank()) {
-            showSeatManagementDialog(position)
-            return
-        }
-
         joinWithPosition(position)
-    }
-
-    private fun showSeatManagementDialog(position: String) {
-        val options = if (isHost) {
-            arrayOf("Convidar Amigo", "Adicionar Agente", "Mudar Lugar")
-        } else {
-            arrayOf("Mudar Lugar")
-        }
-        val adapter = ArrayAdapter(this, R.layout.dialog_custom_item, options)
-        
-        val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
-        titleView.text = "Lugar ${position.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}"
-
-        AlertDialog.Builder(this, R.style.CustomDialogTheme)
-            .setCustomTitle(titleView)
-            .setAdapter(adapter) { _, which ->
-                if (isHost) {
-                    when (which) {
-                        0 -> showInviteFriendDialog(position)
-                        1 -> showAgentLevelDialog(position)
-                        2 -> changeSeatTo(position)
-                    }
-                } else {
-                    changeSeatTo(position)
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun leaveRoomAndExit() {
-        if (roomId == "SALA_LOCAL") {
-            finish()
-            return
-        }
-
-        if (playerId.isBlank()) {
-            finish()
-            return
-        }
-
-        lifecycleScope.launch {
-            try {
-                runCatching {
-                    GatewayClient.leaveRoom(roomId, playerId)
-                }
-            } finally {
-                finish()
-            }
-        }
-    }
-
-    private fun changeSeatTo(position: String) {
-        if (playerId.isBlank()) {
-            Toast.makeText(this, "Ainda sem player_id. Aguarda um instante.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        lifecycleScope.launch {
-            try {
-                val response = GatewayClient.changePosition(
-                    playerId = playerId,
-                    gameId = roomId,
-                    position = position.lowercase(Locale.ROOT)
-                )
-
-                if (response.success) {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Lugar alterado.", Toast.LENGTH_SHORT).show()
-                    val state = GatewayClient.getStatus(roomId)
-                    if (state != null) {
-                        applyState(state)
-                    }
-                } else {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Nao foi possivel alterar lugar.", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(this@RoomActivity, "Erro ao alterar lugar.", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun showInviteFriendDialog(position: String) {
-        val uid = AuthManager.getUid() ?: return
-        lifecycleScope.launch {
-            FriendsManager.listFriends(uid).onSuccess { friends ->
-                if (friends.isEmpty()) {
-                    Toast.makeText(this@RoomActivity, "Ainda não tens amigos.", Toast.LENGTH_SHORT).show()
-                    return@onSuccess
-                }
-
-                val names = friends.map { it.username }.toTypedArray()
-                val adapter = ArrayAdapter(this@RoomActivity, R.layout.dialog_custom_item, names)
-
-                val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
-                titleView.text = "Convidar para Mesa ${position.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}"
-
-                AlertDialog.Builder(this@RoomActivity, R.style.CustomDialogTheme)
-                    .setCustomTitle(titleView)
-                    .setAdapter(adapter) { _, which ->
-                        val friend = friends[which]
-                        Toast.makeText(this@RoomActivity, "Convite enviado para ${friend.username}", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton("Voltar", null)
-                    .show()
-            }.onFailure {
-                Toast.makeText(this@RoomActivity, "Erro ao carregar amigos.", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun showAgentLevelDialog(position: String) {
-        val levels = arrayOf(
-            "Nível 1",
-            "Nível 2",
-            "Nível 3",
-            "Nível 4"
-        )
-        val adapter = ArrayAdapter(this, R.layout.dialog_custom_item, levels)
-        
-        val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
-        titleView.text = "Escolher nível do agente"
-
-        AlertDialog.Builder(this, R.style.CustomDialogTheme)
-            .setCustomTitle(titleView)
-            .setAdapter(adapter) { _, which ->
-                val (difficulty, namePrefix) = when (which) {
-                    0 -> "random" to "BOT_LV1"
-                    1 -> "weak" to "BOT_LV2"
-                    2 -> "Average" to "BOT_LV3"
-                    3 -> "smart" to "BOT_LV4"
-                    else -> "random" to "Bot"
-                }
-                
-                pendingBotDifficulty = difficulty
-                pendingBotNamePrefix = namePrefix
-                addBotAtPosition(position)
-            }
-            .setNegativeButton("Voltar", null)
-            .show()
     }
 
     private fun toggleBotPlacementMode(difficulty: String, namePrefix: String) {
@@ -751,7 +526,7 @@ class RoomActivity : AppCompatActivity() {
         button: Button,
         playerLabel: TextView
     ) {
-        val showButton = isAvailable
+        val showButton = isAvailable && (playerId.isBlank() || forceShowAction)
         button.visibility = if (showButton) View.VISIBLE else View.GONE
         button.isEnabled = showButton
 

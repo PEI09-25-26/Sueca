@@ -1,3 +1,4 @@
+import subprocess
 import threading
 import queue
 from pathlib import Path
@@ -112,5 +113,29 @@ def is_service_up(url: str) -> bool:
         return False
 
 
-# start_service / stop_managed_services removed — orchestration should be handled by
-# container tooling (docker-compose / k8s) or external process managers.
+def start_service(name: str, command: list[str], health_url: str, cwd: Optional[Path] = None):
+    if is_service_up(health_url):
+        return
+
+    process = subprocess.Popen(
+        command,
+        cwd=str(cwd or state.ROOT_DIR),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    state.service_processes[name] = process
+
+
+def stop_managed_services():
+    for name, process in tuple(state.service_processes.items()):
+        try:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=3)
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
+        finally:
+            state.service_processes.pop(name, None)

@@ -13,8 +13,6 @@ venv.bak/
 venv
 venv/
 **/venv/
-.pem
-**/.pem
 
 # Python cache
 __pycache__/
