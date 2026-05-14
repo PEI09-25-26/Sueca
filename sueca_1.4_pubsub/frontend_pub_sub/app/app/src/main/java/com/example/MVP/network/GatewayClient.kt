@@ -9,6 +9,17 @@ import com.example.MVP.models.GatewayCommandRequest
 import com.example.MVP.models.GatewayEnvelope
 import com.example.MVP.models.GenericResponse
 import com.example.MVP.models.HandResponse
+import com.example.MVP.models.HybridConfirmCaptureRequest
+import com.example.MVP.models.HybridConfirmCaptureResponse
+import com.example.MVP.models.HybridConfirmTrumpCaptureRequest
+import com.example.MVP.models.HybridConfirmTrumpCaptureResponse
+import com.example.MVP.models.HybridDealRecognizeRequest
+import com.example.MVP.models.HybridDealRecognizeResponse
+import com.example.MVP.models.HybridDealResetRequest
+import com.example.MVP.models.HybridPendingResponse
+import com.example.MVP.models.HybridRegisterPlayerRequest
+import com.example.MVP.models.HybridSelectCardRequest
+import com.example.MVP.models.HybridStateResponse
 import com.example.MVP.models.JoinGameRequest
 import com.example.MVP.models.JoinGameResponse
 import com.example.MVP.models.MatchPointsResponse
@@ -216,6 +227,95 @@ object GatewayClient {
             ?: MatchPointsResponse(success = false, message = "Invalid payload")
     }
 
+    suspend fun hybridRegisterPlayer(request: HybridRegisterPlayerRequest): HybridStateResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "player_id" to request.playerId,
+            "role" to request.role,
+            "is_host" to request.isHost
+        )
+
+        val envelope = command("hybrid/register_player", gameId = request.gameId, payload = payload)
+        return requireParsed(envelope, HybridStateResponse::class.java)
+    }
+
+    suspend fun hybridState(gameId: String): HybridStateResponse {
+        val envelope = RetrofitClient.api.routeQuery(
+            queryPath = "hybrid/state",
+            gameId = gameId,
+            mode = MODE_VIRTUAL
+        )
+
+        return requireParsed(envelope, HybridStateResponse::class.java)
+    }
+
+    suspend fun hybridDealReset(request: HybridDealResetRequest): HybridStateResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "player_id" to request.playerId,
+            "cards_per_virtual" to request.cardsPerVirtual
+        )
+
+        val envelope = command("hybrid/deal/reset", gameId = request.gameId, payload = payload)
+        return requireParsed(envelope, HybridStateResponse::class.java)
+    }
+
+    suspend fun hybridDealRecognize(request: HybridDealRecognizeRequest): HybridDealRecognizeResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "player_id" to request.playerId,
+            "frame_base64" to request.frameBase64,
+            "target_player_id" to request.targetPlayerId
+        )
+
+        val envelope = command("hybrid/deal/recognize", gameId = request.gameId, payload = payload)
+        return requireParsed(envelope, HybridDealRecognizeResponse::class.java)
+    }
+
+    suspend fun hybridSelectCard(request: HybridSelectCardRequest): HybridStateResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "player_id" to request.playerId,
+            "card" to request.card
+        )
+
+        val envelope = command("hybrid/virtual/select_card", gameId = request.gameId, payload = payload)
+        return requireParsed(envelope, HybridStateResponse::class.java)
+    }
+
+    suspend fun hybridPendingPlay(gameId: String): HybridPendingResponse {
+        val envelope = RetrofitClient.api.routeQuery(
+            queryPath = "hybrid/pending_play",
+            gameId = gameId,
+            mode = MODE_VIRTUAL
+        )
+
+        return requireParsed(envelope, HybridPendingResponse::class.java)
+    }
+
+    suspend fun hybridConfirmCapture(request: HybridConfirmCaptureRequest): HybridConfirmCaptureResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "player_id" to request.playerId,
+            "host_player_id" to request.hostPlayerId,
+            "frame_base64" to request.frameBase64
+        )
+
+        val envelope = command("hybrid/play/confirm_capture", gameId = request.gameId, payload = payload)
+        return requireParsed(envelope, HybridConfirmCaptureResponse::class.java)
+    }
+
+    suspend fun hybridConfirmTrumpCapture(request: HybridConfirmTrumpCaptureRequest): HybridConfirmTrumpCaptureResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "host_player_id" to request.hostPlayerId,
+            "frame_base64" to request.frameBase64
+        )
+
+        val envelope = command("hybrid/trump/confirm_capture", gameId = request.gameId, payload = payload)
+        return requireParsed(envelope, HybridConfirmTrumpCaptureResponse::class.java)
+    }
+
     private suspend fun command(command: String, gameId: String?, payload: Map<String, Any?>): GatewayEnvelope {
         return RetrofitClient.api.routeCommand(
             command = command,
@@ -248,6 +348,14 @@ object GatewayClient {
     private fun <T> parseJson(json: JsonObject?, clazz: Class<T>): T? {
         if (json == null) return null
         return runCatching { gson.fromJson(json, clazz) }.getOrNull()
+    }
+
+    private fun <T> requireParsed(envelope: GatewayEnvelope, clazz: Class<T>): T {
+        val parsed = parseJson(envelope.response, clazz)
+        if (parsed != null) {
+            return parsed
+        }
+        throw IllegalStateException(fallbackMessage(envelope))
     }
 
     private fun JsonObject?.bool(key: String): Boolean? {

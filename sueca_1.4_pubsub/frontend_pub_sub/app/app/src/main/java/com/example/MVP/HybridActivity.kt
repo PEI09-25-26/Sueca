@@ -38,7 +38,7 @@ import com.example.MVP.models.HybridRegisterPlayerRequest
 import com.example.MVP.models.HybridRuntimeState
 import com.example.MVP.models.HybridSelectCardRequest
 import com.example.MVP.models.SelectTrumpRequest
-import com.example.MVP.network.RetrofitClient
+import com.example.MVP.network.GatewayClient
 import com.example.MVP.utils.CardMapper
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
@@ -183,7 +183,7 @@ class HybridActivity : AppCompatActivity() {
         }
 
         try {
-            RetrofitClient.api.hybridRegisterPlayer(
+            GatewayClient.hybridRegisterPlayer(
                 HybridRegisterPlayerRequest(
                     gameId = roomId,
                     playerId = playerId,
@@ -203,7 +203,7 @@ class HybridActivity : AppCompatActivity() {
             return
         }
         try {
-            val response = RetrofitClient.api.hybridDealReset(
+            val response = GatewayClient.hybridDealReset(
                 HybridDealResetRequest(
                     gameId = roomId,
                     playerId = playerId,
@@ -236,7 +236,7 @@ class HybridActivity : AppCompatActivity() {
                     if (!hybridRoleRegistered) {
                         hybridRoleRegistered = registerHybridRole()
                     }
-                    val response = RetrofitClient.api.hybridState(roomId)
+                    val response = GatewayClient.hybridState(roomId)
                     hybridState = response.state
                     updateUiFromHybridState(response.state)
                 } catch (e: Exception) {
@@ -252,7 +252,7 @@ class HybridActivity : AppCompatActivity() {
                     if (!hybridRoleRegistered) {
                         hybridRoleRegistered = registerHybridRole()
                     }
-                    val state = RetrofitClient.api.getStatus(roomId)
+                    val state = GatewayClient.getStatus(roomId) ?: continue
                     gameState = state
                     updateUiFromGameState(state)
                 } catch (e: Exception) {
@@ -435,7 +435,7 @@ class HybridActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val response = RetrofitClient.api.selectTrump(
+                val response = GatewayClient.selectTrump(
                     SelectTrumpRequest(
                         playerId = playerId,
                         choice = choice,
@@ -482,7 +482,7 @@ class HybridActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val response = RetrofitClient.api.hybridSelectCard(
+                val response = GatewayClient.hybridSelectCard(
                     HybridSelectCardRequest(
                         gameId = roomId,
                         playerId = playerId,
@@ -524,9 +524,11 @@ class HybridActivity : AppCompatActivity() {
 
     private suspend fun syncPlayerIdFromStatus() {
         try {
-            val state = RetrofitClient.api.getStatus(roomId)
-            val me = state.players.firstOrNull { it.name == playerName }
-            playerId = me?.id ?: playerId
+            val state = GatewayClient.getStatus(roomId)
+            if (state != null) {
+                val me = state.players.firstOrNull { it.name == playerName }
+                playerId = me?.id ?: playerId
+            }
         } catch (_: Exception) {
             // Will retry from next polling cycle.
         }
@@ -599,7 +601,7 @@ class HybridActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     if (localGame?.phase == "trump_selection") {
-                        val response = RetrofitClient.api.hybridConfirmTrumpCapture(
+                        val response = GatewayClient.hybridConfirmTrumpCapture(
                             HybridConfirmTrumpCaptureRequest(
                                 gameId = roomId,
                                 hostPlayerId = playerId,
@@ -617,7 +619,7 @@ class HybridActivity : AppCompatActivity() {
                             flashCheck("Trunfo captado")
                         }
                     } else if (localHybrid != null && !localHybrid.dealDone && localGame?.phase == "playing") {
-                        val response = RetrofitClient.api.hybridDealRecognize(
+                        val response = GatewayClient.hybridDealRecognize(
                             HybridDealRecognizeRequest(
                                 gameId = roomId,
                                 playerId = playerId,
@@ -641,7 +643,7 @@ class HybridActivity : AppCompatActivity() {
                         }
 
                         if (!capturePlayerId.isNullOrBlank()) {
-                            val response = RetrofitClient.api.hybridConfirmCapture(
+                            val response = GatewayClient.hybridConfirmCapture(
                                 HybridConfirmCaptureRequest(
                                     gameId = roomId,
                                     playerId = capturePlayerId,
