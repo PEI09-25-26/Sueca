@@ -655,7 +655,7 @@ def create_weak_bot(bot_name, position=None, game_id=None):
     return agent
 
 def create_average_bot(bot_name, position=None, game_id=None):
-    agent = WeakAgent()
+    agent = AverageAgent()
     agent.agent_name = bot_name
     agent.position = position
     agent.game_id = game_id
@@ -675,6 +675,7 @@ class BotFactory:
         'weak_agent': create_weak_bot,
         'average': create_average_bot,
         'average_agent': create_average_bot,
+        'smart': create_smart_bot,
         'smart_agent': create_smart_bot,
     }
     

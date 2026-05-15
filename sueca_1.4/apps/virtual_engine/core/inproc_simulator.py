@@ -31,6 +31,10 @@ def _decision_maker_for(difficulty, tracker):
         from ..agents.average_agent.decision_maker import DecisionMaker as AvgDecision
 
         return AvgDecision(tracker)
+    if difficulty.startswith("smart"):
+        from ..agents.smart_agent.decision_maker import DecisionMaker as SmartDecision
+
+        return SmartDecision(tracker)
 
     # default/random
     from ..agents.random_agent.decision_maker import DecisionMaker as RandDecision

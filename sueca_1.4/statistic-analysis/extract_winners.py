@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # Path relative to this script's directory
 SCRIPT_DIR = Path(__file__).parent
-DATA_PATH = SCRIPT_DIR / "batch_output_1000/average_random_average_random/tables/batch_summary.csv"
+DATA_PATH = SCRIPT_DIR / "batch_output_1000/average_smart_average_smart/tables/batch_summary.csv"
 
 def main():
     if not DATA_PATH.exists():
