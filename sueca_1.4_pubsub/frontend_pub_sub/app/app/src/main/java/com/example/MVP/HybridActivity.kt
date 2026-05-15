@@ -649,6 +649,18 @@ class HybridActivity : AppCompatActivity() {
                 return
             }
 
+            val localHybrid = hybridState
+            val localGame = gameState
+            val currentPlayerId = localGame?.currentPlayerId
+            val currentRole = localHybrid?.playerRoles?.get(currentPlayerId)
+            val pending = localHybrid?.pendingVirtualPlay
+
+            // Se for a vez de um virtual e ele ainda não escolheu, paramos de enviar frames (mas mantemos o preview)
+            // IMPORTANTE: Só impedimos se a distribuição já estiver concluída.
+            if (localHybrid?.dealDone == true && currentRole == "virtual" && pending == null) {
+                return
+            }
+
             val now = SystemClock.elapsedRealtime()
             if (now - lastFrameSentAt < minFrameIntervalMs) {
                 return
@@ -660,9 +672,6 @@ class HybridActivity : AppCompatActivity() {
 
             // Share frame with virtual players via MQTT
             mqttSubscriber?.publishCameraFrame(roomId, frameBase64)
-
-            val localHybrid = hybridState
-            val localGame = gameState
 
             lifecycleScope.launch {
                 try {
@@ -719,6 +728,14 @@ class HybridActivity : AppCompatActivity() {
                                 )
                             )
                             if (response.success) {
+                                // Validar se a carta captada corresponde à selecionada pelo virtual (se aplicável)
+                                if (pending != null && response.capturedCardId != null && response.capturedCardId != pending.cardId) {
+                                    runOnUiThread {
+                                        flashError("Carta errada! Esperada: ${CardMapper.getCard(pending.cardId)}")
+                                    }
+                                    return@launch
+                                }
+
                                 response.state?.let {
                                     hybridState = it
                                     updateUiFromHybridState(it)
@@ -745,9 +762,22 @@ class HybridActivity : AppCompatActivity() {
         flashJob?.cancel()
         flashJob = lifecycleScope.launch {
             recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check)
+            recognitionStateImage.colorFilter = null
             recognitionProgressText.text = text
             delay(1200)
             recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+        }
+    }
+
+    private fun flashError(text: String) {
+        flashJob?.cancel()
+        flashJob = lifecycleScope.launch {
+            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check) // Or a cross if available
+            recognitionStateImage.setColorFilter(ContextCompat.getColor(this@HybridActivity, android.R.color.holo_red_dark))
+            recognitionProgressText.text = text
+            delay(2000)
+            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+            recognitionStateImage.colorFilter = null
         }
     }
 
