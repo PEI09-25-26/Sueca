@@ -12,11 +12,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.JoinGameRequest
+import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Atividade que gere o lobby (sala) antes de iniciar uma partida em modo Híbrido.
+ * Aqui os jogadores escolhem os seus lugares e decidem se querem ser jogadores Virtuais ou Reais.
+ */
 class RoomHybridActivity : AppCompatActivity() {
 
     private lateinit var roomId: String
@@ -39,7 +44,7 @@ class RoomHybridActivity : AppCompatActivity() {
     private lateinit var btnStartHybridGame: Button
     private lateinit var switchVirtualRole: Switch
 
-    private var pollingJob: Job? = null
+    private var mqttSubscriber: GameMqttSubscriber? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,29 +102,42 @@ class RoomHybridActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        startPolling()
+        startMqttUpdates()
     }
 
     override fun onPause() {
         super.onPause()
-        pollingJob?.cancel()
+        mqttSubscriber?.disconnect()
     }
 
-    private fun startPolling() {
-        pollingJob?.cancel()
-        pollingJob = lifecycleScope.launch {
-            while (true) {
-                try {
-                    val state = GatewayClient.getStatus(roomId)
-                    if (state != null) {
+    /**
+     * Inicia a receção de atualizações em tempo real via MQTT.
+     * Isto é crucial para que todos os jogadores vejam quem já escolheu lugar sem precisar de fazer refresh manual.
+     */
+    private fun startMqttUpdates() {
+        mqttSubscriber?.disconnect()
+        
+        val subscriber = GameMqttSubscriber(
+            brokerHost = "mqtt.suecadaojogo.com",
+            brokerPort = 443,
+            protocol = "wss"
+        )
+        
+        subscriber.connectAndSubscribe(
+            gameId = roomId,
+            onEnvelope = { envelope ->
+                runOnUiThread {
+                    envelope.state?.let { state ->
                         updateUI(state)
                     }
-                } catch (_: Exception) {
-                    // Keep current UI state if server temporarily fails.
                 }
-                delay(1000)
+            },
+            onConnectionError = { error ->
+                // Optional: Fallback to polling if needed, but let's stick to MQTT for now.
             }
-        }
+        )
+        
+        mqttSubscriber = subscriber
     }
 
     private fun wireSeatSelection() {
@@ -129,6 +147,10 @@ class RoomHybridActivity : AppCompatActivity() {
         btnSeatWest.setOnClickListener { joinWithPosition("west") }
     }
 
+    /**
+     * Faz a chamada ao servidor para ocupar um lugar específico (Norte, Sul, Este ou Oeste).
+     * @param position A posição escolhida pelo utilizador.
+     */
     private fun joinWithPosition(position: String) {
         lifecycleScope.launch {
             try {
@@ -160,6 +182,10 @@ class RoomHybridActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Atualiza a interface gráfica com base no estado atual da sala recebido do servidor.
+     * Mostra quem está em cada lugar e quais os lugares ainda disponíveis.
+     */
     private fun updateUI(state: GameStatusResponse) {
         val occupied = state.players.associate { it.position.uppercase() to it.name }
         val available = state.availableSlots?.map { it.position.uppercase() }?.toSet() ?: emptySet()
@@ -211,6 +237,10 @@ class RoomHybridActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Transição para a atividade principal do jogo híbrido (HybridActivity).
+     * Passa as configurações escolhidas (lugar, se é host, se é virtual) via Intent.
+     */
     private fun goToHybridGame() {
         val intent = Intent(this, HybridActivity::class.java)
         intent.putExtra("roomId", roomId)

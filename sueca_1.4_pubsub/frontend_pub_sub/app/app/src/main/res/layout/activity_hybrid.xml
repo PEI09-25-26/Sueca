@@ -94,6 +94,14 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <ImageView
+            android:id="@+id/hostCameraPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:contentDescription="Feed da camara do host" />
+
         <LinearLayout
             android:id="@+id/recognitionOverlay"
             android:layout_width="match_parent"

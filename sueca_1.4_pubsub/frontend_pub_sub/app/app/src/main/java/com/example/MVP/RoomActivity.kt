@@ -135,7 +135,6 @@ class RoomActivity : AppCompatActivity() {
                 GatewayClient.setRoomMode(roomId, "virtual")
             }
             startRealtimeUpdates()
-            startPolling()
         }
     }
 
@@ -192,50 +191,7 @@ class RoomActivity : AppCompatActivity() {
         )
     }
 
-    private fun startPolling() {
-        pollingJob = lifecycleScope.launch {
-            while (true) {
-                try {
-                    val now = System.currentTimeMillis()
-
-                    // Give MQTT a tiny head start before we start hammering fallback GETs.
-                    val inInitialGrace = !hasRealtimeState && (now - roomEnteredAtMs) < initialRealtimeGraceMs
-                    if (inInitialGrace) {
-                        delay(500)
-                        continue
-                    }
-
-                    // If MQTT handshake is healthy, don't spam REST just because lobby is chill.
-                    if (hasRealtimeState && hasBrokerRoundTrip && !usingPollingFallback) {
-                        delay(2000)
-                        continue
-                    }
-
-                    val staleRealtime = (System.currentTimeMillis() - lastRealtimeUpdateMs) > 15000
-                    if (staleRealtime) {
-                        if (!usingPollingFallback) {
-                            Log.w(logTag, "Switching to polling fallback roomId=$roomId staleMs=${System.currentTimeMillis() - lastRealtimeUpdateMs} (plan B time)")
-                            usingPollingFallback = true
-                        }
-                        val state = GatewayClient.getStatus(roomId)
-                        if (state != null) {
-                            applyState(state)
-                            lastRealtimeUpdateMs = System.currentTimeMillis()
-
-                            // Still waiting for broker round-trip gate before we call it stable.
-                            if (hasRealtimeState && hasBrokerRoundTrip) {
-                                scheduleHideOverlayWhenStable("fallback")
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(logTag, "Polling error roomId=$roomId (this is fine)", e)
-                    e.printStackTrace()
-                }
-                delay(5000)
-            }
-        }
-    }
+    // Polling removed in favor of MQTT.
 
     private fun scheduleHideOverlayWhenStable(source: String) {
         stabilizationJob?.cancel()

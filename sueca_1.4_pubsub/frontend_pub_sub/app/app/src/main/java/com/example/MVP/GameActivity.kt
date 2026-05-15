@@ -98,7 +98,6 @@ class GameActivity : AppCompatActivity() {
 
         setupUI()
         startRealtimeUpdates()
-        startPolling()
     }
 
     override fun onDestroy() {
@@ -231,29 +230,7 @@ class GameActivity : AppCompatActivity() {
         )
     }
 
-    // Fallback polling in case MQTT is temporarily unavailable.
-    private fun startPolling() {
-        pollingJob = lifecycleScope.launch {
-            while (true) {
-                try {
-                    val staleRealtime = (System.currentTimeMillis() - lastRealtimeUpdateMs) > 15000
-                    if (staleRealtime) {
-                        if (!usingPollingFallback) {
-                            Log.w(logTag, "Switching to polling fallback gameId=$gameId staleMs=${System.currentTimeMillis() - lastRealtimeUpdateMs} (plan B)")
-                            usingPollingFallback = true
-                        }
-                        fetchGameState()
-                        fetchHand()
-                    }
-                } catch (e: Exception) {
-                    Log.e(logTag, "Polling error gameId=$gameId (why now)", e)
-                    txtStatus.text = "Connection error: ${e.message}"
-                }
-
-                delay(5000)
-            }
-        }
-    }
+    // Polling removed in favor of MQTT.
 
     private suspend fun fetchGameState() {
         try {

@@ -4,6 +4,7 @@ from .common import error, get_game_from_request
 from ..core import manager
 from ..core.hybrid_game_coordinator import HybridGameCoordinator
 from ..core.hybrid_vision_service import HybridVisionService
+from apps.emqx import mqtt_client
 
 
 router = APIRouter()
@@ -20,6 +21,17 @@ def _players_meta(game):
         }
         for p in game.players
     }
+
+
+def _push_hybrid_state(game, room):
+    if not game or not room:
+        return
+    payload = {
+        "event_type": "hybrid_state_update",
+        "game_id": game.game_id,
+        "hybrid_state": hybrid_coordinator.to_payload(room, _players_meta(game))
+    }
+    mqtt_client.publish_json(f"sueca/games/{game.game_id}/hybrid", payload, retain=True)
 
 
 def _maybe_skip_hybrid_cut(game, room):
@@ -83,6 +95,7 @@ async def hybrid_register_player(data: dict = Body(default_factory=dict)):
     room = hybrid_coordinator.register_player(game_id, player_id, role, is_host)
     _autofill_missing_real_players_for_hybrid(game)
     _maybe_skip_hybrid_cut(game, room)
+    _push_hybrid_state(game, room)
     return {"success": True, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
 
 
@@ -136,6 +149,7 @@ async def hybrid_deal_reset(data: dict = Body(default_factory=dict)):
         virtual_player_ids=registered_virtual_ids,
         cards_per_virtual=cards_per_virtual,
     )
+    _push_hybrid_state(game, room)
     return {"success": True, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
 
 
@@ -172,7 +186,7 @@ async def hybrid_confirm_trump_capture(data: dict = Body(default_factory=dict)):
     if not success:
         return error(message, 400)
 
-    return {
+    response_payload = {
         "success": True,
         "message": message,
         "captured_card_id": recognized.card_id,
@@ -180,6 +194,8 @@ async def hybrid_confirm_trump_capture(data: dict = Body(default_factory=dict)):
         "game_state": game.get_state(),
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
     }
+    _push_hybrid_state(game, room)
+    return response_payload
 
 
 @router.post("/api/hybrid/deal/recognize")
@@ -234,7 +250,7 @@ async def hybrid_deal_recognize(data: dict = Body(default_factory=dict)):
         }
 
     ok, message, room = hybrid_coordinator.add_deal_card(game_id, target, recognized.card_id)
-    return {
+    response_payload = {
         "success": True,
         "recognized": True,
         "confirmed": ok,
@@ -250,6 +266,8 @@ async def hybrid_deal_recognize(data: dict = Body(default_factory=dict)):
         },
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
     }
+    _push_hybrid_state(game, room)
+    return response_payload
 
 
 @router.post("/api/hybrid/virtual/select_card")
@@ -272,6 +290,8 @@ async def hybrid_virtual_select_card(data: dict = Body(default_factory=dict)):
     ok, message, room = hybrid_coordinator.select_virtual_card(game_id, player_id, card)
     status = 200 if ok else 400
     payload = {"success": ok, "message": message, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
+    if ok:
+        _push_hybrid_state(game, room)
     return payload if status == 200 else error(payload["message"], status)
 
 
@@ -324,7 +344,7 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         return error(message, 400)
 
     room = hybrid_coordinator.confirm_play_success(game_id, player_id, recognized.card_id)
-    return {
+    response_payload = {
         "success": True,
         "message": message,
         "captured_card_id": recognized.card_id,
@@ -332,3 +352,5 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
         "game_state": game.get_state(),
     }
+    _push_hybrid_state(game, room)
+    return response_payload

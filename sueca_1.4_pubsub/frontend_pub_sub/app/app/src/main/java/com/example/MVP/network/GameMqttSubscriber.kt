@@ -1,7 +1,11 @@
 package com.example.MVP.network
-
+/**
+ * Componente de rede que gere a subscrição MQTT para receber atualizações em tempo real.
+ * No modo híbrido, é usado para atualizar as cartas distribuídas e as jogadas confirmadas instantaneamente.
+ */
 import android.util.Log
 import com.example.MVP.models.GameStatusResponse
+import com.example.MVP.models.HybridRuntimeState
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -26,7 +30,9 @@ class GameMqttSubscriber(
         val eventType: String?,
         val gameId: String?,
         val state: GameStatusResponse?,
-        val hands: Map<String, List<String>>
+        val hands: Map<String, List<String>>,
+        val hybridState: HybridRuntimeState? = null,
+        val cameraFrame: String? = null
     )
 
     private val gson = Gson()
@@ -67,7 +73,8 @@ class GameMqttSubscriber(
                         "messageArrived gameId=$gameId topic=$topic payloadBytes=${message?.payload?.size ?: 0} qos=${message?.qos} retained=${message?.isRetained}"
                     )
                     val envelope = parseEnvelope(payload)
-                    if (envelope.state == null && envelope.eventType == null && envelope.hands.isEmpty()) {
+                    if (envelope.state == null && envelope.eventType == null && envelope.hands.isEmpty() 
+                        && envelope.hybridState == null && envelope.cameraFrame == null) {
                         Log.w(tag, "message parsed with empty envelope gameId=$gameId topic=$topic (maybe backend sent vibes)")
                     }
                     onEnvelope(envelope)
@@ -92,6 +99,8 @@ class GameMqttSubscriber(
                         subscribeWithLog(mqttClient, "sueca/games/$gameId/state", gameId)
                         subscribeWithLog(mqttClient, "sueca/games/$gameId/events", gameId)
                         subscribeWithLog(mqttClient, "sueca/games/$gameId/players/+", gameId)
+                        subscribeWithLog(mqttClient, "sueca/games/$gameId/hybrid", gameId)
+                        subscribeWithLog(mqttClient, "sueca/games/$gameId/camera", gameId)
                         subscribeWithLog(
                             mqttClient = mqttClient,
                             topic = probeTopic,
@@ -136,6 +145,21 @@ class GameMqttSubscriber(
         }
     }
 
+    fun publishCameraFrame(gameId: String, frameBase64: String) {
+        val mqttClient = client ?: return
+        if (!mqttClient.isConnected) return
+        
+        try {
+            val topic = "sueca/games/$gameId/camera"
+            val payload = JsonObject().apply {
+                addProperty("camera_frame", frameBase64)
+            }.toString()
+            mqttClient.publish(topic, payload.toByteArray(Charsets.UTF_8), 0, false)
+        } catch (e: Exception) {
+            Log.w(tag, "Failed to publish camera frame", e)
+        }
+    }
+
     private fun subscribeWithLog(
         mqttClient: MqttAsyncClient,
         topic: String,
@@ -171,16 +195,21 @@ class GameMqttSubscriber(
             val root = JsonParser.parseString(payload).asJsonObject
             val state = root.getAsJsonObjectOrNull("state")
                 ?.let { gson.fromJson(it, GameStatusResponse::class.java) }
+            
+            val hybridState = root.getAsJsonObjectOrNull("hybrid_state")
+                ?.let { gson.fromJson(it, HybridRuntimeState::class.java) }
 
             Envelope(
                 eventType = root.getStringOrNull("event_type"),
                 gameId = root.getStringOrNull("game_id"),
                 state = state,
-                hands = root.getHandsMap()
+                hands = root.getHandsMap(),
+                hybridState = hybridState,
+                cameraFrame = root.getStringOrNull("camera_frame")
             )
         } catch (e: Exception) {
             Log.w(tag, "parseEnvelope failed payloadPreview=${payload.take(180)} (json said nope)", e)
-            Envelope(null, null, null, emptyMap())
+            Envelope(null, null, null, emptyMap(), null, null)
         }
     }
 

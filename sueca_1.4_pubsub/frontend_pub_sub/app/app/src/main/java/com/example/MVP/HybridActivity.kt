@@ -38,6 +38,7 @@ import com.example.MVP.models.HybridRegisterPlayerRequest
 import com.example.MVP.models.HybridRuntimeState
 import com.example.MVP.models.HybridSelectCardRequest
 import com.example.MVP.models.SelectTrumpRequest
+import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.utils.CardMapper
 import java.io.ByteArrayOutputStream
@@ -47,6 +48,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Atividade principal do Modo Híbrido. 
+ * Gere a câmara (se for Host), a sincronização via MQTT e a interação entre o mundo físico e virtual.
+ */
 class HybridActivity : AppCompatActivity() {
 
     private lateinit var modeSwitch: Switch
@@ -60,6 +65,7 @@ class HybridActivity : AppCompatActivity() {
     private lateinit var trumpSelectionControls: View
     private lateinit var btnTrumpTop: Button
     private lateinit var btnTrumpBottom: Button
+    private lateinit var hostCameraPreview: ImageView
 
     private lateinit var handAdapter: CardsAdapter
 
@@ -73,8 +79,7 @@ class HybridActivity : AppCompatActivity() {
     private var hybridState: HybridRuntimeState? = null
 
     private var isRunning = false
-    private var pollHybridJob: Job? = null
-    private var pollGameJob: Job? = null
+    private var mqttSubscriber: GameMqttSubscriber? = null
     private var flashJob: Job? = null
 
     private var inFlightRecognition = false
@@ -120,6 +125,7 @@ class HybridActivity : AppCompatActivity() {
         trumpSelectionControls = findViewById(R.id.trumpSelectionControls)
         btnTrumpTop = findViewById(R.id.btnTrumpTop)
         btnTrumpBottom = findViewById(R.id.btnTrumpBottom)
+        hostCameraPreview = findViewById(R.id.hostCameraPreview)
 
         clearTableCards()
         setupHand()
@@ -130,13 +136,14 @@ class HybridActivity : AppCompatActivity() {
             ensureCameraPermissionsAndStart()
         } else {
             previewView.visibility = View.GONE
-            modeSwitch.isChecked = true
-            modeSwitch.isEnabled = false
+            // Permitimos que o jogador virtual alterne entre mesa e câmara do host
+            modeSwitch.isEnabled = true 
+            modeSwitch.isChecked = true // Começa na mesa (virtual) como solicitado
         }
 
         lifecycleScope.launch {
             hybridRoleRegistered = registerHybridRole()
-            startRuntimeLoops()
+            startMqttUpdates()
         }
     }
 
@@ -166,12 +173,25 @@ class HybridActivity : AppCompatActivity() {
                 modeSwitch.text = "Camera ativa"
                 modeText.text = "Modo atual: camera"
                 mesaContainer.visibility = View.GONE
-                previewView.visibility = if (isHost) View.VISIBLE else View.GONE
-                recognitionOverlay.visibility = if (isRunning) View.VISIBLE else View.GONE
+                
+                if (isHost) {
+                    previewView.visibility = View.VISIBLE
+                    hostCameraPreview.visibility = View.GONE
+                } else {
+                    previewView.visibility = View.GONE
+                    hostCameraPreview.visibility = View.VISIBLE
+                }
+                
+                // Only host should see the recognition overlay
+                recognitionOverlay.visibility = if (isRunning && isHost) View.VISIBLE else View.GONE
             }
         }
     }
 
+    /**
+     * Regista o papel do jogador no servidor (Real ou Virtual).
+     * Essencial para que o servidor saiba quem precisa de "ver" as cartas no telemóvel.
+     */
     private suspend fun registerHybridRole(): Boolean {
         if (playerId.isBlank()) {
             syncPlayerIdFromStatus()
@@ -198,6 +218,10 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Reinicia o estado de distribuição de cartas para o Host.
+     * Prepara o sistema de reconhecimento de imagem para começar a "dar" cartas aos jogadores virtuais.
+     */
     private suspend fun resetDealForHost() {
         if (playerId.isBlank()) {
             return
@@ -219,50 +243,54 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
-    private fun startRuntimeLoops() {
-        if (isRunning) {
-            return
-        }
+    /**
+     * Conecta-se ao broker MQTT para receber atualizações automáticas do jogo.
+     * O "envelope" recebido contém tanto o estado geral do jogo (pontos, mesa) como o estado específico do modo híbrido (cartas distribuídas).
+     */
+    private fun startMqttUpdates() {
+        if (isRunning) return
         isRunning = true
         recognitionOverlay.visibility = View.VISIBLE
         modeSwitch.isEnabled = false
 
-        pollHybridJob?.cancel()
-        pollGameJob?.cancel()
+        val subscriber = GameMqttSubscriber(
+            brokerHost = "mqtt.suecadaojogo.com",
+            brokerPort = 443, // WSS via Cloudflare usually goes through 443
+            protocol = "wss"
+        )
 
-        pollHybridJob = lifecycleScope.launch {
-            while (isRunning) {
-                try {
-                    if (!hybridRoleRegistered) {
-                        hybridRoleRegistered = registerHybridRole()
+        subscriber.connectAndSubscribe(
+            gameId = roomId,
+            onEnvelope = { envelope ->
+                runOnUiThread {
+                    envelope.state?.let { state ->
+                        gameState = state
+                        updateUiFromGameState(state)
                     }
-                    val response = GatewayClient.hybridState(roomId)
-                    hybridState = response.state
-                    updateUiFromHybridState(response.state)
-                } catch (e: Exception) {
-                    Log.w("HybridActivity", "hybridState poll failed: ${e.message}")
+                    envelope.hybridState?.let { hybrid ->
+                        hybridState = hybrid
+                        updateUiFromHybridState(hybrid)
+                    }
+                    
+                    envelope.cameraFrame?.let { frame ->
+                        if (!isHost) {
+                            displayHostFrame(frame)
+                        }
+                    }
                 }
-                delay(700)
+            },
+            onConnectionError = { error ->
+                Log.e("HybridActivity", "MQTT Error: $error")
+                // Optional: Fallback to polling if MQTT fails completely
             }
-        }
+        )
 
-        pollGameJob = lifecycleScope.launch {
-            while (isRunning) {
-                try {
-                    if (!hybridRoleRegistered) {
-                        hybridRoleRegistered = registerHybridRole()
-                    }
-                    val state = GatewayClient.getStatus(roomId) ?: continue
-                    gameState = state
-                    updateUiFromGameState(state)
-                } catch (e: Exception) {
-                    Log.w("HybridActivity", "game status poll failed: ${e.message}")
-                }
-                delay(700)
-            }
-        }
+        mqttSubscriber = subscriber
     }
 
+    /**
+     * Decide se a UI deve mostrar a fase de Distribuição ou a fase de Jogo.
+     */
     private fun updateUiFromHybridState(state: HybridRuntimeState) {
         if (gameState?.phase != "playing") {
             handAdapter.isEnabled = false
@@ -277,6 +305,23 @@ class HybridActivity : AppCompatActivity() {
         showPlayPhase(state)
     }
 
+    private fun displayHostFrame(frameBase64: String) {
+        try {
+            val decodedString = android.util.Base64.decode(frameBase64, android.util.Base64.DEFAULT)
+            val decodedByte = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
+            runOnUiThread {
+                hostCameraPreview.setImageBitmap(decodedByte)
+            }
+        } catch (e: Exception) {
+            Log.w("HybridActivity", "Failed to decode host frame", e)
+        }
+    }
+
+    /**
+     * Gere a UI durante a distribuição de cartas. 
+     * Se for Host, indica qual o próximo jogador virtual que deve receber uma carta da câmara.
+     * Se for Virtual, mostra as cartas que o Host já leu para nós.
+     */
     private fun showDealPhase(state: HybridRuntimeState) {
         recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
 
@@ -312,6 +357,10 @@ class HybridActivity : AppCompatActivity() {
         handAdapter.isEnabled = false
     }
 
+    /**
+     * Gere a UI durante as jogadas.
+     * O Host vê o que a câmara capta. Os Virtuais veem as suas cartas para poderem escolher uma.
+     */
     private fun showPlayPhase(state: HybridRuntimeState) {
         val pending = state.pendingVirtualPlay
         val currentPlayerId = gameState?.currentPlayerId
@@ -362,7 +411,7 @@ class HybridActivity : AppCompatActivity() {
             recognitionProgressText.text = "Jogador real: acompanhar mao do jogador da vez"
         }
 
-        modeSwitch.isEnabled = isHost
+        modeSwitch.isEnabled = true
     }
 
     private fun updateUiFromGameState(state: GameStatusResponse) {
@@ -467,6 +516,10 @@ class HybridActivity : AppCompatActivity() {
         // Decision is executed by analyzer thread; this method only updates intent.
     }
 
+    /**
+     * Chamada quando um jogador virtual clica numa carta no ecrã.
+     * A carta fica num estado "pendente" até o Host a confirmar fisicamente na mesa com a câmara.
+     */
     private fun onVirtualCardTap(card: Card) {
         if (!isVirtualPlayer) {
             return
@@ -547,6 +600,10 @@ class HybridActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * Configura o pipeline da câmara usando CameraX.
+     * Define um 'analyzer' que processa frames em tempo real para detetar cartas.
+     */
     private fun startCameraPipeline() {
         val providerFuture = ProcessCameraProvider.getInstance(this)
         frameExecutor = Executors.newSingleThreadExecutor()
@@ -580,6 +637,12 @@ class HybridActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    /**
+     * A função mais importante para o Host:
+     * 1. Captura o frame da câmara.
+     * 2. Converte-o para Base64.
+     * 3. Envia-o para o servidor dependendo da fase (Capturar Trunfo, Distribuir Cartas ou Confirmar Jogada).
+     */
     private fun analyzeFrameForHybrid(imageProxy: ImageProxy) {
         try {
             if (!isHost || !isRunning || inFlightRecognition) {
@@ -595,6 +658,9 @@ class HybridActivity : AppCompatActivity() {
             lastFrameSentAt = now
             inFlightRecognition = true
 
+            // Share frame with virtual players via MQTT
+            mqttSubscriber?.publishCameraFrame(roomId, frameBase64)
+
             val localHybrid = hybridState
             val localGame = gameState
 
@@ -609,9 +675,10 @@ class HybridActivity : AppCompatActivity() {
                             )
                         )
                         if (response.success) {
+                            Log.i("HybridActivity", "Trump confirmed: ${response.capturedDisplay}")
                             response.gameState?.let {
                                 gameState = it
-                                updateUiFromGameState(it)
+                                runOnUiThread { updateUiFromGameState(it) }
                             }
                             response.state?.let {
                                 hybridState = it
@@ -790,8 +857,7 @@ class HybridActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         isRunning = false
-        pollHybridJob?.cancel()
-        pollGameJob?.cancel()
+        mqttSubscriber?.disconnect()
         flashJob?.cancel()
         frameExecutor?.shutdown()
         cameraProvider?.unbindAll()
