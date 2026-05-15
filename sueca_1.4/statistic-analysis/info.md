@@ -14,14 +14,23 @@ cd "/home/daniel-andrade-martins/Desktop/Desktop/Engenharia Informática/3º Ano
 source .venv/bin/activate
 
 # 3. Run the 1000 games batch
+```
+
 SUECA_STATISTICS_FAST_MODE=1 SUECA_MQTT_EVENTS=false SUECA_BOT_THINK_TIME=0 \
-  ./.venv/bin/python statistic-analysis/data_gatherer.py \
+  ../../venv/bin/python statistic-analysis/data_gatherer.py \
     --matches 1000 \
     --fast-inproc \
     --split-csv \
     --no-game-files \
     --output-dir statistic-analysis/batch_output_1000 \
     --poll-interval 0.0
+
+```
+
+```
+
+SUECA_STATISTICS_FAST_MODE=1 SUECA_MQTT_EVENTS=false SUECA_BOT_THINK_TIME=0   ../../venv/bin/python statistic-analysis/data_gatherer.py     --matches 1000     --fast-inproc     --split-csv     --no-game-files     --output-dir statistic-analysis/batch_output_1000     --poll-interval 0.0 --combinations-file ./statistic-analysis/combinations.example.json
+
 ```
 
 ## 📂 Output Files

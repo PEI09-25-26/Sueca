@@ -6,7 +6,7 @@
       {
         "name": "N",
         "position": "NORTH",
-        "difficulty": "average"
+        "difficulty": "smart"
       },
       {
         "name": "E",
@@ -16,7 +16,7 @@
       {
         "name": "S",
         "position": "SOUTH",
-        "difficulty": "average"
+        "difficulty": "smart"
       },
       {
         "name": "W",

@@ -12,6 +12,12 @@ class DecisionMaker:
     def __init__(self, game_state_tracker):
         self.state = game_state_tracker
 
+    def find_safe_ace(self, cards):
+        for c in cards:
+            if CardMapper.get_card_rank(c) == "A":
+                return c
+        return None
+
     def choose_card(self, hand):
         if not hand:
             return None
@@ -51,7 +57,7 @@ class DecisionMaker:
                     self.state.trump_suit,
                     self.state.lead_suit,
                 )
-                if CardMapper.get_card_points(high) > 0:
+                if high is not None and CardMapper.get_card_points(high) > 0:
                     return high
             else:
                 high = CardAnalyzer.get_highest_card(
@@ -59,7 +65,7 @@ class DecisionMaker:
                     self.state.trump_suit,
                     self.state.lead_suit,
                 )
-                if CardMapper.get_card_points(high) > 0:
+                if high is not None and CardMapper.get_card_points(high) > 0:
                     return high
         if preferred_cards:
             for card in preferred_cards:

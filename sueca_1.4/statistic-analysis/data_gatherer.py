@@ -1299,7 +1299,11 @@ def _parse_combinations_from_args(args):
     elif args.combinations_file:
         payloads.append(_load_json_file(args.combinations_file))
     elif args.combinations_json:
-        payloads.append(json.loads(args.combinations_json))
+        combinations_value = str(args.combinations_json).strip()
+        if combinations_value and os.path.isfile(combinations_value):
+            payloads.append(_load_json_file(combinations_value))
+        else:
+            payloads.append(json.loads(combinations_value))
     else:
         return None
 
