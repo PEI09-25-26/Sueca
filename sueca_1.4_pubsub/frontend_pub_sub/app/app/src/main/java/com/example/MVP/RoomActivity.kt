@@ -39,7 +39,6 @@ class RoomActivity : AppCompatActivity() {
     private var hasRealtimeState: Boolean = false
     private var hasBrokerRoundTrip: Boolean = false
     private var usingPollingFallback: Boolean = false
-    private var sessionBootstrapInFlight: Boolean = false
     private var latestRoomState: GameStatusResponse? = null
     private lateinit var roomId: String
     private lateinit var playerId: String
@@ -148,13 +147,6 @@ class RoomActivity : AppCompatActivity() {
             usingPollingFallback = false
             lastRealtimeUpdateMs = 0L
             showMqttConnectingOverlay()
-            lifecycleScope.launch {
-                val currentMode = GatewayClient.getRoomMode(roomId)
-                if (currentMode != "physical") {
-                    GatewayClient.setRoomMode(roomId, "virtual")
-                }
-            }
-            ensureRoomSession()
             startRealtimeUpdates()
             startPolling()
         }
@@ -301,32 +293,6 @@ class RoomActivity : AppCompatActivity() {
         }
     }
 
-    private fun ensureRoomSession() {
-        if (playerId.isNotBlank()) return
-        if (GameSessionManager.getToken(roomId) != null) return
-        if (sessionBootstrapInFlight) return
-
-        sessionBootstrapInFlight = true
-        lifecycleScope.launch {
-            try {
-                val response = GatewayClient.joinGame(
-                    JoinGameRequest(
-                        name = playerName,
-                        gameId = roomId,
-                        position = null
-                    )
-                )
-                if (response.success) {
-                    playerId = response.playerId ?: playerId
-                }
-            } catch (_: Exception) {
-                // Polling and manual join actions can still recover later.
-            } finally {
-                sessionBootstrapInFlight = false
-            }
-        }
-    }
-
     private fun updateUI(state: GameStatusResponse) {
         val available = state.availableSlots
             ?.map { it.position.uppercase() }
@@ -345,11 +311,12 @@ class RoomActivity : AppCompatActivity() {
         val mySeat = normalizePosition(me?.position)
         val hasSelectedSeat = mySeat.isNotBlank()
 
-        if (playerId.isNotBlank() && meById == null && meByName == null) {
+        if (playerId.isNotBlank() && meById == null && meByName == null && state.creatorId != playerId) {
             playerId = ""
         }
 
-        val isHost = state.players.firstOrNull()?.id?.let { it == playerId } == true ||
+        val isHost = state.creatorId == playerId ||
+            state.players.firstOrNull()?.id?.let { it == playerId } == true ||
             state.players.firstOrNull()?.name == playerName
         this.isHost = isHost
 
@@ -593,6 +560,11 @@ class RoomActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
+                if (GameSessionManager.getAuthHeader(roomId).isNullOrBlank()) {
+                    Toast.makeText(this@RoomActivity, "Ainda sem sessao da sala. Entra numa posicao primeiro.", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
                 val response = GatewayClient.changePosition(
                     playerId = playerId,
                     gameId = roomId,
@@ -716,6 +688,11 @@ class RoomActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
+                if (GameSessionManager.getAuthHeader(roomId).isNullOrBlank()) {
+                    Toast.makeText(this@RoomActivity, "Ainda sem sessao da sala. Entra numa posicao primeiro.", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
                 val botName = "${pendingBotNamePrefix ?: "Bot"}_${normalizedPosition}_${(100..999).random()}"
                 val response = GatewayClient.addBot(
                     AddBotRequest(

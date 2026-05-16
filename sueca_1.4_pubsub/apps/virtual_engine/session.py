@@ -4,8 +4,15 @@ import os
 import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import uuid
+import logging
+from shared.redis_client import revoke_jti, is_jti_revoked
 
-SECRET_KEY = os.getenv("SUECA_PLAYER_SESSION_SECRET") or os.getenv("SUECA_JWT_SECRET", "dev-secret")
+SECRET_KEY = os.getenv("SUECA_PLAYER_SESSION_SECRET") or os.getenv("SUECA_JWT_SECRET")
+if not SECRET_KEY:
+    raise RuntimeError("SUECA_JWT_SECRET or SUECA_PLAYER_SESSION_SECRET must be set")
+
+logger = logging.getLogger(__name__)
 TOKEN_EXPIRY_MINUTES = 30
 
 
@@ -26,19 +33,26 @@ class Session:
     
     def _generate_token(self) -> str:
         """Generate JWT token."""
+        jti = uuid.uuid4().hex
+        exp_time = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_EXPIRY_MINUTES)
         payload = {
             'game_id': self.game_id,
             'player_id': self.player_id,
             'player_name': self.player_name,
-            'exp': datetime.now(timezone.utc) + timedelta(minutes=TOKEN_EXPIRY_MINUTES),
-            'iat': datetime.now(timezone.utc),
+            'exp': int(exp_time.timestamp()),
+            'iat': int(datetime.now(timezone.utc).timestamp()),
+            'jti': jti,
         }
+        self.jti = jti
         return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
     
     def is_valid(self) -> bool:
         """Check if session is still active."""
         try:
-            decode_session_token(self.token)
+            payload = decode_session_token(self.token)
+            jti = payload.get('jti')
+            if jti and is_jti_revoked(jti):
+                return False
             return True
         except jwt.ExpiredSignatureError:
             return False
@@ -65,6 +79,13 @@ class SessionManager:
         # Track by game+player
         key = f"{game_id}:{player_id}"
         self.player_sessions[key] = session.token
+
+        try:
+            jti = getattr(session, 'jti', None)
+            if jti:
+                logger.info("Created session game=%s player=%s jti=%s", game_id, player_id, jti)
+        except Exception:
+            pass
         
         return session.token
     
@@ -73,8 +94,9 @@ class SessionManager:
         try:
             payload = decode_session_token(token)
             session = self.sessions.get(token)
-            if session and session.is_valid():
-                session.update_activity()
+            if not session or not session.is_valid():
+                return None
+            session.update_activity()
             return {
                 'game_id': payload['game_id'],
                 'player_id': payload['player_id'],
@@ -91,6 +113,20 @@ class SessionManager:
             del self.sessions[token]
             if key in self.player_sessions:
                 del self.player_sessions[key]
+            # Add JTI to denylist so the token can't be used until expiry
+            try:
+                # decode to get exp and jti
+                payload = decode_session_token(token)
+                jti = payload.get('jti')
+                exp = int(payload.get('exp') or 0)
+                if jti and exp:
+                    ttl = max(0, exp - int(datetime.now(timezone.utc).timestamp()))
+                    if ttl > 0:
+                        revoke_jti(jti, ttl)
+                        logger.info("Revoked session jti=%s ttl=%s", jti, ttl)
+            except Exception:
+                # best-effort; if we cannot decode, ignore
+                pass
     
     def get_session(self, game_id: str, player_id: str) -> Optional[str]:
         """Get token for a player in a game."""
@@ -106,6 +142,7 @@ class SessionManager:
         ]
         for token in tokens_to_remove:
             self.revoke_session(token)
+        logger.info("Deleted sessions for player=%s tokens_removed=%s", player_id, len(tokens_to_remove))
 
 
 # Global session manager

@@ -1,5 +1,4 @@
 from apps.virtual_engine.card_analyzer import CardAnalyzer
-from apps.virtual_engine.card_mapper import CardMapper
 
 
 class DecisionMaker:

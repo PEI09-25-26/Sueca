@@ -196,22 +196,24 @@ class GameState:
                 return position
         return None
 
-    def add_player(self, name, position_choice):
+    def add_player(self, name, position_choice, player_id=None):
         if len(self.players) >= self.max_players:
             return False, 'Game is full', None
 
+        if player_id and self.get_player(player_id):
+            return False, 'Player already in game', None
+
+        # Position is now MANDATORY - no auto-assignment
         position = self._normalize_position(position_choice)
         if not position:
-            position = self._pick_first_available_position()
-        if not position:
-            return False, 'No seats available', None
+            return False, 'Position required: choose NORTH, SOUTH, EAST, or WEST', None
 
         team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
         if position not in self.available_team_positions[team_key]:
             return False, f'Position {position.name} is already taken', None
 
         player = Player(name)
-        player.player_id = uuid.uuid4().hex[:8]
+        player.player_id = player_id or uuid.uuid4().hex[:8]
         player.position = position
         self.available_team_positions[team_key].remove(position)
         self.players.append(player)

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query, Request, Response
 
 from .. import state
 from ..dto import CommandRequestDTO
-from ..helpers import is_service_up, normalize_mode, target_base_for_mode
+from ..helpers import normalize_mode, target_base_for_mode
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -63,10 +63,11 @@ def route_command(command: str, request_data: CommandRequestDTO, request: Reques
         )
         data = _decode_backend_response(response)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying command %s to %s", command, target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "mode": mode, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "mode": mode, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -99,10 +100,11 @@ def route_query(
         )
         data = _decode_backend_response(response)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying query %s to %s", query_path, target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "mode": resolved_mode, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "mode": resolved_mode, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -115,10 +117,11 @@ def route_stats(game_id: str):
     try:
         response = state.INTERNAL_HTTP.post(target, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error fetching stats for %s", game_id)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -132,8 +135,9 @@ def route_presence(request: Request):
             timeout=5,
         )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
-        return Response(status_code=502, content=json.dumps({"success": False, "message": str(error)}), media_type=APPLICATION_JSON)
+    except requests.RequestException:
+        logger.exception("Error fetching presence")
+        return Response(status_code=502, content=json.dumps({"success": False, "message": "backend unavailable"}), media_type=APPLICATION_JSON)
 
 
 @router.get("/api/status")
@@ -150,10 +154,11 @@ def proxy_api_status(request: Request):
             timeout=5,
         )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying status to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -169,10 +174,11 @@ def proxy_api_rooms(request: Request):
             timeout=5,
         )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying rooms to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -190,10 +196,11 @@ async def proxy_api_create_room(request: Request):
             timeout=5,
         )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying create_room to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -213,10 +220,11 @@ async def proxy_api_start(request: Request):
             timeout=5,
         )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying start to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -234,10 +242,11 @@ async def proxy_api_leave(request: Request):
             timeout=5,
         )
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying leave to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -259,10 +268,11 @@ async def proxy_api_auth(path: str, request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying auth to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -284,10 +294,11 @@ async def proxy_auth(path: str, request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying auth to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -309,10 +320,11 @@ async def proxy_api_friends(path: str, request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying friends to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -335,10 +347,11 @@ async def proxy_api_friends_root(request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying friends root to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -360,10 +373,11 @@ async def proxy_friends(path: str, request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), headers=headers, timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying agents to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -385,10 +399,11 @@ async def proxy_friends_root(request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying agents to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -409,10 +424,11 @@ async def proxy_api_agents(path: str, request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying api_agents to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )
 
@@ -433,9 +449,10 @@ async def proxy_agents(path: str, request: Request):
         else:
             response = state.INTERNAL_HTTP.get(target_url, params=dict(request.query_params), timeout=5)
         return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException as error:
+    except requests.RequestException:
+        logger.exception("Error proxying agents to %s", target_url)
         return Response(
             status_code=502,
-            content=json.dumps({"success": False, "target": target_url, "message": str(error)}),
+            content=json.dumps({"success": False, "target": target_url, "message": "backend unavailable"}),
             media_type=APPLICATION_JSON,
         )

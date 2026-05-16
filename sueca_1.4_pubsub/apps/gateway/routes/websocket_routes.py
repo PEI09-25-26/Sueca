@@ -1,12 +1,11 @@
 import asyncio
 import json
-import os
 
-import jwt
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from .. import state
+from apps.virtual_engine.session import session_manager
 
 
 router = APIRouter()
@@ -28,21 +27,20 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
 async def websocket_camera(websocket: WebSocket, game_id: str):
     token = _extract_ws_token(websocket)
 
-    secret = os.getenv("SUECA_JWT_SECRET", "dev-secret")
     if not token:
         await websocket.close(code=4001)
         print(f"[Middleware] Missing token for game {game_id}")
         return
-
-    try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore
-        if payload.get("game_id") != game_id:
-            await websocket.close(code=4003)
-            print(f"[Middleware] Token game_id mismatch for {game_id}")
-            return
-    except Exception as e:
-        print(f"[Middleware] Token validation failed: {e}")
+    # Validate the token using the session manager to ensure it is an active room session
+    payload = session_manager.validate_token(token)
+    if not payload:
         await websocket.close(code=4002)
+        print(f"[Middleware] Token validation failed for {game_id}")
+        return
+
+    if payload.get("game_id") != game_id:
+        await websocket.close(code=4003)
+        print(f"[Middleware] Token game_id mismatch for {game_id}")
         return
 
     await websocket.accept()
@@ -91,10 +89,9 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                                 }
                                 await websocket.send_json(combined_data)
                             else:
-                                print(
-                                    f"[Middleware] Game Service HTTP {game_response.status_code}: {game_response.text}"
-                                )
-                                await websocket.send_json(data)
+                                # Log backend error but avoid echoing internal backend text to clients
+                                print(f"[Middleware] Game Service HTTP {game_response.status_code}")
+                                await websocket.send_json({"success": False, "detection": detection, "message": "game service unavailable"})
                         except Exception as error:
                             print(f"[Middleware] Error sending to Game Service: {error}")
                             await websocket.send_json(data)

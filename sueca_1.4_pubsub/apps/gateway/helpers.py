@@ -1,9 +1,12 @@
 import threading
 import queue
-from pathlib import Path
 from typing import Optional
 
-import requests
+from fastapi import Header, HTTPException, status
+import os
+import jwt
+import logging
+from shared.redis_client import is_jti_revoked
 
 from shared.contracts import normalize_event, normalize_room_state, to_dict
 
@@ -110,6 +113,45 @@ def is_service_up(url: str) -> bool:
         return response.status_code < 500
     except Exception:
         return False
+
+
+def require_control_plane_token(authorization: str | None = Header(default=None)) -> bool:
+    """Dependency that enforces a signed service JWT for control-plane actions.
+
+    Expects a Bearer token signed with `SUECA_SERVICE_JWT_SECRET` and containing
+    a claim `scope: "control_plane"`. Also checks the token `jti` against the
+    Redis denylist to ensure revoked service tokens are rejected.
+    """
+    logger = logging.getLogger(__name__)
+    secret = os.getenv("SUECA_SERVICE_JWT_SECRET")
+    if not secret:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="server misconfigured")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing or invalid authorization header")
+
+    token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
+
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="service token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid service token")
+
+    # ensure scope
+    if payload.get("scope") != "control_plane":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")
+
+    # denylist check
+    jti = payload.get("jti")
+    if jti and is_jti_revoked(jti):
+        logger.warning("Rejected revoked service token jti=%s", jti)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="service token revoked")
+
+    return True
 
 
 # start_service / stop_managed_services removed — orchestration should be handled by

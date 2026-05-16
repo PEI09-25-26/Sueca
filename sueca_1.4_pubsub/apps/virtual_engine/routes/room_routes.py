@@ -1,4 +1,5 @@
 from typing import Optional
+import uuid
 
 from fastapi import APIRouter, Body, Header, Query
 
@@ -139,16 +140,32 @@ def create_room_endpoint(data: dict = Body(default_factory=dict)):
     name = str(data.get("name", "")).strip()
     position = data.get("position")
     if name:
-        success, message, game_id, player_id = manager.create_room_with_host(name, position)
-        if not success:
-            return error(message, 400)
+        if position:
+            success, message, game_id, player_id = manager.create_room_with_host(name, position)
+            if not success:
+                return error(message, 400)
 
-        token = session_manager.create_session(game_id, player_id, name)
+            token = session_manager.create_session(game_id, player_id, name)
+            return {
+                "success": True,
+                "message": message,
+                "game_id": game_id,
+                "player_id": player_id,
+                "token": token,
+            }
+
+        game_id = manager.create_room()
+        owner_player_id = uuid.uuid4().hex[:8]
+        game = manager.get_game(game_id)
+        if not game:
+            return error(f"Game {game_id} not found", 404)
+        game.creator_id = owner_player_id
+        token = session_manager.create_session(game_id, owner_player_id, name)
         return {
             "success": True,
-            "message": message,
+            "message": "Room created",
             "game_id": game_id,
-            "player_id": player_id,
+            "player_id": owner_player_id,
             "token": token,
         }
 
@@ -173,7 +190,7 @@ def create_game(data: dict = Body(default_factory=dict)):
 
 
 @router.post("/api/join")
-def join_game(data: dict = Body(default_factory=dict)):
+def join_game(data: dict = Body(default_factory=dict), authorization: str | None = Header(default=None)):
     name = data.get("name", "").strip()
     position = data.get("position")
     game_id = data.get("game_id") or manager.default_game_id
@@ -184,7 +201,16 @@ def join_game(data: dict = Body(default_factory=dict)):
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    success, message, player_id = game.add_player(name, position)
+    player_id_override = None
+    if authorization:
+        try:
+            session_data = authorize_header(authorization, game_id)
+            if session_data.get("player_id") == game.creator_id:
+                player_id_override = session_data.get("player_id")
+        except Exception:
+            player_id_override = None
+
+    success, message, player_id = game.add_player(name, position, player_id=player_id_override)
     if success:
         # Rooms created with create_room start empty; first joiner becomes host.
         if game.creator_id is None:

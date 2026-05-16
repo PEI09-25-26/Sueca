@@ -3,6 +3,15 @@ package com.example.Jogo_da_Sueca.models
 import com.google.gson.annotations.SerializedName
 import com.google.gson.JsonObject
 
+// ============ Authentication ============
+data class GuestSessionResponse(
+    val success: Boolean,
+    val session_token: String,
+    val game_id: String?,
+    val player_id: String,
+    val expires_at: String
+)
+
 // ============ Card Data ============
 data class Card(
     val id: String,

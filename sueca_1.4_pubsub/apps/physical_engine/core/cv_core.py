@@ -7,10 +7,10 @@ from PIL import Image
 import json
 import os
 from pathlib import Path
-import jwt
 
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+from apps.virtual_engine.session import session_manager
 
 try:
     from cv import CardDetector, CardClassifier
@@ -107,7 +107,8 @@ async def start_cv(request: StartCVRequest):
 
     except Exception as error:
         print(f"[CV Service] Error starting service: {error}")
-        raise HTTPException(status_code=500, detail=str(error))
+        # Log and return generic error to callers to avoid leaking internals
+        raise HTTPException(status_code=500, detail="internal error")
 
 
 async def stream_cv(websocket: WebSocket, game_id: str):
@@ -119,21 +120,26 @@ async def stream_cv(websocket: WebSocket, game_id: str):
         token = authorization[7:].strip()
     if not token:
         token = websocket.query_params.get("token")
-    secret = os.getenv("SUECA_JWT_SECRET", "dev-secret")
+    secret = os.getenv("SUECA_JWT_SECRET")
     if not token:
         await websocket.close(code=4001)
         print(f"[CV Service] Missing token for game: {game_id}")
         return
-
-    try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
-        if payload.get("game_id") != game_id:
-            await websocket.close(code=4003)
-            print(f"[CV Service] Token game_id mismatch for game: {game_id}")
-            return
-    except Exception as error:
-        print(f"[CV Service] Token validation failed: {error}")
+    if not secret:
+        print("[CV Service] Server misconfigured: missing SUECA_JWT_SECRET")
         await websocket.close(code=4002)
+        return
+
+    # Validate via session manager so revocation is respected across services
+    payload = session_manager.validate_token(token)
+    if not payload:
+        print(f"[CV Service] Token validation failed for game: {game_id}")
+        await websocket.close(code=4002)
+        return
+
+    if payload.get("game_id") != game_id:
+        await websocket.close(code=4003)
+        print(f"[CV Service] Token game_id mismatch for game: {game_id}")
         return
 
     await websocket.accept()

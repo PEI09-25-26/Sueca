@@ -1,8 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, Query, Body
+from fastapi import FastAPI, HTTPException, Depends, Body
 from pydantic import BaseModel
 from shared.auth import get_authenticated_uid
 from shared.firebase_client import (
-    add_friend,
     get_user,
     get_friends,
     remove_friend,

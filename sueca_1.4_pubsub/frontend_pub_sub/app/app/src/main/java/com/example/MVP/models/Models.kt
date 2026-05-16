@@ -300,7 +300,7 @@ data class RoomState(
 )
 
 data class CreateRoomRequest(
-    val name: String,
+    val name: String? = null,
     val position: String? = null
 )
 

@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-import requests
 
 from .routes import auth_router, game_router, proxy_router, state_router, websocket_router
 

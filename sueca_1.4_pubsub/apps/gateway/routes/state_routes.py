@@ -1,14 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from .. import state
 from ..dto import RoomModeDTO
-from ..helpers import ingest_event, ingest_state, normalize_mode
+from ..helpers import ingest_event, ingest_state, normalize_mode, require_control_plane_token
 
 
 router = APIRouter()
 
 
-@router.post("/game/state")
+@router.post("/game/state", dependencies=[Depends(require_control_plane_token)])
 def receive_state(payload: dict):
     canonical_state = ingest_state(payload, source="virtual_engine", default_mode="virtual")
     return {
@@ -18,7 +18,7 @@ def receive_state(payload: dict):
     }
 
 
-@router.post("/game/physical/state")
+@router.post("/game/physical/state", dependencies=[Depends(require_control_plane_token)])
 def receive_physical_state(payload: dict):
     canonical_state = ingest_state(payload, source="physical_engine", default_mode="physical")
     return {
@@ -28,7 +28,7 @@ def receive_physical_state(payload: dict):
     }
 
 
-@router.post("/game/event")
+@router.post("/game/event", dependencies=[Depends(require_control_plane_token)])
 def receive_event(payload: dict):
     envelope, _ = ingest_event(payload, source="virtual_engine", default_mode="virtual")
     return {
@@ -38,7 +38,7 @@ def receive_event(payload: dict):
     }
 
 
-@router.post("/game/physical/event")
+@router.post("/game/physical/event", dependencies=[Depends(require_control_plane_token)])
 def receive_physical_event(payload: dict):
     envelope, _ = ingest_event(payload, source="physical_engine", default_mode="physical")
     return {
@@ -63,7 +63,7 @@ def get_canonical_state_by_game(game_id: str):
     return state.latest_room_state_by_game.get(game_id, {})
 
 
-@router.post("/game/room_mode/{game_id}")
+@router.post("/game/room_mode/{game_id}", dependencies=[Depends(require_control_plane_token)])
 def set_room_mode(game_id: str, data: RoomModeDTO):
     mode = normalize_mode(data.mode)
     state.room_modes[game_id] = mode

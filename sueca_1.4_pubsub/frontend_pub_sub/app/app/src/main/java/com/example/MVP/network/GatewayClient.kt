@@ -49,6 +49,7 @@ object GatewayClient {
     }
 
     suspend fun createRoom(playerName: String): CreateRoomResponse {
+        // Create an empty room and let the backend mint a host token without occupying a seat.
         val response = RetrofitClient.api.createRoomV2(CreateRoomRequest(name = playerName))
         if (response.success) {
             val gameId = response.gameId ?: response.roomId

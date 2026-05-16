@@ -5,6 +5,11 @@ import retrofit2.http.*
 
 interface ApiService {
 
+    // ============ /auth Endpoints ============
+
+    @POST("/auth/guest_session")
+    suspend fun createGuestSession(@Body payload: Map<String, String>): GuestSessionResponse
+
     // ============ /api Endpoints ============
 
     @GET("/api/status")
