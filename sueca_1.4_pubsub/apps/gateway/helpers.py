@@ -1,3 +1,4 @@
+import os
 import subprocess
 import threading
 import queue
@@ -117,11 +118,21 @@ def start_service(name: str, command: list[str], health_url: str, cwd: Optional[
     if is_service_up(health_url):
         return
 
+    # Ensure ROOT_DIR is in PYTHONPATH so absolute imports like 'apps.emqx...' work
+    env = os.environ.copy()
+    root_str = str(state.ROOT_DIR)
+    current_pythonpath = env.get("PYTHONPATH", "")
+    if current_pythonpath:
+        env["PYTHONPATH"] = f"{root_str}{os.pathsep}{current_pythonpath}"
+    else:
+        env["PYTHONPATH"] = root_str
+
     process = subprocess.Popen(
         command,
         cwd=str(cwd or state.ROOT_DIR),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        env=env,
     )
     state.service_processes[name] = process
 

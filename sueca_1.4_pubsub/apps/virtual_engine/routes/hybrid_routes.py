@@ -250,6 +250,12 @@ async def hybrid_deal_recognize(data: dict = Body(default_factory=dict)):
         }
 
     ok, message, room = hybrid_coordinator.add_deal_card(game_id, target, recognized.card_id)
+    
+    room_payload = hybrid_coordinator.to_payload(room, _players_meta(game))
+    # Se a distribuição acabou agora, limpamos o histórico do CV para a fase de jogo
+    if room_payload.get("deal_done"):
+        await hybrid_vision.reset_cv_history(game_id)
+
     response_payload = {
         "success": True,
         "recognized": True,
@@ -264,7 +270,7 @@ async def hybrid_deal_recognize(data: dict = Body(default_factory=dict)):
             "drawable_key": recognized.drawable_key,
             "display": recognized.display,
         },
-        "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "state": room_payload,
     }
     _push_hybrid_state(game, room)
     return response_payload

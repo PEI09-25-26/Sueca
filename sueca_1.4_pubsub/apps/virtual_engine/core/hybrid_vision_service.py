@@ -67,6 +67,16 @@ class HybridVisionService:
             logger.error(f"Error in recognize_once for game {game_id}: {e}")
             return None
 
+    async def reset_cv_history(self, game_id: str) -> None:
+        """Reset the CV service history (sent_labels) for a clean start of the playing phase."""
+        ws_url = f"{self.cv_ws_url}/cv/stream/{game_id}"
+        try:
+            async with websockets.connect(ws_url, open_timeout=self.timeout_s) as ws:
+                await ws.send(json.dumps({"action": "reset_cards", "delay": 0, "full": True}))
+                logger.info(f"CV history (sent_labels) reset for game {game_id}")
+        except Exception as e:
+            logger.error(f"Failed to reset CV history for game {game_id}: {e}")
+
     def _build_from_detection(self, detection: dict) -> Optional[RecognizedCard]:
         rank = self._normalize_rank(str(detection.get("rank", "")).strip())
         suit_name = self._normalize_suit(str(detection.get("suit", "")).strip())
