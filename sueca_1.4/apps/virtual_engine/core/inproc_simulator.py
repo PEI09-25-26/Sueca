@@ -43,11 +43,16 @@ def _decision_maker_for(difficulty, tracker):
 
 
 def simulate_match(game_number: int, bots: List[Dict[str, Any]] = None, fast_mode: bool = True) -> Dict[str, Any]:
+    from ..positions import Positions
     bots_payload = bots or _DEFAULT_BOTS
     game_id = f"INPROC_{uuid.uuid4().hex[:6].upper()}"
 
     game = GameState(game_id)
     game.set_fast_mode(fast_mode)
+
+    # Rotate starting player: Game 1 -> South, Game 2 -> East, Game 3 -> North, Game 4 -> West (and repeat)
+    rotation = [Positions.SOUTH, Positions.EAST, Positions.NORTH, Positions.WEST]
+    game.starting_player_position = rotation[(game_number - 1) % 4]
 
     # Add players
     for b in bots_payload:

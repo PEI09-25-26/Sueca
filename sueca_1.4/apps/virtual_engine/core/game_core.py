@@ -301,9 +301,10 @@ class GameState:
                 player.hand.append(self.deck.cards.pop(0))
             player.hand.sort()
 
-        # SOUTH always starts in this implementation
+        # Check if a custom starting player position is set (e.g., rotating starting position)
+        start_pos = getattr(self, "starting_player_position", Positions.SOUTH)
         for player in self.players:
-            if player.position == Positions.SOUTH:
+            if player.position == start_pos:
                 self.last_winner = player
                 self.current_player = player
                 break
