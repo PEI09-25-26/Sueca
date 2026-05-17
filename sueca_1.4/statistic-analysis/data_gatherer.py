@@ -1459,7 +1459,7 @@ def main():
     parser.add_argument("--combinations-file", default=None, help="Path to JSON file with bot combinations")
     parser.add_argument("--combinations-files", nargs="+", default=None, help="Multiple combination files to merge and run")
     parser.add_argument("--name-by-difficulty", action="store_true", help="Use difficulty distribution as folder label")
-    parser.add_argument("--games-per-combination", type=int, default=1000, help="Games per lineup in combinations mode")
+    parser.add_argument("--games-per-combination", type=int, default=10000, help="Games per lineup in combinations mode")
     parser.add_argument("--save-to-redis", action="store_true", help="Persist each game in Redis")
     parser.add_argument("--redis-host", default="127.0.0.1")
     parser.add_argument("--redis-port", type=int, default=6379)

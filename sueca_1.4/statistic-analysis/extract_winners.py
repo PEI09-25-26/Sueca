@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # Path relative to this script's directory
 SCRIPT_DIR = Path(__file__).parent
-DATA_PATH = SCRIPT_DIR / "batch_output_1000/average_smart_average_smart/tables/batch_summary.csv"
+DATA_PATH = SCRIPT_DIR / "batch_output_10000/smart_average_smart_average/tables/batch_summary.csv"
 
 def main():
     if not DATA_PATH.exists():
@@ -32,10 +32,10 @@ def main():
     print("Draws:", draw_counter)
 
     fig, ax = plt.subplots()
-    ax.pie([team2_counter, team1_counter, draw_counter], labels=['Team2', 'Team1', 'Draws'])
-    ax.set_title("Team Wins")
+    ax.pie([team2_counter, team1_counter, draw_counter], labels=['average', 'Smart', 'Draws'], textprops={'fontsize': 14})
+    ax.set_title("Team Wins", fontsize=16)
 
-    plt.show()
+    plt.savefig(SCRIPT_DIR / "batch_output_10000/smart_average_smart_average/graph.png")
 
     
 

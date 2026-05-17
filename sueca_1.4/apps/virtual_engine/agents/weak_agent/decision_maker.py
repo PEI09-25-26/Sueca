@@ -99,17 +99,15 @@ class DecisionMaker:
         trick_points = self.state.get_trick_points()
         # As last player, only contest expensive tricks.
         if trick_points < 10:
+            winning_card = CardAnalyzer.get_lowest_winning_card(
+                legal_plays,
+                self.state.current_trick,
+                self.state.trump_suit,
+                self.state.lead_suit,
+            )
+            if winning_card is not None:
+                return winning_card
             return CardAnalyzer.get_lowest_card(legal_plays)
-
-        winning_card = CardAnalyzer.get_lowest_winning_card(
-            legal_plays,
-            self.state.current_trick,
-            self.state.trump_suit,
-            self.state.lead_suit,
-        )
-        if winning_card is not None:
-            return winning_card
-
         return random.choice(legal_plays)
 
     def choose_trump_selection(self):
