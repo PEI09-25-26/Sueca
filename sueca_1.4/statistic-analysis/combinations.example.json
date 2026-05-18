@@ -1,27 +1,27 @@
 [
   {
-    "label": "weak_smart_weak_smart",
+    "label": "average_average_average_average",
     "games": 10000,
     "bots": [
       {
         "name": "N",
         "position": "NORTH",
-        "difficulty": "weak"
+        "difficulty": "average"
       },
       {
         "name": "E",
         "position": "EAST",
-        "difficulty": "smart"
+        "difficulty": "average"
       },
       {
         "name": "S",
         "position": "SOUTH",
-        "difficulty": "weak"
+        "difficulty": "average"
       },
       {
         "name": "W",
         "position": "WEST",
-        "difficulty": "smart"
+        "difficulty": "average"
       }
     ]
   }
