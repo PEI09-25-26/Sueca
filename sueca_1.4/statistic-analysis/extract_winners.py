@@ -4,7 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 SCRIPT_DIR = Path(__file__).parent
-DEFAULT_DATA_PATH = SCRIPT_DIR / "batch_output_10000/average_average_average_average/tables/batch_summary.csv"
+DEFAULT_DATA_PATH = SCRIPT_DIR / "batch_output_10000/average_smart_average_smart/tables/batch_summary.csv"
 
 def main():
     # Allow passing a custom path to the summary CSV as an argument
@@ -38,7 +38,7 @@ def main():
     print("Draws:", draw_counter)
 
     fig, ax = plt.subplots()
-    ax.pie([team2_counter, team1_counter, draw_counter], labels=['Team 2 (Average)', 'Team 1 (Average)', 'Draws'], autopct='%1.1f%%', textprops={'fontsize': 14})
+    ax.pie([team2_counter, team1_counter, draw_counter], labels=['Team 2 (Smart)', 'Team 1 (Average)', 'Draws'], autopct='%1.1f%%', textprops={'fontsize': 14})
     ax.set_title("Team Wins", fontsize=16)
 
     # Save the graph inside the batch output directory (parent of tables/)
