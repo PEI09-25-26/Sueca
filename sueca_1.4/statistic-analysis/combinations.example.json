@@ -1,12 +1,12 @@
 [
   {
-    "label": "random_random_random_random",
+    "label": "weak_random_weak_random",
     "games": 10000,
     "bots": [
       {
         "name": "N",
         "position": "NORTH",
-        "difficulty": "random"
+        "difficulty": "weak"
       },
       {
         "name": "E",
@@ -16,7 +16,7 @@
       {
         "name": "S",
         "position": "SOUTH",
-        "difficulty": "random"
+        "difficulty": "weak"
       },
       {
         "name": "W",
