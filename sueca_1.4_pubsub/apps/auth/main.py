@@ -7,6 +7,9 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException
 from passlib.hash import bcrypt_sha256
 from pydantic import BaseModel, Field
+from shared.logging_config import setup_logging, correlation_id_from_request, set_correlation_id, clear_correlation_id
+
+setup_logging()
 
 from apps.auth.twilio.email_service import EmailService
 from shared.auth import get_authenticated_payload, get_authenticated_uid
@@ -236,6 +239,23 @@ def _pick_login_user(identifier: str, password: str) -> tuple[str, dict] | None:
         except Exception:
             continue
     return None
+
+
+# Correlation-id middleware must be registered after `app` is defined
+from fastapi import Request
+
+
+@app.middleware("http")
+async def _add_cid(request: Request, call_next):
+    cid = correlation_id_from_request(request)
+    request.state.correlation_id = cid
+    set_correlation_id(cid)
+    try:
+        resp = await call_next(request)
+        resp.headers['X-Correlation-ID'] = cid
+        return resp
+    finally:
+        clear_correlation_id()
 
 
 @app.get("/health")

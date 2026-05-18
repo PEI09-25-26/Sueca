@@ -203,30 +203,34 @@ class GameState:
         if player_id and self.get_player(player_id):
             return False, 'Player already in game', None
 
-        # Position is now MANDATORY - no auto-assignment
+        # Position is OPTIONAL - allows entering room before choosing a seat
         position = self._normalize_position(position_choice)
-        if not position:
-            return False, 'Position required: choose NORTH, SOUTH, EAST, or WEST', None
-
-        team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
-        if position not in self.available_team_positions[team_key]:
-            return False, f'Position {position.name} is already taken', None
+        
+        if position:
+            team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+            if position not in self.available_team_positions[team_key]:
+                return False, f'Position {position.name} is already taken', None
 
         player = Player(name)
         player.player_id = player_id or uuid.uuid4().hex[:8]
         player.position = position
-        self.available_team_positions[team_key].remove(position)
         self.players.append(player)
         self.scores[player.player_id] = 0
 
-        if team_key == 'team1':
-            self.teams[0].append(player)
+        if position:
+            team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+            self.available_team_positions[team_key].remove(position)
+            if team_key == 'team1':
+                self.teams[0].append(player)
+            else:
+                self.teams[1].append(player)
+            logger.info('Player %s joined game %s at position %s', name, self.game_id, player.position)
         else:
-            self.teams[1].append(player)
+            logger.info('Player %s joined game %s without position', name, self.game_id)
 
-        logger.info('Player %s joined game %s at position %s', name, self.game_id, player.position)
-
-        if len(self.players) == self.max_players and not self.game_started:
+        # Check if we can start deck cutting - only when 4 players are seated
+        seated_players = [p for p in self.players if p.position is not None]
+        if len(seated_players) == self.max_players and not self.game_started:
             self.phase = 'deck_cutting'
             self.deck.shuffle_deck()
             self.current_match_number = self.next_match_number
@@ -234,7 +238,7 @@ class GameState:
             logger.info('Game %s ready for deck cutting', self.game_id)
 
         self._push_state('player_joined')
-        return True, f'Joined as {player.position}', player.player_id
+        return True, f'Joined as {player.position}' if position else 'Joined room', player.player_id
 
     def remove_player(self, actor_id, target_id):
         actor = self.get_player(actor_id)
@@ -254,13 +258,15 @@ class GameState:
         if target_id == self.creator_id:
             return False, 'Host cannot remove themselves'
 
-        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
-        self.available_team_positions[team_key].append(target.position)
+        if target.position:
+            team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+            if target.position not in self.available_team_positions[team_key]:
+                self.available_team_positions[team_key].append(target.position)
         
         self.players.remove(target)
         if target in self.teams[0]:
             self.teams[0].remove(target)
-        else:
+        elif target in self.teams[1]:
             self.teams[1].remove(target)
         
         if target_id in self.scores:
@@ -285,10 +291,11 @@ class GameState:
         if self.game_started and self.phase != 'finished':
             return False, 'Cannot leave while game is in progress'
 
-        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
-        # Free up the position
-        if target.position not in self.available_team_positions[team_key]:
-            self.available_team_positions[team_key].append(target.position)
+        if target.position:
+            team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+            # Free up the position
+            if target.position not in self.available_team_positions[team_key]:
+                self.available_team_positions[team_key].append(target.position)
 
         try:
             self.players.remove(target)

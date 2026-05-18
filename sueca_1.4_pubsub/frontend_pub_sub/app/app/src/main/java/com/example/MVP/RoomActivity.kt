@@ -17,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.JoinGameRequest
 import com.example.MVP.models.AddBotRequest
+import com.example.MVP.models.Position
 import com.example.MVP.models.RemoveParticipantRequest
 import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
@@ -163,6 +164,7 @@ class RoomActivity : AppCompatActivity() {
 
     private fun startRealtimeUpdates() {
         if (roomId.isBlank()) return
+        if (mqttSubscriber != null) return
 
         Log.i(logTag, "Starting realtime updates roomId=$roomId broker=${RetrofitClient.MQTT_BROKER_HOST}:${RetrofitClient.MQTT_BROKER_PORT} (pls work)")
 
@@ -255,10 +257,21 @@ class RoomActivity : AppCompatActivity() {
         stabilizationJob = lifecycleScope.launch {
             delay(stableRealtimeWindowMs)
 
-            val staleRealtime = (System.currentTimeMillis() - lastRealtimeUpdateMs) > 3000
-            if (hasRealtimeState && hasBrokerRoundTrip && !staleRealtime && !usingPollingFallback) {
+            val now = System.currentTimeMillis()
+            val staleData = (now - lastRealtimeUpdateMs) > 10000 // Relaxed from 5s to 10s
+            
+            // Hide overlay if we have healthy MQTT (broker roundtrip confirmed)
+            // OR if we are successfully polling.
+            // Note: We don't strictly need hasRealtimeState here because polling 
+            // will eventually provide it if MQTT is just sitting waiting for events.
+            val mqttHealthy = hasBrokerRoundTrip && !staleData
+            val pollingHealthy = usingPollingFallback && !staleData
+
+            if (mqttHealthy || pollingHealthy) {
                 hideMqttConnectingOverlay()
-                Log.i(logTag, "Room stabilized via $source roomId=$roomId; loading hidden (finally)")
+                Log.i(logTag, "Room stabilized via $source (mqtt_roundtrip=$hasBrokerRoundTrip, polling=$pollingHealthy) roomId=$roomId")
+            } else {
+                Log.w(logTag, "Room not stable yet (stale=$staleData, mqtt_roundtrip=$hasBrokerRoundTrip, poll=$pollingHealthy)")
             }
         }
     }
@@ -494,11 +507,30 @@ class RoomActivity : AppCompatActivity() {
             return
         }
 
-        if (playerId.isNotBlank()) {
-            showSeatManagementDialog(position)
+        // Use the same logic as updateUI to find "me"
+        val meById = if (playerId.isNotBlank()) latestRoomState?.players?.firstOrNull { it.id == playerId } else null
+        val meByName = latestRoomState?.players?.firstOrNull { it.name == playerName }
+        val me = meById ?: meByName
+        
+        // If we found ourselves by name but didn't have the ID, update it now
+        if (me != null && me.id != null && (playerId.isBlank() || playerId != me.id)) {
+            playerId = me.id
+        }
+        
+        val currentPos = normalizePosition(me?.position)
+
+        if (playerId.isNotBlank() || me != null) {
+            if (currentPos.isBlank()) {
+                // If I'm in the room but don't have a seat, just take it automatically
+                changeSeatTo(position)
+            } else {
+                // If I already have a seat, show management dialog (to change, invite, etc.)
+                showSeatManagementDialog(position)
+            }
             return
         }
 
+        // Fallback: if we really don't have a playerId and aren't in the list, join now
         joinWithPosition(position)
     }
 
@@ -561,14 +593,14 @@ class RoomActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 if (GameSessionManager.getAuthHeader(roomId).isNullOrBlank()) {
-                    Toast.makeText(this@RoomActivity, "Ainda sem sessao da sala. Entra numa posicao primeiro.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@RoomActivity, "Ainda sem sessao da sala. Aguarda 1s.", Toast.LENGTH_SHORT).show()
                     return@launch
                 }
 
                 val response = GatewayClient.changePosition(
                     playerId = playerId,
                     gameId = roomId,
-                    position = position.lowercase(Locale.ROOT)
+                    position = position.uppercase(Locale.ROOT)
                 )
 
                 if (response.success) {
@@ -698,7 +730,7 @@ class RoomActivity : AppCompatActivity() {
                     AddBotRequest(
                         playerId = playerId,
                         gameId = roomId,
-                        position = position.lowercase(Locale.ROOT),
+                        position = Position.valueOf(normalizedPosition),
                         difficulty = difficulty,
                         name = botName
                     )
@@ -728,7 +760,7 @@ class RoomActivity : AppCompatActivity() {
                     JoinGameRequest(
                         name = playerName,
                         gameId = roomId,
-                        position = position
+                        position = Position.valueOf(position.uppercase(Locale.ROOT))
                     )
                 )
 
@@ -844,13 +876,13 @@ class RoomActivity : AppCompatActivity() {
 
     private fun normalizePosition(position: String?): String {
         if (position.isNullOrBlank()) return ""
-        val p = position.uppercase()
+        val p = position.uppercase(Locale.ROOT)
         return when {
             p.contains("NORTH") -> "NORTH"
             p.contains("SOUTH") -> "SOUTH"
             p.contains("EAST") -> "EAST"
             p.contains("WEST") -> "WEST"
-            else -> p
+            else -> ""
         }
     }
 }

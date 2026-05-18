@@ -7,6 +7,8 @@ services:
       - "8080:8080"
     env_file:
       - ./.env
+    environment:
+      - MQTT_SERVICE=gateway
     depends_on:
       - auth
       - agents
@@ -47,6 +49,8 @@ services:
       - "127.0.0.1:5000:5000"
     env_file:
       - ./.env
+    environment:
+      - MQTT_SERVICE=virtual_engine
     depends_on:
       - auth
 
@@ -60,6 +64,7 @@ services:
     env_file:
       - ./.env
     environment:
+      - MQTT_SERVICE=physical_engine
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - SUECA_YOLO_DEVICE=cuda:0
@@ -73,6 +78,8 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env
+    environment:
+      - MQTT_SERVICE=cloudflare
     depends_on:
       - gateway
       - emqx
@@ -87,9 +94,17 @@ services:
     image: emqx/emqx:5.0.0
     restart: unless-stopped
     ports:
-      - "1883:1883"
-      - "18083:18083"
+      - "127.0.0.1:1883:1883"
+      - "127.0.0.1:8883:8883"
+      - "127.0.0.1:18083:18083"
+
     environment:
       - EMQX_NAME=emqx-sueca
       - EMQX_HOST=0.0.0.0
-    volumes: []
+      - EMQX_ALLOW_ANONYMOUS=false
+    volumes:
+      - ./apps/emqx/emqx.conf:/opt/emqx/etc/emqx.conf:ro
+      - ./apps/emqx/acl.conf:/opt/emqx/etc/acl.conf:ro
+      - ./apps/emqx/certs:/opt/emqx/etc/certs:ro
+
+

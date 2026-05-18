@@ -3,7 +3,8 @@ from typing import Annotated, Optional
 import logging
 import requests
 import json
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Query, Request, Response, Depends
+from shared.ratelimit import rate_limit_dependency
 
 from .. import state
 from ..dto import CommandRequestDTO
@@ -37,7 +38,7 @@ def _decode_backend_response(response: requests.Response):
         }
 
 
-@router.post("/game/command/{command:path}")
+@router.post("/game/command/{command:path}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def route_command(command: str, request_data: CommandRequestDTO, request: Request):
     game_id = request_data.game_id
     mode = request_data.mode or state.room_modes.get(game_id, "virtual")
@@ -62,7 +63,16 @@ def route_command(command: str, request_data: CommandRequestDTO, request: Reques
             timeout=5,
         )
         data = _decode_backend_response(response)
-        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+        envelope = {
+            "success": response.ok,
+            "http_success": response.ok,
+            "http_status": response.status_code,
+            "mode": mode,
+            "target": target_url,
+            "message": data.get("message") if isinstance(data, dict) else None,
+            "response": data
+        }
+        return envelope
     except requests.RequestException:
         logger.exception("Error proxying command %s to %s", command, target_url)
         return Response(
@@ -72,7 +82,7 @@ def route_command(command: str, request_data: CommandRequestDTO, request: Reques
         )
 
 
-@router.get("/game/query/{query_path:path}")
+@router.get("/game/query/{query_path:path}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def route_query(
     query_path: str,
     request: Request,
@@ -99,7 +109,16 @@ def route_query(
             timeout=5,
         )
         data = _decode_backend_response(response)
-        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+        envelope = {
+            "success": response.ok,
+            "http_success": response.ok,
+            "http_status": response.status_code,
+            "mode": resolved_mode,
+            "target": target_url,
+            "message": data.get("message") if isinstance(data, dict) else None,
+            "response": data
+        }
+        return envelope
     except requests.RequestException:
         logger.exception("Error proxying query %s to %s", query_path, target_url)
         return Response(
@@ -109,7 +128,7 @@ def route_query(
         )
 
 
-@router.post("/stats/game/{game_id:path}")
+@router.post("/stats/game/{game_id:path}", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
 def route_stats(game_id: str):
     if not game_id:
         return {"success": False, "message": "game_id is required"}
@@ -126,7 +145,7 @@ def route_stats(game_id: str):
         )
 
 
-@router.get("/presence")
+@router.get("/presence", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def route_presence(request: Request):
     try:
         response = state.INTERNAL_HTTP.get(
@@ -140,7 +159,7 @@ def route_presence(request: Request):
         return Response(status_code=502, content=json.dumps({"success": False, "message": "backend unavailable"}), media_type=APPLICATION_JSON)
 
 
-@router.get("/api/status")
+@router.get("/api/status", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def proxy_api_status(request: Request):
     game_id = request.query_params.get("game_id")
     mode = normalize_mode(state.room_modes.get(game_id, "virtual"))
@@ -162,7 +181,7 @@ def proxy_api_status(request: Request):
             media_type=APPLICATION_JSON,
         )
 
-@router.get("/api/rooms")
+@router.get("/api/rooms", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def proxy_api_rooms(request: Request):
     target = target_base_for_mode("virtual")
     target_url = f"{target}/api/rooms"
@@ -183,7 +202,7 @@ def proxy_api_rooms(request: Request):
         )
 
 
-@router.post("/api/create_room")
+@router.post("/api/create_room", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 async def proxy_api_create_room(request: Request):
     target = target_base_for_mode("virtual")
     target_url = f"{target}/api/create_room"
@@ -205,7 +224,7 @@ async def proxy_api_create_room(request: Request):
         )
 
 
-@router.post("/api/start")
+@router.post("/api/start", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 async def proxy_api_start(request: Request):
     target = target_base_for_mode("virtual")
     target_url = f"{target}/api/start"
@@ -229,7 +248,7 @@ async def proxy_api_start(request: Request):
         )
 
 
-@router.post("/api/leave")
+@router.post("/api/leave", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 async def proxy_api_leave(request: Request):
     target = target_base_for_mode("virtual")
     target_url = f"{target}/api/leave"

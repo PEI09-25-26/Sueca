@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -10,6 +11,8 @@ from apps.virtual_engine.session import session_manager
 
 router = APIRouter()
 
+logger = logging.getLogger("gateway.websocket")
+
 
 def _extract_ws_token(websocket: WebSocket) -> str | None:
     authorization = websocket.headers.get("authorization")
@@ -17,10 +20,8 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
         token = authorization[7:].strip()
         if token:
             return token
-    try:
-        return websocket.query_params.get("token")
-    except Exception:
-        return None
+    # Do not accept tokens in query parameters for security reasons.
+    return None
 
 
 @router.websocket("/ws/camera/{game_id}")
@@ -29,23 +30,23 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
 
     if not token:
         await websocket.close(code=4001)
-        print(f"[Middleware] Missing token for game {game_id}")
+        logger.warning("Missing token for game %s", game_id)
         return
     # Validate the token using the session manager to ensure it is an active room session
     payload = session_manager.validate_token(token)
     if not payload:
         await websocket.close(code=4002)
-        print(f"[Middleware] Token validation failed for {game_id}")
+        logger.warning("Token validation failed for %s", game_id)
         return
 
     if payload.get("game_id") != game_id:
         await websocket.close(code=4003)
-        print(f"[Middleware] Token game_id mismatch for {game_id}")
+        logger.warning("Token game_id mismatch for %s", game_id)
         return
 
     await websocket.accept()
     state.active_connections[game_id] = websocket
-    print(f"[Middleware] Mobile WebSocket connected for game: {game_id}")
+    logger.info("Mobile WebSocket connected for game: %s", game_id)
 
     cv_ws = None
     try:
@@ -54,7 +55,7 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
             additional_headers={"Authorization": f"Bearer {token}"},
         )
         state.cv_connections[game_id] = cv_ws
-        print(f"[Middleware] Connected to CV Service WebSocket for game: {game_id}")
+        logger.info("Connected to CV Service WebSocket for game: %s", game_id)
 
         async def receive_from_cv():
             try:
@@ -62,7 +63,7 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                     data = json.loads(message)
                     if data.get("success") and data.get("detection"):
                         detection = data["detection"]
-                        print(f"[Middleware] Received detection from CV: {detection}")
+                        logger.debug("Received detection from CV: %s", detection)
 
                         try:
                             suit_symbol = state.SUIT_SYMBOLS.get(detection["suit"], detection["suit"])
@@ -80,7 +81,7 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                             )
                             if game_response.status_code == 200:
                                 game_result = game_response.json()
-                                print(f"[Middleware] Game Service response: {game_result}")
+                                logger.debug("Game Service response: %s", game_result)
 
                                 combined_data = {
                                     "success": True,
@@ -90,13 +91,13 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                                 await websocket.send_json(combined_data)
                             else:
                                 # Log backend error but avoid echoing internal backend text to clients
-                                print(f"[Middleware] Game Service HTTP {game_response.status_code}")
+                                logger.warning("Game Service HTTP %s for game %s", game_response.status_code, game_id)
                                 await websocket.send_json({"success": False, "detection": detection, "message": "game service unavailable"})
                         except Exception as error:
-                            print(f"[Middleware] Error sending to Game Service: {error}")
+                            logger.exception("Error sending to Game Service for game %s", game_id)
                             await websocket.send_json(data)
             except Exception as error:
-                print(f"[Middleware] Error receiving from CV: {error}")
+                logger.exception("Error receiving from CV for game %s", game_id)
 
         asyncio.create_task(receive_from_cv())
 
@@ -104,9 +105,9 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
             frame_data = await websocket.receive_text()
             await cv_ws.send(frame_data)
     except WebSocketDisconnect:
-        print(f"[Middleware] Mobile WebSocket disconnected for game: {game_id}")
+        logger.info("Mobile WebSocket disconnected for game: %s", game_id)
     except Exception as error:
-        print(f"[Middleware] WebSocket error: {error}")
+        logger.exception("WebSocket error for game %s", game_id)
     finally:
         if game_id in state.active_connections:
             del state.active_connections[game_id]
@@ -114,4 +115,4 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
             await cv_ws.close()
         if game_id in state.cv_connections:
             del state.cv_connections[game_id]
-        print(f"[Middleware] Cleaned up connections for game: {game_id}")
+        logger.info("Cleaned up connections for game: %s", game_id)
