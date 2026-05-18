@@ -1,0 +1,22 @@
+[
+  {
+    "name": "BotNorth",
+    "position": "NORTH",
+    "difficulty": "weak"
+  },
+  {
+    "name": "BotEast",
+    "position": "EAST",
+    "difficulty": "average"
+  },
+  {
+    "name": "BotSouth",
+    "position": "SOUTH",
+    "difficulty": "weak"
+  },
+  {
+    "name": "BotWest",
+    "position": "WEST",
+    "difficulty": "average"
+  }
+]

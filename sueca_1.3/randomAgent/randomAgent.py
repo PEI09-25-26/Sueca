@@ -5,6 +5,8 @@ from client import GameClient
 from game_state_tracker import GameStateTracker
 from card_mapper import CardMapper
 from .decision_maker import DecisionMaker
+from card_analyzer import CardAnalyzer
+import os
 import random
 import time
 
@@ -21,7 +23,10 @@ class RandomAgent(GameClient):
         self.state_tracker = GameStateTracker()
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
-        self.think_time = 1.0
+        self.think_time = float(os.getenv("SUECA_BOT_THINK_TIME", "0.0"))
+        self.loop_sleep_min = float(os.getenv("SUECA_BOT_LOOP_SLEEP_MIN", "0.05"))
+        self.loop_sleep_max = float(os.getenv("SUECA_BOT_LOOP_SLEEP_MAX", "0.10"))
+        self.error_sleep = float(os.getenv("SUECA_BOT_ERROR_SLEEP", "0.1"))
         self.player_id = None
         self.game_id = game_id
         self.position = position
@@ -78,7 +83,7 @@ class RandomAgent(GameClient):
             try:
                 state = self.get_status()
                 if state is None:
-                    time.sleep(1)
+                    time.sleep(self.error_sleep)
                     continue
 
                 self._maybe_handle_match_transition(state)
@@ -86,9 +91,16 @@ class RandomAgent(GameClient):
                 # Update state tracker
                 self.state_tracker.update_from_state(state, self.player_name)
 
-                # Update hand
-                hand = self.get_hand()
-                self.state_tracker.update_my_hand(hand)
+                # Fetch hand only when it can affect a move to avoid flooding the server.
+                if state.get("phase") == "playing":
+                    current_player_name = state.get("current_player_name") or state.get("current_player")
+                    is_my_turn = (
+                        state.get("current_player_id") == self.player_id
+                        or current_player_name == self.player_name
+                    )
+                    if is_my_turn:
+                        hand = self.get_hand()
+                        self.state_tracker.update_my_hand(hand)
 
                 # Handle deck cutting
                 if state["phase"] == "deck_cutting":
@@ -112,9 +124,9 @@ class RandomAgent(GameClient):
                         self._finished_announced_key = finished_key
             except Exception as error:
                 print(f"[ERROR] RandomAgent loop error: {error}")
-                time.sleep(1)
+                time.sleep(self.error_sleep)
 
-            time.sleep(random.uniform(0.5, 1.0))
+            time.sleep(random.uniform(self.loop_sleep_min, self.loop_sleep_max))
     
     def _handle_deck_cutting(self, state):
         """
@@ -152,11 +164,30 @@ class RandomAgent(GameClient):
         if state.get("current_player") != self.player_name or not self.state_tracker.my_hand:
             return
         
-        time.sleep(self.think_time)  # Simulate thinking
+        time.sleep(self.think_time)
+        
+        hand_before = list(self.state_tracker.my_hand)
+        legal_moves = CardAnalyzer.get_legal_plays(
+            hand_before,
+            self.state_tracker.lead_suit
+        )
         
         card = self.decision_maker.choose_card(self.state_tracker.my_hand)
         if card is None:
             return
+        
+        self.log_action({
+            "round_number": self.state_tracker.current_round,
+            "player": self.player_name,
+            "position": self.position,
+            "hand_before": hand_before,
+            "legal_moves": legal_moves,
+            "chosen_card": card,
+            "cards_in_trick": list(self.state_tracker.current_trick),
+            "position_in_trick": len(self.state_tracker.current_trick),
+            "lead_suit": self.state_tracker.lead_suit,
+            "trump": self.state_tracker.trump_suit,
+        })
         
         card_str = str(card)
         success, msg = self.play_card(card_str)
