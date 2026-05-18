@@ -1,6 +1,6 @@
 [
   {
-    "label": "weak_average_weak_average",
+    "label": "weak_smart_weak_smart",
     "games": 10000,
     "bots": [
       {
@@ -11,7 +11,7 @@
       {
         "name": "E",
         "position": "EAST",
-        "difficulty": "average"
+        "difficulty": "smart"
       },
       {
         "name": "S",
@@ -21,7 +21,7 @@
       {
         "name": "W",
         "position": "WEST",
-        "difficulty": "average"
+        "difficulty": "smart"
       }
     ]
   }
