@@ -1,0 +1,28 @@
+[
+  {
+    "label": "smart_smart_smart_smart",
+    "games": 10000,
+    "bots": [
+      {
+        "name": "N",
+        "position": "NORTH",
+        "difficulty": "smart"
+      },
+      {
+        "name": "E",
+        "position": "EAST",
+        "difficulty": "smart"
+      },
+      {
+        "name": "S",
+        "position": "SOUTH",
+        "difficulty": "smart"
+      },
+      {
+        "name": "W",
+        "position": "WEST",
+        "difficulty": "smart"
+      }
+    ]
+  }
+]

@@ -7,7 +7,10 @@ from ..positions import Positions
 from ..card_mapper import CardMapper
 from ..agents.random_agent.random_agent import RandomAgent
 from ..agents.weak_agent import WeakAgent
+from ..agents.average_agent import AverageAgent
+from ..agents.smart_agent import SmartAgent
 import logging
+import os
 import requests
 import threading
 import uuid
@@ -23,8 +26,18 @@ logger = logging.getLogger(__name__)
 ACTIVE_BOT_THREADS: dict[str, threading.Thread] = {}
 
 
+def _cleanup_dead_threads():
+    """Remove dead threads from ACTIVE_BOT_THREADS to prevent memory leak."""
+    dead_keys = [k for k, t in ACTIVE_BOT_THREADS.items() if not t.is_alive()]
+    for key in dead_keys:
+        del ACTIVE_BOT_THREADS[key]
+    if dead_keys:
+        logger.debug(f"Cleaned up {len(dead_keys)} dead bot threads")
+
+
 def launch_bot_thread(agent, game_id: str, bot_name: str) -> bool:
     """Start bot run loop in background and keep a reference by game/name."""
+    _cleanup_dead_threads()  # Clean up before adding new thread
     key = f"{game_id}:{bot_name}"
     existing = ACTIVE_BOT_THREADS.get(key)
     if existing and existing.is_alive():
@@ -51,6 +64,10 @@ class GameState:
         self.reset()
 
     def reset(self):
+        self.fast_mode = str(os.getenv("SUECA_STATISTICS_FAST_MODE", "")).strip().lower() in {"1", "true", "yes", "on"}
+        if self.fast_mode:
+            logger.info(f"FAST_MODE ENABLED for game {self.game_id}")
+            logger.setLevel(logging.WARNING)
         self.deck = Deck()
         self.players = []
         self.max_players = 4
@@ -81,6 +98,9 @@ class GameState:
         # Dealer rotates each match. Initial dealer is WEST to preserve current first-match behavior.
         self.dealer_index = self.positions.index(Positions.WEST)
         self._push_state('game_reset')
+
+    def set_fast_mode(self, enabled):
+        self.fast_mode = bool(enabled)
 
     def _prepare_new_match(self, advance_dealer=False):
         self.deck = Deck()
@@ -281,9 +301,10 @@ class GameState:
                 player.hand.append(self.deck.cards.pop(0))
             player.hand.sort()
 
-        # SOUTH always starts in this implementation
+        # Check if a custom starting player position is set (e.g., rotating starting position)
+        start_pos = getattr(self, "starting_player_position", Positions.SOUTH)
         for player in self.players:
-            if player.position == Positions.SOUTH:
+            if player.position == start_pos:
                 self.last_winner = player
                 self.current_player = player
                 break
@@ -419,8 +440,10 @@ class GameState:
             'state': self.get_state(),
             'game_id': self.game_id,
         }
+        # In fast/statistics mode we avoid external HTTP/webhook posts to reduce latency.
         try:
-            requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
+            if not self.fast_mode and os.getenv('SUECA_EVENT_HTTP', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
         except Exception:
             pass
 
@@ -428,6 +451,7 @@ class GameState:
         self._push_state('round_end')
 
     def play_card(self, player_id, card_str):
+        should_finish_now = False
         with self._play_lock:
             player = self.get_player(player_id)
             if not player:
@@ -481,18 +505,23 @@ class GameState:
             'state': self.get_state(),
             'game_id': self.game_id,
         }
+        # Avoid external posts in fast mode to keep simulation tight.
         try:
-            requests.post('http://localhost:8000/game/event', json=event, timeout=0.5)
+            if not self.fast_mode and os.getenv('SUECA_EVENT_HTTP', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                requests.post('http://localhost:8000/game/event', json=event, timeout=0.5)
         except Exception:
             pass
 
         if len(self.round_plays) == 4:
             self.current_player = None
             self.round_resolving = True
-            threading.Timer(1.69, self._finish_round).start()
+            should_finish_now = self.fast_mode
 
-        # Keep MQTT/state consumers in sync after every accepted play.
-        self._push_state('card_played')
+        if len(self.round_plays) == 4:
+            if should_finish_now:
+                self._finish_round()
+            else:
+                threading.Timer(1.69, self._finish_round).start()
 
         return True, f'Played {CardMapper.get_card(card)}'
 
@@ -579,32 +608,36 @@ class GameState:
             'game_id': self.game_id,
         }
 
+        # Avoid external HTTP posts during fast/inproc simulations
         try:
-            requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
+            if not self.fast_mode and os.getenv('SUECA_EVENT_HTTP', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                requests.post('http://localhost:8000/game/event', json=event, timeout=0.3)
         except Exception:
             pass
 
         try:
-            hands_by_player = {
-                player.player_id: [str(card) for card in player.hand]
-                for player in self.players
-                if getattr(player, 'player_id', None)
-            }
-            topic = f'sueca/games/{self.game_id}/state'
-            published = mqtt_client.publish_json(
-                f'sueca/games/{self.game_id}/state',
-                {
-                    'event_type': event_type,
-                    'game_id': self.game_id,
-                    'state': state_snapshot,
-                    'hands': hands_by_player,
-                },
-                retain=True,
-            )
-            if published:
-                logger.info('Published state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
-            else:
-                logger.warning('Failed to publish state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
+            # Avoid MQTT publishes in fast/inproc simulations
+            if not self.fast_mode and os.getenv('SUECA_MQTT_EVENTS', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+                hands_by_player = {
+                    player.player_id: [str(card) for card in player.hand]
+                    for player in self.players
+                    if getattr(player, 'player_id', None)
+                }
+                topic = f'sueca/games/{self.game_id}/state'
+                published = mqtt_client.publish_json(
+                    f'sueca/games/{self.game_id}/state',
+                    {
+                        'event_type': event_type,
+                        'game_id': self.game_id,
+                        'state': state_snapshot,
+                        'hands': hands_by_player,
+                    },
+                    retain=True,
+                )
+                if published:
+                    logger.info('Published state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
+                else:
+                    logger.warning('Failed to publish state to MQTT topic %s (event=%s, round_plays=%s)', topic, event_type, len(state_snapshot.get('round_plays', [])))
         except Exception:
             logger.exception('Unexpected error while publishing state to MQTT (event=%s, game_id=%s)', event_type, self.game_id)
 
@@ -623,10 +656,15 @@ def create_weak_bot(bot_name, position=None, game_id=None):
     return agent
 
 def create_average_bot(bot_name, position=None, game_id=None):
-    agent = WeakAgent()
+    agent = AverageAgent()
     agent.agent_name = bot_name
     agent.position = position
     agent.game_id = game_id
+    return agent
+
+
+def create_smart_bot(bot_name, position=None, game_id=None):
+    agent = SmartAgent(agent_name=bot_name, game_id=game_id, position=position)
     return agent
 
 class BotFactory:
@@ -637,7 +675,9 @@ class BotFactory:
         'weak': create_weak_bot,
         'weak_agent': create_weak_bot,
         'average': create_average_bot,
-        'average_agent': create_average_bot
+        'average_agent': create_average_bot,
+        'smart': create_smart_bot,
+        'smart_agent': create_smart_bot,
     }
     
     @classmethod
@@ -667,6 +707,22 @@ class GameManager:
         self.default_game_id = 'default'
         self._lock = threading.Lock()
         self.games[self.default_game_id] = GameState(self.default_game_id)
+        self._finished_games_threshold = 50  # Keep at most 50 finished games
+
+    def _cleanup_finished_games(self):
+        """Aggressively remove finished games to prevent memory leak."""
+        if len(self.games) > 20:  # Keep max 20 games in memory (except default)
+            # Remove any non-default games that are finished
+            finished_ids = [gid for gid, game in self.games.items() 
+                          if gid != self.default_game_id and game.phase in ('finished', 'waiting')]
+            # Keep only the most recent finished games
+            while len(self.games) > 20:
+                if finished_ids:
+                    gid = finished_ids.pop(0)
+                    del self.games[gid]
+                    logger.debug(f"Cleaned up finished game {gid}, games dict now has {len(self.games)} entries")
+                else:
+                    break
 
     def _generate_game_id(self):
         while True:
@@ -681,6 +737,7 @@ class GameManager:
 
     def create_room(self):
         with self._lock:
+            self._cleanup_finished_games()  # Clean before creating new game
             game_id = self._generate_game_id()
             self.games[game_id] = GameState(game_id)
             return game_id

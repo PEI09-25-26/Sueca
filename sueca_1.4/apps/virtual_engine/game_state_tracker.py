@@ -18,6 +18,8 @@ class GameStateTracker:
         self.partner_id = None  # partner's name
         self.partner_position = None
         self.opponents = []  # list of opponent names
+        self.players = []  # latest players snapshot from state
+        self._players_by_position = {}
         
         # Trump
         self.trump_suit = None
@@ -55,12 +57,18 @@ class GameStateTracker:
         Update tracker from server's game state dictionary.
         """
         self.player_name = player_name        
-        for player in state.get("players", []):
+        self.players = list(state.get("players", []))
+        self._players_by_position = {}
+        for player in self.players:
             if player["name"] == player_name:
                 raw_position = str(player.get("position", ""))
                 normalized_position = raw_position.split(".")[-1].upper()
                 if normalized_position in Positions.__members__:
                     self.position = Positions[normalized_position]
+            raw_position = str(player.get("position", ""))
+            normalized_position = raw_position.split(".")[-1].upper()
+            if normalized_position in Positions.__members__:
+                self._players_by_position[Positions[normalized_position]] = player.get("name")
 
         self._determine_team_info(state)
         if state.get("trump_suit"):
@@ -158,6 +166,43 @@ class GameStateTracker:
         Get all unplayed cards of a specific suit.
         """
         return {card for card in self.remaining_cards if CardMapper.get_card_suit(card) == suit}
+
+    def is_player_void(self, player, suit):
+        """
+        Check whether a player has already shown void in a given suit.
+        """
+        if not player or not suit:
+            return False
+        return suit in self.void_suits_by_player.get(player, set())
+
+    def is_ace_gone(self, suit):
+        """
+        Check whether the ace of a suit has already been played.
+        """
+        if not suit or suit not in CardMapper.SUITS:
+            return False
+        ace_card = CardMapper.SUITS.index(suit) * CardMapper.SUITSIZE + CardMapper.RANKS.index("A")
+        return ace_card not in self.remaining_cards
+
+    def get_players_after_self(self):
+        """
+        Return player names in turn order after the current player.
+        """
+        if self.position is None:
+            return []
+
+        ordered_positions = [Positions.NORTH, Positions.EAST, Positions.SOUTH, Positions.WEST]
+        if self.position not in ordered_positions:
+            return []
+
+        start_index = ordered_positions.index(self.position)
+        result = []
+        for offset in range(1, len(ordered_positions)):
+            position = ordered_positions[(start_index + offset) % len(ordered_positions)]
+            player_name = self._players_by_position.get(position)
+            if player_name:
+                result.append(player_name)
+        return result
 
     def get_my_cards_of_suit(self, suit):
         """
