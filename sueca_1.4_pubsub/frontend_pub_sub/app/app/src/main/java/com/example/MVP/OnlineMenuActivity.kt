@@ -167,6 +167,15 @@ class OnlineMenuActivity : AppCompatActivity() {
 
     override fun onPause() {
         roomsPollingJob?.cancel()
+        try {
+            roomsMqttClient?.let { client ->
+                if (client.isConnected) client.disconnect().waitForCompletion(500)
+                client.close()
+            }
+        } catch (_: Exception) {
+        } finally {
+            roomsMqttClient = null
+        }
         super.onPause()
     }
 
@@ -191,9 +200,9 @@ class OnlineMenuActivity : AppCompatActivity() {
             
             val options = MqttConnectOptions().apply {
                 isAutomaticReconnect = true
-                isCleanSession = false
-                connectionTimeout = 8
-                keepAliveInterval = 30
+                isCleanSession = true
+                connectionTimeout = 10
+                keepAliveInterval = 60
             }
             
             roomsMqttClient?.connect(options, null, object : IMqttActionListener {

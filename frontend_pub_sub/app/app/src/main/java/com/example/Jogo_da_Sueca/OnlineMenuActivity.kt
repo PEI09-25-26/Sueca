@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.Jogo_da_Sueca.network.GatewayClient
+import com.example.Jogo_da_Sueca.network.RetrofitClient
 import kotlinx.coroutines.launch
 
 class OnlineMenuActivity : AppCompatActivity() {
@@ -16,6 +17,9 @@ class OnlineMenuActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_online_menu_mvp)
+
+        // Initialize RetrofitClient with context for auth interceptor
+        RetrofitClient.initialize(this)
 
         val inputName = findViewById<EditText>(R.id.inputName)
         val inputRoomId = findViewById<EditText>(R.id.inputRoomId)
@@ -46,21 +50,46 @@ class OnlineMenuActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 try {
+                    // Get/create guest session token
+                    val authManager = AuthManager.getInstance(this@OnlineMenuActivity)
+                    val sessionToken = authManager.getOrCreateGuestSessionToken(name)
+                    if (sessionToken == null) {
+                        Toast.makeText(
+                            this@OnlineMenuActivity,
+                            "Falha ao criar sessão. Tente novamente.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+
                     val response = GatewayClient.createRoom()
                     if (response.success) {
                         val roomId = response.gameId ?: response.roomId
                         if (roomId.isNullOrBlank()) {
-                            Toast.makeText(this@OnlineMenuActivity, "Resposta invalida ao criar sala.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                this@OnlineMenuActivity,
+                                "Resposta invalida ao criar sala.",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         } else {
                             GatewayClient.setRoomMode(roomId)
-                            goToRoom(roomId = roomId, playerName = name, playerId = "")
+                            val playerId = authManager.getCurrentPlayerId() ?: ""
+                            goToRoom(roomId = roomId, playerName = name, playerId = playerId)
                         }
                     } else {
-                        Toast.makeText(this@OnlineMenuActivity, "Erro ao criar sala: ${response.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            this@OnlineMenuActivity,
+                            "Erro ao criar sala: ${response.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(this@OnlineMenuActivity, "Connection error. Check if server is running.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@OnlineMenuActivity,
+                        "Connection error. Check if server is running.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }
@@ -70,23 +99,45 @@ class OnlineMenuActivity : AppCompatActivity() {
             val roomId = inputRoomId.text.toString().trim()
 
             if (roomId.isBlank()) {
-                Toast.makeText(this@OnlineMenuActivity, "Insere o ID da sala.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@OnlineMenuActivity, "Insere o ID da sala.", Toast.LENGTH_SHORT)
+                    .show()
                 return@setOnClickListener
             }
 
             lifecycleScope.launch {
                 try {
+                    // Get/create guest session token
+                    val authManager = AuthManager.getInstance(this@OnlineMenuActivity)
+                    val sessionToken = authManager.getOrCreateGuestSessionToken(name)
+                    if (sessionToken == null) {
+                        Toast.makeText(
+                            this@OnlineMenuActivity,
+                            "Falha ao criar sessão. Tente novamente.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+
                     // Validate room existence before entering lobby.
                     val state = GatewayClient.getStatus(roomId)
                     if (state == null) {
-                        Toast.makeText(this@OnlineMenuActivity, "Sala nao encontrada ou servidor offline.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this@OnlineMenuActivity,
+                            "Sala nao encontrada ou servidor offline.",
+                            Toast.LENGTH_LONG
+                        ).show()
                         return@launch
                     }
                     GatewayClient.setRoomMode(roomId)
-                    goToRoom(roomId = roomId, playerName = name, playerId = "")
+                    val playerId = authManager.getCurrentPlayerId() ?: ""
+                    goToRoom(roomId = roomId, playerName = name, playerId = playerId)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(this@OnlineMenuActivity, "Sala nao encontrada ou servidor offline.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@OnlineMenuActivity,
+                        "Sala nao encontrada ou servidor offline.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }

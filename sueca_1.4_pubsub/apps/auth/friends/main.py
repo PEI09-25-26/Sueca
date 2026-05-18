@@ -1,8 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, Query, Body
+from fastapi import FastAPI, HTTPException, Depends, Body
 from pydantic import BaseModel
 from shared.auth import get_authenticated_uid
 from shared.firebase_client import (
-    add_friend,
     get_user,
     get_friends,
     remove_friend,
@@ -15,20 +14,47 @@ from shared.ratelimit import rate_limit_dependency
 
 app = FastAPI(title="Sueca Friends Service")
 
+from shared.logging_config import setup_logging, correlation_id_from_request, set_correlation_id, clear_correlation_id
+from fastapi import Request
+
+setup_logging()
+
+
+@app.middleware("http")
+async def _add_cid(request: Request, call_next):
+    cid = correlation_id_from_request(request)
+    request.state.correlation_id = cid
+    set_correlation_id(cid)
+    try:
+        resp = await call_next(request)
+        resp.headers['X-Correlation-ID'] = cid
+        return resp
+    finally:
+        clear_correlation_id()
+
 
 class FriendRequest(BaseModel):
-    user: str
-    friend: str
+    user: str | None = None
+    uid: str | None = None
+    from_uid: str | None = None
+    fromUid: str | None = None
+    friend: str | None = None
+    to_uid: str | None = None
+    toUid: str | None = None
 
 
 class FriendRequestAction(BaseModel):
     request_id: str | None = None
+    requestId: str | None = None
     user: str | None = None
+    uid: str | None = None
     friend: str | None = None
+    from_uid: str | None = None
+    fromUid: str | None = None
 
 
 def _extract_friend_request(data: dict) -> tuple[str, str]:
-    from_user = (data.get("user") or data.get("from_uid") or data.get("fromUid") or "").strip()
+    from_user = (data.get("user") or data.get("uid") or data.get("from_uid") or data.get("fromUid") or "").strip()
     to_user = (data.get("friend") or data.get("to_uid") or data.get("toUid") or "").strip()
     if not from_user or not to_user:
         raise HTTPException(status_code=422, detail="user/friend or from_uid/to_uid required")
@@ -120,8 +146,9 @@ def get_friend_code(
 
 @app.post("/friends/request", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 @app.post("/request", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
-def request_friend_route(data: dict = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
-    _, to_user = _extract_friend_request(data)
+def request_friend_route(data: FriendRequest = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
+    payload = data.dict()
+    _, to_user = _extract_friend_request(payload)
     from_user = authenticated_uid
     if from_user == to_user:
         raise HTTPException(status_code=400, detail="cannot friend yourself")
@@ -147,8 +174,9 @@ def incoming_requests(
 
 @app.post("/friends/accept", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 @app.post("/accept", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
-def accept_request(data: dict = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
-    user, friend = _extract_request_action(data)
+def accept_request(data: FriendRequestAction = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
+    payload = data.dict()
+    user, friend = _extract_request_action(payload)
     if user != authenticated_uid:
         raise HTTPException(status_code=403, detail="forbidden")
     ok = accept_friend_request(user, friend)
@@ -159,8 +187,9 @@ def accept_request(data: dict = Body(default_factory=dict), authenticated_uid: s
 
 @app.post("/friends/reject", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 @app.post("/decline", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
-def reject_request(data: dict = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
-    user, friend = _extract_request_action(data)
+def reject_request(data: FriendRequestAction = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
+    payload = data.dict()
+    user, friend = _extract_request_action(payload)
     if user != authenticated_uid:
         raise HTTPException(status_code=403, detail="forbidden")
     ok = reject_friend_request(user, friend)
@@ -170,8 +199,9 @@ def reject_request(data: dict = Body(default_factory=dict), authenticated_uid: s
 
 
 @app.delete("/friends", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
-def remove_friend_route(data: dict = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
-    user, friend = _extract_friend_request(data)
+def remove_friend_route(data: FriendRequest = Body(default_factory=dict), authenticated_uid: str = Depends(get_authenticated_uid)):
+    payload = data.dict()
+    user, friend = _extract_friend_request(payload)
     if user != authenticated_uid:
         raise HTTPException(status_code=403, detail="forbidden")
     ok = remove_friend(user, friend)

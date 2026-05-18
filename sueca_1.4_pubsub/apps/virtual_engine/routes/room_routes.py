@@ -1,6 +1,9 @@
 from typing import Optional
+import uuid
 
-from fastapi import APIRouter, Body, Header, Query
+from fastapi import APIRouter, Body, Header, Query, Depends
+from shared.ratelimit import rate_limit_dependency
+from pydantic import BaseModel, constr
 
 from ..auth import authorize_header, check_host
 from ..core import manager
@@ -8,11 +11,36 @@ from ..session import session_manager
 from .common import error, get_game_from_request
 
 
-
 router = APIRouter()
 
 
-@router.get("/api/status")
+class CreateRoomRequest(BaseModel):
+    name: Optional[constr(strip_whitespace=True, max_length=64)] = None
+    position: Optional[str] = None
+
+
+class CreateGameRequest(BaseModel):
+    name: constr(strip_whitespace=True, min_length=1, max_length=64)
+    position: Optional[str] = None
+
+
+class JoinRequest(BaseModel):
+    name: constr(strip_whitespace=True, min_length=1, max_length=64)
+    position: Optional[str] = None
+    game_id: Optional[str] = None
+
+
+class RoomVisibilityRequest(BaseModel):
+    game_id: Optional[str] = None
+    is_public: Optional[bool] = None
+
+
+class LeaveRequest(BaseModel):
+    player_id: Optional[str] = None
+    game_id: Optional[str] = None
+
+
+@router.get("/api/status", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def get_status(game_id: Optional[str] = Query(default=None)):
     game, resolved_game_id = get_game_from_request(game_id_query=game_id)
     if not game:
@@ -20,7 +48,7 @@ def get_status(game_id: Optional[str] = Query(default=None)):
     return game.get_state()
 
 
-@router.get("/api/rooms")
+@router.get("/api/rooms", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def list_rooms(
     include_default: bool = Query(default=False),
     include_empty: bool = Query(default=True),
@@ -64,11 +92,13 @@ def list_rooms(
     }
 
 
-@router.get("/api/room/{game_id}/lobby")
-def get_room_lobby(game_id: str):
+@router.get("/api/room/{game_id}/lobby", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def get_room_lobby(game_id: str, authorization: str | None = Header(default=None)):
     game = manager.get_game(game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
+    # Require authentication to view lobby details
+    session_data = authorize_header(authorization, game_id)
 
     state = game.get_state()
     return {
@@ -85,11 +115,13 @@ def get_room_lobby(game_id: str):
     }
 
 
-@router.get("/api/room/{game_id}/history")
-def get_room_history(game_id: str):
+@router.get("/api/room/{game_id}/history", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def get_room_history(game_id: str, authorization: str | None = Header(default=None)):
     game = manager.get_game(game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
+    # Require authentication to access match history
+    session_data = authorize_header(authorization, game_id)
 
     return {
         "success": True,
@@ -99,11 +131,13 @@ def get_room_history(game_id: str):
     }
 
 
-@router.get("/api/room/{game_id}/match_points")
-def get_room_match_points(game_id: str):
+@router.get("/api/room/{game_id}/match_points", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def get_room_match_points(game_id: str, authorization: str | None = Header(default=None)):
     game = manager.get_game(game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
+    # Require authentication to view match points
+    session_data = authorize_header(authorization, game_id)
 
     return {
         "success": True,
@@ -120,7 +154,7 @@ def get_room_match_points(game_id: str):
     }
 
 
-@router.post("/api/room/{game_id}/rematch")
+@router.post("/api/room/{game_id}/rematch", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 def start_room_rematch(game_id: str, authorization: str = Header(default=None)):
     game = manager.get_game(game_id)
     if not game:
@@ -134,10 +168,10 @@ def start_room_rematch(game_id: str, authorization: str = Header(default=None)):
     return {"success": True, "message": message, "state": game.get_state()}
 
 
-@router.post("/api/create_room")
-def create_room_endpoint(data: dict = Body(default_factory=dict)):
-    name = str(data.get("name", "")).strip()
-    position = data.get("position")
+@router.post("/api/create_room", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
+def create_room_endpoint(data: CreateRoomRequest = Body(default_factory=dict)):
+    name = data.name.strip() if data.name else ""
+    position = data.position
     if name:
         success, message, game_id, player_id = manager.create_room_with_host(name, position)
         if not success:
@@ -156,12 +190,10 @@ def create_room_endpoint(data: dict = Body(default_factory=dict)):
     return {"success": True, "game_id": game_id}
 
 
-@router.post("/api/create_game")
-def create_game(data: dict = Body(default_factory=dict)):
-    name = data.get("name", "").strip()
-    position = data.get("position")
-    if not name:
-        return error("Name required", 400)
+@router.post("/api/create_game", dependencies=[Depends(rate_limit_dependency(limit=10, window_seconds=60))])
+def create_game(data: CreateGameRequest = Body(...)):
+    name = data.name.strip()
+    position = data.position
 
     success, message, game_id, player_id = manager.create_game(name, position)
     return {
@@ -172,19 +204,26 @@ def create_game(data: dict = Body(default_factory=dict)):
     }
 
 
-@router.post("/api/join")
-def join_game(data: dict = Body(default_factory=dict)):
-    name = data.get("name", "").strip()
-    position = data.get("position")
-    game_id = data.get("game_id") or manager.default_game_id
-    if not name:
-        return error("Name required", 400)
+@router.post("/api/join", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def join_game(data: JoinRequest = Body(...), authorization: str | None = Header(default=None)):
+    name = data.name.strip()
+    position = data.position
+    game_id = data.game_id or manager.default_game_id
 
     game = manager.get_game(game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    success, message, player_id = game.add_player(name, position)
+    player_id_override = None
+    if authorization:
+        try:
+            session_data = authorize_header(authorization, game_id)
+            if session_data.get("player_id") == game.creator_id:
+                player_id_override = session_data.get("player_id")
+        except Exception:
+            player_id_override = None
+
+    success, message, player_id = game.add_player(name, position, player_id=player_id_override)
     if success:
         # Rooms created with create_room start empty; first joiner becomes host.
         if game.creator_id is None:
@@ -201,12 +240,12 @@ def join_game(data: dict = Body(default_factory=dict)):
     
     return {"success": False, "message": message}
 
-@router.post("/api/room_visibility")
+@router.post("/api/room_visibility", dependencies=[Depends(rate_limit_dependency(limit=10, window_seconds=60))])
 def update_room_visibility(
-    data: dict = Body(default_factory=dict),
+    data: RoomVisibilityRequest = Body(...),
     authorization: str = Header(default=None),
 ):
-    game, game_id = get_game_from_request(data)
+    game, game_id = get_game_from_request({"game_id": data.game_id})
     if not game:
         return error(f"Game {game_id} not found", 404)
 
@@ -214,20 +253,10 @@ def update_room_visibility(
     actor_id = session_data["player_id"]
     check_host(game_id, actor_id)
 
-    if "is_public" not in data:
+    if data.is_public is None:
         return error("is_public required", 400)
 
-    raw_visibility = data.get("is_public")
-    if isinstance(raw_visibility, bool):
-        is_public = raw_visibility
-    else:
-        visibility_value = str(raw_visibility).strip().lower()
-        if visibility_value in {"1", "true", "yes", "public"}:
-            is_public = True
-        elif visibility_value in {"0", "false", "no", "private"}:
-            is_public = False
-        else:
-            return error("Invalid is_public value", 400)
+    is_public = bool(data.is_public)
 
     game.is_public = is_public
     game._push_state("room_visibility_changed")
@@ -235,12 +264,12 @@ def update_room_visibility(
     message = "Room is now public" if is_public else "Room is now private"
     return {"success": True, "message": message, "game_id": game_id, "is_public": is_public}
 
-@router.post("/api/leave")
+@router.post("/api/leave", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
 def leave_game(
-    data: dict = Body(default_factory=dict),
+    data: LeaveRequest = Body(default_factory=dict),
     authorization: str = Header(default=None),
 ):
-    game, game_id = get_game_from_request(data)
+    game, game_id = get_game_from_request(data.dict())
     if not game:
         return error(f"Game {game_id} not found", 404)
 

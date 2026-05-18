@@ -101,11 +101,15 @@ class GameActivity : AppCompatActivity() {
         startPolling()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
+    override fun onPause() {
+        super.onPause()
         pollingJob?.cancel()
         mqttSubscriber?.disconnect()
         mqttSubscriber = null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
     }
 
     private fun setupUI() {
@@ -178,6 +182,7 @@ class GameActivity : AppCompatActivity() {
 
     private fun startRealtimeUpdates() {
         if (gameId.isBlank()) return
+        if (mqttSubscriber != null) return
 
         Log.i(logTag, "Starting realtime updates gameId=$gameId broker=${RetrofitClient.MQTT_BROKER_HOST}:${RetrofitClient.MQTT_BROKER_PORT} (pls work)")
 
@@ -593,10 +598,11 @@ class GameActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
 
+                val choiceEnum = if (choice.equals("top", ignoreCase = true)) Choice.TOP else Choice.BOTTOM
                 val res = GatewayClient.selectTrump(
                     SelectTrumpRequest(
                         playerId = if (playerId.isNotBlank()) playerId else playerName,
-                        choice = choice,
+                        choice = choiceEnum,
                         gameId = gameId.ifBlank { null }
                     )
                 )

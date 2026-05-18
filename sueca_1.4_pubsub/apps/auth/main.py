@@ -7,6 +7,9 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException
 from passlib.hash import bcrypt_sha256
 from pydantic import BaseModel, Field
+from shared.logging_config import setup_logging, correlation_id_from_request, set_correlation_id, clear_correlation_id
+
+setup_logging()
 
 from apps.auth.twilio.email_service import EmailService
 from shared.auth import get_authenticated_payload, get_authenticated_uid
@@ -24,9 +27,17 @@ from shared.firebase_client import (
 )
 from shared.ratelimit import rate_limit_dependency
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY must be set in environment")
+
+SUECA_SERVICE_JWT_SECRET = os.getenv("SUECA_SERVICE_JWT_SECRET")
+if not SUECA_SERVICE_JWT_SECRET:
+    raise RuntimeError("SUECA_SERVICE_JWT_SECRET must be set in environment")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXP_SECONDS = int(os.getenv("JWT_EXP_SECONDS", "3600"))
+SERVICE_TOKEN_EXP_SECONDS = int(os.getenv("SERVICE_TOKEN_EXP_SECONDS", "900"))  # 15 minutes
 
 app = FastAPI(title="Sueca Auth Service")
 
@@ -76,6 +87,27 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 
+class ValidateTokenRequest(BaseModel):
+    token: str
+
+
+class ValidateTokenResponse(BaseModel):
+    valid: bool
+    payload: dict | None = None
+    error: str | None = None
+
+
+class ServiceTokenRequest(BaseModel):
+    service_name: str
+    scope: str
+
+
+class ServiceTokenResponse(BaseModel):
+    success: bool
+    token: str
+    expires_in: int
+
+
 class FriendCodeLookupResponse(BaseModel):
     success: bool
     user: dict | None = None
@@ -108,6 +140,21 @@ def _issue_jwt(uid: str) -> str:
         "jti": jti,
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def _issue_service_token(service_name: str, scope: str) -> str:
+    """Issue a short-lived service-to-service token."""
+    jti = str(uuid.uuid4())
+    now = _utc_now()
+    payload = {
+        "service": service_name,
+        "scope": scope,
+        "iat": now,
+        "exp": now + datetime.timedelta(seconds=SERVICE_TOKEN_EXP_SECONDS),
+        "jti": jti,
+        "type": "service",
+    }
+    return jwt.encode(payload, SUECA_SERVICE_JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 def _build_user_response(uid: str, user: dict, *, last_login_at: str | None = None) -> dict:
@@ -192,6 +239,23 @@ def _pick_login_user(identifier: str, password: str) -> tuple[str, dict] | None:
         except Exception:
             continue
     return None
+
+
+# Correlation-id middleware must be registered after `app` is defined
+from fastapi import Request
+
+
+@app.middleware("http")
+async def _add_cid(request: Request, call_next):
+    cid = correlation_id_from_request(request)
+    request.state.correlation_id = cid
+    set_correlation_id(cid)
+    try:
+        resp = await call_next(request)
+        resp.headers['X-Correlation-ID'] = cid
+        return resp
+    finally:
+        clear_correlation_id()
 
 
 @app.get("/health")
@@ -429,3 +493,74 @@ def reset_password(req: ResetPasswordRequest):
     create_user(verified_uid, user)
 
     return {"success": True, "message": "Password updated"}
+
+
+# ============================================================
+# CENTRALIZED TOKEN VALIDATION ENDPOINTS
+# ============================================================
+
+@app.post("/validate/token", dependencies=[Depends(rate_limit_dependency(limit=100, window_seconds=60))])
+def validate_token_endpoint(req: ValidateTokenRequest) -> ValidateTokenResponse:
+    """Centralized token validation for all services."""
+    from shared.auth import decode_access_token
+
+    try:
+        payload = decode_access_token(req.token)
+        return ValidateTokenResponse(valid=True, payload=payload)
+    except HTTPException as e:
+        return ValidateTokenResponse(valid=False, error=e.detail)
+    except Exception:
+        return ValidateTokenResponse(valid=False, error="token validation failed")
+
+
+@app.post("/validate/service", dependencies=[Depends(rate_limit_dependency(limit=100, window_seconds=60))])
+def validate_service_token_endpoint(req: ValidateTokenRequest) -> ValidateTokenResponse:
+    """Validate service-to-service tokens."""
+    try:
+        payload = jwt.decode(req.token, SUECA_SERVICE_JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        
+        # Ensure it's a service token
+        if payload.get("type") != "service":
+            return ValidateTokenResponse(valid=False, error="not a service token")
+        
+        # Check JTI denylist
+        jti = payload.get("jti")
+        if jti:
+            from shared.redis_client import is_jti_revoked
+            if is_jti_revoked(jti):
+                return ValidateTokenResponse(valid=False, error="token revoked")
+        
+        return ValidateTokenResponse(valid=True, payload=payload)
+    except jwt.ExpiredSignatureError:
+        return ValidateTokenResponse(valid=False, error="token expired")
+    except jwt.InvalidTokenError:
+        return ValidateTokenResponse(valid=False, error="invalid token")
+    except Exception:
+        return ValidateTokenResponse(valid=False, error="token validation failed")
+
+
+# ============================================================
+# SERVICE TOKEN ISSUANCE ENDPOINTS
+# ============================================================
+
+@app.post("/service-token/issue", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def issue_service_token(req: ServiceTokenRequest) -> ServiceTokenResponse:
+    """Issue a short-lived service-to-service token.
+    
+    Service tokens are used for control-plane operations and should be:
+    - Short-lived (15 minutes by default)
+    - Scoped (e.g., 'control_plane')
+    - Issued only to trusted services
+    
+    In production, this endpoint should be protected (e.g., by mTLS or static service secret).
+    """
+    if not req.service_name or not req.scope:
+        raise HTTPException(status_code=400, detail="service_name and scope required")
+    
+    token = _issue_service_token(req.service_name, req.scope)
+    return ServiceTokenResponse(
+        success=True,
+        token=token,
+        expires_in=SERVICE_TOKEN_EXP_SECONDS,
+    )
+

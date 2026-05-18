@@ -4,13 +4,17 @@ import jwt
 from fastapi import Header, HTTPException, status
 
 from shared.firebase_client import is_token_revoked
+from shared.redis_client import is_jti_revoked
 
 
 JWT_ALGORITHM = "HS256"
 
 
 def _secret_key() -> str:
-    return os.getenv("SECRET_KEY", "dev-secret")
+    secret = os.getenv("SECRET_KEY")
+    if not secret:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="server misconfigured")
+    return secret
 
 
 def extract_bearer_token(authorization: str | None) -> str:
@@ -38,7 +42,8 @@ def decode_access_token(token: str) -> dict:
         ) from error
 
     jti = payload.get("jti")
-    if jti and is_token_revoked(jti):
+    # Consider both firebase revocation and local JTI denylist (session revocations)
+    if jti and (is_token_revoked(jti) or is_jti_revoked(jti)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="token revoked",

@@ -1,16 +1,19 @@
 import json
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+import logging
 
 from .. import state
+from ..helpers import require_control_plane_token
+logger = logging.getLogger(__name__)
 from ..dto import RoundEndData, ScanEventDTO, StartGameRequest, StartGameResponse
 
 
 router = APIRouter()
 
 
-@router.post("/game/round_end")
+@router.post("/game/round_end", dependencies=[Depends(require_control_plane_token)])
 async def round_end(data: RoundEndData):
     for game_id, ws in state.active_connections.items():
         try:
@@ -25,13 +28,13 @@ async def round_end(data: RoundEndData):
             }
             await ws.send_text(json.dumps(message))
             print(f"[MIDDLEWARE] Round end notification sent to game {game_id}")
-        except Exception as error:
-            print(f"[MIDDLEWARE] Failed to send round end to {game_id}: {error}")
+        except Exception:
+            logger.exception("Failed to send round end to %s", game_id)
 
     return {"success": True}
 
 
-@router.post("/game/new_round/{game_id}")
+@router.post("/game/new_round/{game_id}", dependencies=[Depends(require_control_plane_token)])
 async def new_round(game_id: str):
     try:
         reset_message = {"action": "reset_cards"}
@@ -48,12 +51,12 @@ async def new_round(game_id: str):
         if response.status_code == 200:
             return {"success": True, "message": "Nova ronda iniciada"}
         return {"success": False, "message": "Erro ao iniciar nova ronda"}
-    except Exception as error:
-        print(f"[MIDDLEWARE] Error starting new round: {error}")
-        return {"success": False, "message": str(error)}
+    except Exception:
+        logger.exception("Error starting new round for %s", game_id)
+        return {"success": False, "message": "internal error"}
 
 
-@router.post("/game/start")
+@router.post("/game/start", dependencies=[Depends(require_control_plane_token)])
 async def start_game(request: StartGameRequest):
     try:
         response = await asyncio.to_thread(
@@ -70,21 +73,22 @@ async def start_game(request: StartGameRequest):
                 gameId=request.roomId or "default",
             )
 
+        logger.warning("Failed to start CV service: %s", response.text)
         return StartGameResponse(
             success=False,
-            message=f"Failed to start CV service: {response.text}",
+            message="failed to start CV service",
             gameId="",
         )
-    except Exception as error:
-        print(f"[Middleware] Error starting CV service: {error}")
+    except Exception:
+        logger.exception("Error starting CV service for request: %s", request)
         return StartGameResponse(
             success=False,
-            message=f"CV service unavailable: {str(error)}",
+            message="CV service unavailable",
             gameId="",
         )
 
 
-@router.post("/game/ready/{game_id}")
+@router.post("/game/ready/{game_id}", dependencies=[Depends(require_control_plane_token)])
 async def game_ready(game_id: str):
     if game_id in state.cv_connections:
         cv_ws = state.cv_connections[game_id]
@@ -107,9 +111,9 @@ async def game_ready(game_id: str):
                     print(f"[Middleware] Failed to notify mobile: {e}")
             
             return {"success": True, "message": "Game started, ready for cards"}
-        except Exception as error:
-            print(f"[Middleware] Error resetting CV: {error}")
-            return {"success": False, "message": str(error)}
+        except Exception:
+            logger.exception("Error resetting CV for %s", game_id)
+            return {"success": False, "message": "internal error"}
     return {"success": False, "message": "Game not found"}
 
 

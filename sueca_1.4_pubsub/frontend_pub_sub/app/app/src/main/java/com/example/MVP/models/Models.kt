@@ -253,7 +253,7 @@ data class CutDeckRequest(
 
 data class SelectTrumpRequest(
     @SerializedName("player_id") val playerId: String,
-    val choice: String, // "top" or "bottom"
+    val choice: Choice, // "top" or "bottom"
     @SerializedName("game_id") val gameId: String? = null
 )
 
@@ -300,7 +300,7 @@ data class RoomState(
 )
 
 data class CreateRoomRequest(
-    val name: String,
+    val name: String? = null,
     val position: String? = null
 )
 
@@ -355,7 +355,7 @@ data class StartGameResponse(
 data class JoinGameRequest(
     val name: String,
     @SerializedName("game_id") val gameId: String? = null,
-    val position: String? = null
+    val position: Position? = null
 )
 
 data class JoinGameResponse(
@@ -369,7 +369,7 @@ data class JoinGameResponse(
 data class AddBotRequest(
     @SerializedName("player_id") val playerId: String,
     @SerializedName("game_id") val gameId: String,
-    val position: String,
+    val position: Position,
     val difficulty: String,
     val name: String
 )
@@ -398,6 +398,19 @@ data class HybridRecognizeRequest(
     @SerializedName("frame_base64") val frameBase64: String,
     @SerializedName("target_count") val targetCount: Int = 10
 )
+
+
+enum class Position {
+    @SerializedName("NORTH") NORTH,
+    @SerializedName("SOUTH") SOUTH,
+    @SerializedName("EAST") EAST,
+    @SerializedName("WEST") WEST
+}
+
+enum class Choice {
+    @SerializedName("top") TOP,
+    @SerializedName("bottom") BOTTOM
+}
 
 data class HybridCardPayload(
     val id: Int,

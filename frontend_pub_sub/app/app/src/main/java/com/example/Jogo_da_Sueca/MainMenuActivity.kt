@@ -17,6 +17,9 @@ class MainMenuActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main_menu_mvp)
 
+        // Initialize RetrofitClient with context for auth interceptor
+        RetrofitClient.initialize(this)
+
         val btnJoin = findViewById<Button>(R.id.btnJoin)
         val btnVision = findViewById<Button>(R.id.btnVision)
         val btnHybrid = findViewById<Button>(R.id.btnHybrid)
@@ -31,6 +34,10 @@ class MainMenuActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 try {
+                    // Get/create guest session token
+                    val authManager = AuthManager.getInstance(this@MainMenuActivity)
+                    authManager.getOrCreateGuestSessionToken(name)
+
                     // Calling the middleware
                     val response = RetrofitClient.api.startGame(
                         StartGameRequest(playerName = name, roomId = roomId)
