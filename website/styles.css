@@ -3,6 +3,8 @@
   --page-text: #ffffff;
   --soft-text: rgba(255, 255, 255, 0.84);
   --muted-text: rgba(255, 255, 255, 0.68);
+  --font-display: "Space Grotesk", "Segoe UI", Arial, Helvetica, sans-serif;
+  --font-body: "Manrope", "Segoe UI", Arial, Helvetica, sans-serif;
   --panel: rgba(255, 255, 255, 0.09);
   --panel-strong: rgba(255, 255, 255, 0.12);
   --panel-border: rgba(255, 255, 255, 0.18);
@@ -29,7 +31,7 @@ body {
     radial-gradient(70% 70% at 68% 20%, rgba(74, 144, 200, 0.28), transparent 58%),
     radial-gradient(65% 70% at 55% 86%, rgba(16, 185, 129, 0.13), transparent 62%),
     linear-gradient(135deg, #0f172a 0%, #1e3a5f 46%, #0f172a 100%);
-  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
 }
 
 body::before {
@@ -87,6 +89,12 @@ h2,
 h3,
 p {
   margin-top: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
 }
 
 h1 {
@@ -162,8 +170,13 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 18px 0 0;
-  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
   font-size: 0.95rem;
 }
 
@@ -428,6 +441,31 @@ h1 {
   font-size: 1rem;
 }
 
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 50;
+  padding: 14px 18px;
+  max-width: calc(100% - 32px);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 15, 25, 0.92);
+  color: #ffffff;
+  font-size: 0.98rem;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 18px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 .reveal {
   animation: reveal 620ms ease both;
 }
@@ -587,7 +625,8 @@ h1 {
 .hero-left {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  text-align: center;
 }
 
 .brand-row {
@@ -616,6 +655,19 @@ h1 {
   color: rgba(255,255,255,0.9);
   font-size: 1.3rem;
   line-height: 1.7;
+}
+
+.hero-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(360px, 100%);
+}
+
+.hero-cta .download-button {
+  width: 100%;
+  min-width: 0;
 }
 
 .download-button {
