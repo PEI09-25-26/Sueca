@@ -1,12 +1,12 @@
 [
   {
-    "label": "average_smart_average_smart",
+    "label": "smart_smart_smart_smart",
     "games": 10000,
     "bots": [
       {
         "name": "N",
         "position": "NORTH",
-        "difficulty": "average"
+        "difficulty": "smart"
       },
       {
         "name": "E",
@@ -16,7 +16,7 @@
       {
         "name": "S",
         "position": "SOUTH",
-        "difficulty": "average"
+        "difficulty": "smart"
       },
       {
         "name": "W",
