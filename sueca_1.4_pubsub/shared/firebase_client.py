@@ -131,41 +131,62 @@ def generate_unique_friend_code() -> str:
     return f"{secrets.randbelow(100_000_000):08d}"
 
 
-def set_verification(username: str, code: str, kind: str = "register", ttl_seconds: int = 600):
+def set_verification(
+    verification_id: str,
+    code: str,
+    kind: str = "register",
+    ttl_seconds: int = 600,
+    *,
+    subject: str | None = None,
+    max_attempts: int = 5,
+):
     _ensure_app()
     salt = secrets.token_hex(16)
     code_hash = hashlib.sha256(f"{salt}:{code}".encode("utf-8")).hexdigest()
     expires = _utc_now() + datetime.timedelta(seconds=ttl_seconds)
-    _DB.collection("verifications").document(username).set({
+    _DB.collection("verifications").document(verification_id).set({
         "code_hash": code_hash,
         "salt": salt,
         "kind": kind,
         "expires_at": expires,
+        "subject": subject or verification_id,
+        "failed_attempts": 0,
+        "max_attempts": max(1, int(max_attempts)),
     })
 
 
 def check_verification(username: str, code: str, kind: str = "register") -> bool:
+    return consume_verification(username, code, kind=kind) is not None
+
+
+def consume_verification(verification_id: str, code: str, kind: str = "register") -> Optional[str]:
     _ensure_app()
-    doc = _DB.collection("verifications").document(username).get()
+    doc_ref = _DB.collection("verifications").document(verification_id)
+    doc = doc_ref.get()
     if not doc.exists:
-        return False
+        return None
     data = doc.to_dict()
     if data.get("kind") != kind:
-        return False
+        return None
     salt = data.get("salt")
     code_hash = data.get("code_hash")
     if not salt or not code_hash:
-        return False
+        return None
+    failed_attempts = int(data.get("failed_attempts", 0))
+    max_attempts = max(1, int(data.get("max_attempts", 5)))
+    if failed_attempts >= max_attempts:
+        return None
     candidate_hash = hashlib.sha256(f"{salt}:{code}".encode("utf-8")).hexdigest()
     if not secrets.compare_digest(code_hash, candidate_hash):
-        return False
+        doc_ref.set({"failed_attempts": failed_attempts + 1}, merge=True)
+        return None
     expires = data.get("expires_at")
     if expires and isinstance(expires, datetime.datetime):
         if expires < _utc_now():
-            return False
+            return None
     # delete after successful
-    _DB.collection("verifications").document(username).delete()
-    return True
+    doc_ref.delete()
+    return str(data.get("subject") or verification_id)
 
 
 def add_friend(user: str, friend: str):

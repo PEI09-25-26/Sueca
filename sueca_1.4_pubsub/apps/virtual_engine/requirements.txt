@@ -3,3 +3,4 @@ uvicorn[standard]
 requests
 paho-mqtt
 PyJWT
+redis>=4.6.0

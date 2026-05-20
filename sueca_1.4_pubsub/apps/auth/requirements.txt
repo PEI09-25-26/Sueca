@@ -7,5 +7,5 @@ firebase-admin==7.4.0
 PyJWT==2.10.1
 cryptography==44.0.3
 sendgrid==6.11.0
-requests==2.31.0
+requests==2.33.0
 redis>=4.6.0

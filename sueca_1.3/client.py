@@ -5,6 +5,7 @@ Supports room creation/join by game ID and manual position selection.
 
 import requests
 import os
+import json
 import time
 from threading import Thread, Lock
 from card_mapper import CardMapper
@@ -46,6 +47,28 @@ class GameClient:
             return response.json() if response.status_code == 200 else None
         except Exception:
             return None
+        
+    def log_action(self, action):
+        try:
+            # Create directory for log file
+            log_dir = os.path.dirname(self.log_file)
+            os.makedirs(log_dir, exist_ok=True)
+
+            with self.log_lock:
+                with open(self.log_file, "a") as f:
+                    f.write(json.dumps(action) + "\n")
+            
+            # Also POST to server for statistics collection
+            if self.game_id:
+                try:
+                    payload = {'game_id': self.game_id, **action}
+                    response = requests.post(f'{SERVER_URL}/api/log_action', json=payload, timeout=2)
+                    if response.status_code != 200:
+                        print(f"[DEBUG] Action POST failed: {response.status_code}")
+                except Exception as e:
+                    print(f"[DEBUG] Action POST error: {e}")
+        except Exception as e:
+            print(f"[LOG ERROR] {e}")
 
     def create_game(self, name, position):
         try:
@@ -55,6 +78,8 @@ class GameClient:
                 timeout=2,
             )
             data = response.json()
+            self.log_file = f"logs/games/game_{self.game_id or 'unknown'}.jsonl"
+            self.log_lock = Lock()
             return data.get('success', False), data.get('message', 'Unknown error'), data.get('game_id'), data.get('player_id')
         except Exception as e:
             return False, f'Error: {e}', None, None
@@ -67,6 +92,8 @@ class GameClient:
                 timeout=2,
             )
             data = response.json()
+            self.log_file = f"logs/games/game_{self.game_id or 'unknown'}.jsonl"
+            self.log_lock = Lock()
             return data.get('success', False), data.get('message', 'Unknown error'), data.get('player_id')
         except Exception as e:
             return False, f'Error: {e}', None
@@ -576,7 +603,9 @@ class GameClient:
         print()
 
         print('Connecting to server...')
-        if not self.get_status():
+        try:
+            requests.get(f'{SERVER_URL}/api/status', timeout=1)
+        except Exception:
             print('[ERROR] Cannot connect to server!')
             print('        Make sure the server is running: python3 server.py')
             return

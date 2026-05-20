@@ -21,8 +21,15 @@ GAME_MODE = os.getenv('SUECA_GAME_MODE', 'virtual').strip().lower() or 'virtual'
 MQTT_EVENTS_ENABLED = os.getenv('SUECA_MQTT_EVENTS', 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
 MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', urlparse(GATEWAY_URL).hostname or '127.0.0.1')
 MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
-MQTT_USERNAME = os.getenv('MQTT_USERNAME', '')
-MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
+# Allow per-service credentials using MQTT_SERVICE env var, falling back to global vars.
+_MQTT_SERVICE = os.getenv('MQTT_SERVICE', '').strip()
+if _MQTT_SERVICE:
+    _S = _MQTT_SERVICE.strip().upper()
+    MQTT_USERNAME = os.getenv(f"{_S}_MQTT_USERNAME", os.getenv('MQTT_USERNAME', ''))
+    MQTT_PASSWORD = os.getenv(f"{_S}_MQTT_PASSWORD", os.getenv('MQTT_PASSWORD', ''))
+else:
+    MQTT_USERNAME = os.getenv('MQTT_USERNAME', '')
+    MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
 MQTT_USE_AUTH = os.getenv('MQTT_USE_AUTH', 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
 HTTP_POLL_INTERVAL = float(os.getenv('SUECA_HTTP_POLL_INTERVAL', '2'))
 SUPPORTED_BOT_TYPES = {'random', 'weak', 'weak_agent', 'average', 'average_agent'}

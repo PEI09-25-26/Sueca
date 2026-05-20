@@ -285,3 +285,55 @@ class GameStateTracker:
                 players_after_self.append(player_name)
 
         return players_after_self
+
+    def get_my_cards_of_suit(self, suit):
+        """
+        Get my hand cards of a specific suit.
+        """
+        return [card for card in self.my_hand if CardMapper.get_card_suit(card) == suit]
+    
+    def is_partner_winning(self):
+        """
+        Check if partner is currently winning the trick.
+        """
+        if not self.current_trick:
+            return False
+        winner = self.get_current_trick_winner()
+        return winner == self.partner_id
+    
+    def get_current_trick_winner(self):
+        """
+        Determine who's currently winning the trick.
+        """
+        if not self.current_trick:
+            return None
+        
+        trump_cards=[]
+        for player, card in self.current_trick:
+            suit = CardMapper.get_card_suit(card)
+            if suit == self.trump_suit:
+                trump_cards.append((player, card))
+
+        if trump_cards:
+            candidate_cards = trump_cards
+        else:
+            lead_suit = CardMapper.get_card_suit(self.current_trick[0][1])
+            candidate_cards = [(player, card) for player, card in self.current_trick
+                            if CardMapper.get_card_suit(card) == lead_suit]
+
+        winner_player, _ = max(candidate_cards, key=lambda x: CardAnalyzer.get_card_strength(x[1], self.trump_suit, self.lead_suit))
+
+        return winner_player
+
+    def get_trick_points(self, trick=None):
+        """
+        Calculate total points in a trick.
+        """
+        if trick is None:
+            trick = self.current_trick
+        
+        total = 0
+        for _, card_id in trick:
+            total += CardMapper.get_card_points(card_id)
+            
+        return total

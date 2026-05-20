@@ -16,6 +16,13 @@ venv/
 .pem
 **/.pem
 
+# .idea/ (IDEA project files)
+./.idea/
+**/.idea/
+
+#ruff cache
+.ruff_cache/
+
 # Python cache
 __pycache__/
 

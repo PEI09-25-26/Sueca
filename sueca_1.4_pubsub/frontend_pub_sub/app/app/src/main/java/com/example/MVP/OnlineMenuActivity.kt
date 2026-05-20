@@ -19,6 +19,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.RoomSummary
 import com.example.MVP.network.RetrofitClient
+import com.example.MVP.network.GatewayClient
+import com.example.MVP.models.JoinGameRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,14 +104,18 @@ class OnlineMenuActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 try {
-                    val response = RetrofitClient.api.createRoomV2()
+                    val response = GatewayClient.createRoom(name)
                     if (response.success) {
                         val roomId = response.gameId ?: response.roomId
                         if (roomId.isNullOrBlank()) {
                             Toast.makeText(this@OnlineMenuActivity, "Resposta invalida ao criar sala.", Toast.LENGTH_SHORT).show()
                         } else {
                             refreshRoomsOnce()
-                            goToRoom(roomId = roomId, playerName = name, playerId = "")
+                            goToRoom(
+                                roomId = roomId,
+                                playerName = name,
+                                playerId = response.playerId.orEmpty()
+                            )
                         }
                     } else {
                         Toast.makeText(this@OnlineMenuActivity, "Erro ao criar sala: ${response.message}", Toast.LENGTH_SHORT).show()
@@ -161,6 +167,15 @@ class OnlineMenuActivity : AppCompatActivity() {
 
     override fun onPause() {
         roomsPollingJob?.cancel()
+        try {
+            roomsMqttClient?.let { client ->
+                if (client.isConnected) client.disconnect().waitForCompletion(500)
+                client.close()
+            }
+        } catch (_: Exception) {
+        } finally {
+            roomsMqttClient = null
+        }
         super.onPause()
     }
 
@@ -185,9 +200,9 @@ class OnlineMenuActivity : AppCompatActivity() {
             
             val options = MqttConnectOptions().apply {
                 isAutomaticReconnect = true
-                isCleanSession = false
-                connectionTimeout = 8
-                keepAliveInterval = 30
+                isCleanSession = true
+                connectionTimeout = 10
+                keepAliveInterval = 60
             }
             
             roomsMqttClient?.connect(options, null, object : IMqttActionListener {
@@ -331,9 +346,26 @@ class OnlineMenuActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                // Validate room existence before entering lobby.
-                RetrofitClient.api.getStatus(normalizedRoomId)
-                goToRoom(roomId = normalizedRoomId, playerName = playerName, playerId = "")
+                val response = GatewayClient.joinGame(
+                    JoinGameRequest(
+                        name = playerName,
+                        gameId = normalizedRoomId,
+                        position = null
+                    )
+                )
+                if (response.success) {
+                    goToRoom(
+                        roomId = normalizedRoomId,
+                        playerName = playerName,
+                        playerId = response.playerId.orEmpty()
+                    )
+                } else {
+                    Toast.makeText(
+                        this@OnlineMenuActivity,
+                        response.message ?: "Nao foi possivel entrar na sala.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 Toast.makeText(this@OnlineMenuActivity, "Sala nao encontrada ou servidor offline.", Toast.LENGTH_LONG).show()

@@ -46,6 +46,7 @@ data class DeleteAccountRequest(
 
 data class ConfirmDeleteAccountRequest(
     val uid: String,
+    @SerializedName("verification_id") val verificationId: String,
     val code: String
 )
 
@@ -252,7 +253,7 @@ data class CutDeckRequest(
 
 data class SelectTrumpRequest(
     @SerializedName("player_id") val playerId: String,
-    val choice: String, // "top" or "bottom"
+    val choice: Choice, // "top" or "bottom"
     @SerializedName("game_id") val gameId: String? = null
 )
 
@@ -270,7 +271,8 @@ data class LeaveRoomRequest(
 // ============ Responses ============
 data class GenericResponse(
     val success: Boolean,
-    val message: String?
+    val message: String?,
+    @SerializedName("verificationId") val verificationId: String? = null
 )
 
 data class JoinResponse(
@@ -298,7 +300,8 @@ data class RoomState(
 )
 
 data class CreateRoomRequest(
-    val playerName: String
+    val name: String? = null,
+    val position: String? = null
 )
 
 data class CreateRoomResponse(
@@ -306,6 +309,7 @@ data class CreateRoomResponse(
     @SerializedName("room_id") val roomId: String? = null,
     @SerializedName("player_id") val playerId: String? = null,
     @SerializedName("game_id") val gameId: String? = null,
+    val token: String? = null,
     val message: String? = null
 )
 
@@ -339,32 +343,42 @@ data class JoinRoomResponse(
 
 data class StartGameRequest(
     val playerName: String?,
-    val roomId: String?
+    val roomId: String?,
+    val dealerId: Int? = null
 )
 
 data class StartGameResponse(
     val success: Boolean,
     val message: String?,
-    val gameId: String?
+    val gameId: String?,
+    val token: String? = null,
+    val gameState: GameStatusResponse? = null
+)
+
+data class CorrectCardRequest(
+    val rank: String,
+    val suit: String,
+    @SerializedName("wrong_label") val wrongLabel: String? = null
 )
 
 data class JoinGameRequest(
     val name: String,
     @SerializedName("game_id") val gameId: String? = null,
-    val position: String? = null
+    val position: Position? = null
 )
 
 data class JoinGameResponse(
     val success: Boolean,
     val message: String?,
     @SerializedName("game_id") val gameId: String?,
-    @SerializedName("player_id") val playerId: String?
+    @SerializedName("player_id") val playerId: String?,
+    val token: String? = null
 )
 
 data class AddBotRequest(
     @SerializedName("player_id") val playerId: String,
     @SerializedName("game_id") val gameId: String,
-    val position: String,
+    val position: Position,
     val difficulty: String,
     val name: String
 )
@@ -393,6 +407,19 @@ data class HybridRecognizeRequest(
     @SerializedName("frame_base64") val frameBase64: String,
     @SerializedName("target_count") val targetCount: Int = 10
 )
+
+
+enum class Position {
+    @SerializedName("NORTH") NORTH,
+    @SerializedName("SOUTH") SOUTH,
+    @SerializedName("EAST") EAST,
+    @SerializedName("WEST") WEST
+}
+
+enum class Choice {
+    @SerializedName("top") TOP,
+    @SerializedName("bottom") BOTTOM
+}
 
 data class HybridCardPayload(
     val id: Int,

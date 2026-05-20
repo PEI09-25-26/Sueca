@@ -3,6 +3,9 @@ from pydantic import BaseModel
 import threading
 import uuid
 from typing import Dict
+from shared.logging_config import setup_logging
+
+setup_logging()
 
 from .agents import RandomAgent, WeakAgent, AverageAgent, SmartAgent
 from shared.ratelimit import rate_limit_dependency
@@ -98,3 +101,21 @@ def activate(req: ActivateRequest):
     time.sleep(0.1)
     duration = time.time() - start
     return {"success": True, "agent": req.agent_name, "duration": duration}
+
+
+# Register middleware for correlation id after the final `app` is defined
+from fastapi import Request
+
+
+@app.middleware("http")
+async def _add_cid(request: Request, call_next):
+    from shared.logging_config import correlation_id_from_request, set_correlation_id, clear_correlation_id
+    cid = correlation_id_from_request(request)
+    request.state.correlation_id = cid
+    set_correlation_id(cid)
+    try:
+        resp = await call_next(request)
+        resp.headers['X-Correlation-ID'] = cid
+        return resp
+    finally:
+        clear_correlation_id()

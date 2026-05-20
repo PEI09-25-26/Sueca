@@ -183,33 +183,54 @@ class GameState:
             return None
         return self._POSITION_MAP.get(str(position_choice).strip().lower())
 
-    def add_player(self, name, position_choice):
+    def _pick_first_available_position(self):
+        ordered_positions = [
+            Positions.NORTH,
+            Positions.EAST,
+            Positions.SOUTH,
+            Positions.WEST,
+        ]
+        for position in ordered_positions:
+            team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+            if position in self.available_team_positions[team_key]:
+                return position
+        return None
+
+    def add_player(self, name, position_choice, player_id=None):
         if len(self.players) >= self.max_players:
             return False, 'Game is full', None
 
-        position = self._normalize_position(position_choice)
-        if not position:
-            return False, 'Invalid position. Choose NORTH, SOUTH, EAST, or WEST', None
+        if player_id and self.get_player(player_id):
+            return False, 'Player already in game', None
 
-        team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
-        if position not in self.available_team_positions[team_key]:
-            return False, f'Position {position.name} is already taken', None
+        # Position is OPTIONAL - allows entering room before choosing a seat
+        position = self._normalize_position(position_choice)
+        
+        if position:
+            team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+            if position not in self.available_team_positions[team_key]:
+                return False, f'Position {position.name} is already taken', None
 
         player = Player(name)
-        player.player_id = uuid.uuid4().hex[:8]
+        player.player_id = player_id or uuid.uuid4().hex[:8]
         player.position = position
-        self.available_team_positions[team_key].remove(position)
         self.players.append(player)
         self.scores[player.player_id] = 0
 
-        if team_key == 'team1':
-            self.teams[0].append(player)
+        if position:
+            team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+            self.available_team_positions[team_key].remove(position)
+            if team_key == 'team1':
+                self.teams[0].append(player)
+            else:
+                self.teams[1].append(player)
+            logger.info('Player %s joined game %s at position %s', name, self.game_id, player.position)
         else:
-            self.teams[1].append(player)
+            logger.info('Player %s joined game %s without position', name, self.game_id)
 
-        logger.info('Player %s joined game %s at position %s', name, self.game_id, player.position)
-
-        if len(self.players) == self.max_players and not self.game_started:
+        # Check if we can start deck cutting - only when 4 players are seated
+        seated_players = [p for p in self.players if p.position is not None]
+        if len(seated_players) == self.max_players and not self.game_started:
             self.phase = 'deck_cutting'
             self.deck.shuffle_deck()
             self.current_match_number = self.next_match_number
@@ -217,7 +238,7 @@ class GameState:
             logger.info('Game %s ready for deck cutting', self.game_id)
 
         self._push_state('player_joined')
-        return True, f'Joined as {player.position}', player.player_id
+        return True, f'Joined as {player.position}' if position else 'Joined room', player.player_id
 
     def remove_player(self, actor_id, target_id):
         actor = self.get_player(actor_id)
@@ -237,13 +258,15 @@ class GameState:
         if target_id == self.creator_id:
             return False, 'Host cannot remove themselves'
 
-        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
-        self.available_team_positions[team_key].append(target.position)
+        if target.position:
+            team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+            if target.position not in self.available_team_positions[team_key]:
+                self.available_team_positions[team_key].append(target.position)
         
         self.players.remove(target)
         if target in self.teams[0]:
             self.teams[0].remove(target)
-        else:
+        elif target in self.teams[1]:
             self.teams[1].remove(target)
         
         if target_id in self.scores:
@@ -268,10 +291,11 @@ class GameState:
         if self.game_started and self.phase != 'finished':
             return False, 'Cannot leave while game is in progress'
 
-        team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
-        # Free up the position
-        if target.position not in self.available_team_positions[team_key]:
-            self.available_team_positions[team_key].append(target.position)
+        if target.position:
+            team_key = 'team1' if target.position in self._TEAM1_POSITIONS else 'team2'
+            # Free up the position
+            if target.position not in self.available_team_positions[team_key]:
+                self.available_team_positions[team_key].append(target.position)
 
         try:
             self.players.remove(target)
@@ -785,6 +809,19 @@ class GameManager:
             self.games[game_id] = GameState(game_id)
             publish_room_event('room_created', game_id=game_id)
             return game_id
+
+    def create_room_with_host(self, creator_name, position_choice=None):
+        with self._lock:
+            game_id = self._generate_game_id()
+            game = GameState(game_id)
+            success, message, player_id = game.add_player(creator_name, position_choice)
+            if not success:
+                return False, message, None, None
+
+            game.creator_id = player_id
+            self.games[game_id] = game
+            publish_room_event('room_created', game_id=game_id)
+            return True, message, game_id, player_id
 
     def delete_room(self, game_id: str):
         with self._lock:

@@ -1,41 +1,61 @@
+from typing import Dict, List, Optional
+
 from ultralytics import YOLO
 import torch
-import os
 
-class CardClassifier:
-    def __init__(self, model_path):
-        requested_device = os.getenv("SUECA_YOLO_DEVICE", "auto").strip().lower()
-        self.min_confidence = float(os.getenv("SUECA_YOLO_MIN_CONFIDENCE", "0.90"))
-        if requested_device in {"", "auto"}:
-            device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        elif requested_device.startswith("cuda") and not torch.cuda.is_available():
-            print("[Classifier] CUDA requested but not available. Falling back to CPU.")
-            device = "cpu"
-        else:
-            device = requested_device
 
-        print(f"[Classifier] torch.cuda.is_available()={torch.cuda.is_available()}")
-        if torch.cuda.is_available():
-            print(f"[Classifier] GPU: {torch.cuda.get_device_name(0)}")
-        print(f"[Classifier] Carregando modelo YOLO em {device}... (min_confidence={self.min_confidence:.2f})")
-
-        self.device = device
+class CornerYoloDetector:
+    def __init__(
+        self,
+        model_path: str,
+        min_conf: float = 0.75,
+        iou: float = 0.5,
+        imgsz: int = 640,
+        max_det: int = 10,
+    ) -> None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"[CV2] Loading YOLO model on {device}: {model_path}")
         self.model = YOLO(model_path)
-        self.model.to(self.device)
-        
-        # Warm-up
-        dummy = torch.zeros((1, 3, 224, 224)).to(self.device)
-        print("[Classifier] Executando warm-up...")
-        _ = self.model(dummy)
-        print("[Classifier] Modelo pronto!")
+        self.model.to(device)
 
-    def classify(self, image):
-        # image = numpy array (H,W,3), shape ~224x224
-        results = self.model(image, imgsz=224, verbose=False, device=self.device)
-        # Extrair label e confiança
-        if results and len(results) > 0:
-            class_label = results[0].names[results[0].probs.top1]
-            conf = results[0].probs.top1conf.item()
-            if conf >= self.min_confidence:
-                return class_label, conf
-        return None, 0.0
+        self.min_conf = min_conf
+        self.iou = iou
+        self.imgsz = imgsz
+        self.max_det = max_det
+
+    def detect(self, frame_bgr) -> List[Dict]:
+        results = self.model.predict(
+            source=frame_bgr,
+            conf=self.min_conf,
+            iou=self.iou,
+            imgsz=self.imgsz,
+            max_det=self.max_det,
+            verbose=False,
+        )
+
+        detections: List[Dict] = []
+        if not results:
+            return detections
+
+        res = results[0]
+        boxes = res.boxes
+        if boxes is None:
+            return detections
+
+        for i in range(len(boxes)):
+            box = boxes[i]
+            cls_idx = int(box.cls.item())
+            conf = float(box.conf.item())
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            label = res.names.get(cls_idx, str(cls_idx))
+
+            detections.append(
+                {
+                    "label": label,
+                    "confidence": conf,
+                    "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                }
+            )
+
+        detections.sort(key=lambda d: d["confidence"], reverse=True)
+        return detections

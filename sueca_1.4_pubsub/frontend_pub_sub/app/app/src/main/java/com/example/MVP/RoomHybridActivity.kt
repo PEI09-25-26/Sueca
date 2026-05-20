@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.JoinGameRequest
+import com.example.MVP.models.Position
 import com.example.MVP.network.GatewayClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -157,7 +158,7 @@ class RoomHybridActivity : AppCompatActivity() {
                     JoinGameRequest(
                         name = playerName,
                         gameId = roomId,
-                        position = position
+                        position = Position.valueOf(position.uppercase())
                     )
                 )
 

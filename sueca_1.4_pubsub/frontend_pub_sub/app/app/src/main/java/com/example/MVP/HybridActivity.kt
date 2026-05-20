@@ -29,6 +29,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.MVP.models.Card
+import com.example.MVP.models.Choice
 import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.HybridConfirmCaptureRequest
 import com.example.MVP.models.HybridConfirmTrumpCaptureRequest
@@ -141,8 +142,8 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private fun setupTrumpControls() {
-        btnTrumpTop.setOnClickListener { submitTrumpChoice("top") }
-        btnTrumpBottom.setOnClickListener { submitTrumpChoice("bottom") }
+        btnTrumpTop.setOnClickListener { submitTrumpChoice(Choice.TOP) }
+        btnTrumpBottom.setOnClickListener { submitTrumpChoice(Choice.BOTTOM) }
     }
 
     private fun setupHand() {
@@ -427,7 +428,7 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
-    private fun submitTrumpChoice(choice: String) {
+    private fun submitTrumpChoice(choice: Choice) {
         if (playerId.isBlank()) {
             recognitionProgressText.text = "Nao foi possivel identificar o teu jogador"
             return

@@ -1,0 +1,142 @@
+[
+  {
+    "generation": "Gen1",
+    "label": "random-random-random-random",
+    "games": 1,
+    "manifest_path": "batch_output/Gen1/random-random-random-random/manifests/batch_manifest.json",
+    "manifest": [
+      {
+        "batch_aborted": true,
+        "reason": "user_interrupt",
+        "stopped_after_game": 1
+      }
+    ],
+    "bots": [
+      {
+        "name": "N4",
+        "position": "NORTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "E4",
+        "position": "EAST",
+        "difficulty": "random"
+      },
+      {
+        "name": "S4",
+        "position": "SOUTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "W4",
+        "position": "WEST",
+        "difficulty": "random"
+      }
+    ]
+  },
+  {
+    "generation": "Gen2",
+    "label": "random-random-random-random",
+    "games": 1,
+    "manifest_path": "batch_output/Gen2/random-random-random-random/manifests/batch_manifest.json",
+    "manifest": [
+      {
+        "batch_aborted": true,
+        "reason": "user_interrupt",
+        "stopped_after_game": 1
+      }
+    ],
+    "bots": [
+      {
+        "name": "N4",
+        "position": "NORTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "E4",
+        "position": "EAST",
+        "difficulty": "random"
+      },
+      {
+        "name": "S4",
+        "position": "SOUTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "W4",
+        "position": "WEST",
+        "difficulty": "random"
+      }
+    ]
+  },
+  {
+    "generation": "Gen3",
+    "label": "random-random-random-random",
+    "games": 1,
+    "manifest_path": "batch_output/Gen3/random-random-random-random/manifests/batch_manifest.json",
+    "manifest": [
+      {
+        "batch_aborted": true,
+        "reason": "user_interrupt",
+        "stopped_after_game": 1
+      }
+    ],
+    "bots": [
+      {
+        "name": "N4",
+        "position": "NORTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "E4",
+        "position": "EAST",
+        "difficulty": "random"
+      },
+      {
+        "name": "S4",
+        "position": "SOUTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "W4",
+        "position": "WEST",
+        "difficulty": "random"
+      }
+    ]
+  },
+  {
+    "generation": "Gen4",
+    "label": "random-random-random-random",
+    "games": 1,
+    "manifest_path": "batch_output/Gen4/random-random-random-random/manifests/batch_manifest.json",
+    "manifest": [
+      {
+        "batch_aborted": true,
+        "reason": "user_interrupt",
+        "stopped_after_game": 1
+      }
+    ],
+    "bots": [
+      {
+        "name": "N4",
+        "position": "NORTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "E4",
+        "position": "EAST",
+        "difficulty": "random"
+      },
+      {
+        "name": "S4",
+        "position": "SOUTH",
+        "difficulty": "random"
+      },
+      {
+        "name": "W4",
+        "position": "WEST",
+        "difficulty": "random"
+      }
+    ]
+  }
+]

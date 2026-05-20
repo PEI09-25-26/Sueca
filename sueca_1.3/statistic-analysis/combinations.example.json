@@ -1,0 +1,12 @@
+[
+  {
+    "label": "weak_weak_average_random",
+    "games": 1000,
+    "bots": [
+      {"name": "N", "position": "NORTH", "difficulty": "weak"},
+      {"name": "E", "position": "EAST", "difficulty": "weak"},
+      {"name": "S", "position": "SOUTH", "difficulty": "average"},
+      {"name": "W", "position": "WEST", "difficulty": "random"}
+    ]
+  }
+]

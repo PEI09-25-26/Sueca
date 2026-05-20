@@ -146,3 +146,8 @@ class CardAnalyzer:
                     counter += 1
 
         return counter
+
+    @staticmethod
+    def get_card_value(card_id):
+        """Compatibility alias used by some decision makers: card point value."""
+        return CardMapper.get_card_points(card_id)

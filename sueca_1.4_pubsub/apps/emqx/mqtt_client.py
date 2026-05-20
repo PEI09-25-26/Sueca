@@ -24,9 +24,22 @@ logger = logging.getLogger(__name__)
 #   Production: export MQTT_BROKER_HOST=$(hostname -I | awk '{print $1}')  # Get server's internal IP
 BROKER = os.getenv('MQTT_BROKER_HOST', '127.0.0.1')
 PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
-USERNAME = os.getenv('MQTT_USERNAME', '')  # Empty for no auth
-PASSWORD = os.getenv('MQTT_PASSWORD', '')
+# Support per-service credentials: set `MQTT_SERVICE=<service>` in the container, and
+# provide `<SERVICE>_MQTT_USERNAME` / `<SERVICE>_MQTT_PASSWORD` in .env. Falls back to
+# global `MQTT_USERNAME` / `MQTT_PASSWORD` for compatibility.
+MQTT_SERVICE = os.getenv('MQTT_SERVICE', '').strip()
+if MQTT_SERVICE:
+    svc = MQTT_SERVICE.strip().upper()
+    USERNAME = os.getenv(f"{svc}_MQTT_USERNAME", os.getenv('MQTT_USERNAME', ''))
+    PASSWORD = os.getenv(f"{svc}_MQTT_PASSWORD", os.getenv('MQTT_PASSWORD', ''))
+else:
+    USERNAME = os.getenv('MQTT_USERNAME', '')  # Empty for no auth
+    PASSWORD = os.getenv('MQTT_PASSWORD', '')
 USE_AUTH = os.getenv('MQTT_USE_AUTH', 'false').lower() == 'true'
+USE_TLS = os.getenv('MQTT_USE_TLS', 'false').lower() == 'true'
+TLS_CA = os.getenv('MQTT_TLS_CA', '/opt/emqx/etc/certs/ca.pem')
+TLS_CERT = os.getenv('MQTT_TLS_CERT', '/opt/emqx/etc/certs/cert.pem')
+TLS_KEY = os.getenv('MQTT_TLS_KEY', '/opt/emqx/etc/certs/key.pem')
 CLIENT_ID = f"sueca-server-{random.randint(0, 9999)}"
 
 client = mqtt_client.Client(client_id=CLIENT_ID)
@@ -70,12 +83,31 @@ def connect_mqtt(wait_seconds: float = 3.0):
         client.on_disconnect = on_disconnect
         client.on_publish = on_publish
         
-        if USE_AUTH and USERNAME and PASSWORD:
+        if USE_AUTH:
+            # Require credentials when USE_AUTH is true
+            if not USERNAME or not PASSWORD:
+                logger.error("[MQTT] MQTT_USE_AUTH=true but MQTT_USERNAME or MQTT_PASSWORD not set. Refusing to connect.")
+                return False
             client.username_pw_set(USERNAME, PASSWORD)
             logger.info("[MQTT] Using authentication")
+
+        port = PORT
+        if USE_TLS:
+            try:
+                import ssl
+                logger.info(f"[MQTT] Configuring TLS. CA={TLS_CA} cert={TLS_CERT}")
+                client.tls_set(ca_certs=TLS_CA, certfile=TLS_CERT, keyfile=TLS_KEY, cert_reqs=ssl.CERT_REQUIRED)
+                # do not allow insecure fallback in production
+                client.tls_insecure_set(False)
+                # default TLS port
+                if port == 1883:
+                    port = 8883
+            except Exception as e:
+                logger.error(f"[MQTT] TLS configuration failed: {e}")
+                return False
         
-        logger.info(f"[MQTT] Connecting to {BROKER}:{PORT}...")
-        client.connect(BROKER, PORT, keepalive=60)
+        logger.info(f"[MQTT] Connecting to {BROKER}:{port}...")
+        client.connect(BROKER, port, keepalive=60)
         if not _loop_started:
             client.loop_start()
             _loop_started = True

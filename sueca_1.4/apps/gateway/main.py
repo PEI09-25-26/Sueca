@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 import requests
 
 from .lifecycle import shutdown_services, startup_services
@@ -14,3 +17,7 @@ app.include_router(state_router)
 app.include_router(proxy_router)
 app.include_router(game_router)
 app.include_router(websocket_router)
+
+website_dir = Path(__file__).resolve().parents[3] / "website"
+if website_dir.exists():
+    app.mount("/site", StaticFiles(directory=website_dir, html=True), name="site")

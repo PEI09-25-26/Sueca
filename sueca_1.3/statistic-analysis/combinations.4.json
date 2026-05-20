@@ -1,0 +1,11 @@
+[
+  {
+    "games": 1000,
+    "bots": [
+      {"name": "N4", "position": "NORTH", "difficulty": "random"},
+      {"name": "E4", "position": "EAST", "difficulty": "random"},
+      {"name": "S4", "position": "SOUTH", "difficulty": "random"},
+      {"name": "W4", "position": "WEST", "difficulty": "random"}
+    ]
+  }
+]
