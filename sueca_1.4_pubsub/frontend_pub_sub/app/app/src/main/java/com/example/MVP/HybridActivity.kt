@@ -65,6 +65,7 @@ class HybridActivity : AppCompatActivity() {
     private lateinit var trumpSelectionControls: View
     private lateinit var btnTrumpTop: Button
     private lateinit var btnTrumpBottom: Button
+    private lateinit var btnUndoMove: Button
     private lateinit var hostCameraPreview: ImageView
 
     private lateinit var handAdapter: CardsAdapter
@@ -125,12 +126,14 @@ class HybridActivity : AppCompatActivity() {
         trumpSelectionControls = findViewById(R.id.trumpSelectionControls)
         btnTrumpTop = findViewById(R.id.btnTrumpTop)
         btnTrumpBottom = findViewById(R.id.btnTrumpBottom)
+        btnUndoMove = findViewById(R.id.btnUndoMove)
         hostCameraPreview = findViewById(R.id.hostCameraPreview)
 
         clearTableCards()
         setupHand()
         setupSwitch()
         setupTrumpControls()
+        setupUndoControl()
 
         if (isHost) {
             ensureCameraPermissionsAndStart()
@@ -150,6 +153,11 @@ class HybridActivity : AppCompatActivity() {
     private fun setupTrumpControls() {
         btnTrumpTop.setOnClickListener { submitTrumpChoice("top") }
         btnTrumpBottom.setOnClickListener { submitTrumpChoice("bottom") }
+    }
+
+    private fun setupUndoControl() {
+        btnUndoMove.setOnClickListener { requestUndoMove() }
+        btnUndoMove.visibility = View.GONE
     }
 
     private fun setupHand() {
@@ -324,6 +332,7 @@ class HybridActivity : AppCompatActivity() {
      */
     private fun showDealPhase(state: HybridRuntimeState) {
         recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+        btnUndoMove.visibility = View.GONE
 
         if (isHost) {
             val nextTarget = state.virtualPlayers.firstOrNull { it.cardsCount < state.cardsPerVirtual }
@@ -364,6 +373,8 @@ class HybridActivity : AppCompatActivity() {
     private fun showPlayPhase(state: HybridRuntimeState) {
         val pending = state.pendingVirtualPlay
         val currentPlayerId = gameState?.currentPlayerId
+        btnUndoMove.visibility = View.VISIBLE
+        btnUndoMove.isEnabled = pending != null || (gameState?.roundPlays?.isNotEmpty() == true)
 
         if (isHost) {
             if (pending != null) {
@@ -414,6 +425,38 @@ class HybridActivity : AppCompatActivity() {
         modeSwitch.isEnabled = true
     }
 
+    private fun requestUndoMove() {
+        if (roomId.isBlank()) {
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                val response = GatewayClient.undoMove(
+                    com.example.MVP.models.UndoMoveRequest(
+                        gameId = roomId
+                    ), "virtual"
+                )
+
+                if (response.success) {
+                    response.state?.let {
+                        hybridState = it
+                        updateUiFromHybridState(it)
+                    }
+                    response.gameState?.let {
+                        gameState = it
+                        updateUiFromGameState(it)
+                    }
+                } else {
+                    recognitionProgressText.text = response.message ?: "Nao foi possivel desfazer a jogada"
+                }
+            } catch (e: Exception) {
+                Log.w("HybridActivity", "requestUndoMove failed: ${e.message}")
+                recognitionProgressText.text = "Erro ao desfazer a jogada"
+            }
+        }
+    }
+
     private fun updateUiFromGameState(state: GameStatusResponse) {
         updateTableFromGameState(state)
 
@@ -425,6 +468,9 @@ class HybridActivity : AppCompatActivity() {
         }
 
         trumpSelectionControls.visibility = View.GONE
+        if (phase != "playing") {
+            btnUndoMove.visibility = View.GONE
+        }
 
         if (isHost && state.phase == "playing" && !dealResetRequested) {
             lifecycleScope.launch {
@@ -452,6 +498,7 @@ class HybridActivity : AppCompatActivity() {
 
     private fun showTrumpSelectionPhase(state: GameStatusResponse) {
         trumpSelectionControls.visibility = View.VISIBLE
+        btnUndoMove.visibility = View.GONE
         recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
         handAdapter.isEnabled = false
         handAdapter.updateCards(emptyList())

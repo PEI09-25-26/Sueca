@@ -316,12 +316,26 @@ object GatewayClient {
         return requireParsed(envelope, HybridConfirmTrumpCaptureResponse::class.java)
     }
 
-    private suspend fun command(command: String, gameId: String?, payload: Map<String, Any?>): GatewayEnvelope {
+    suspend fun undoMove(request: com.example.MVP.models.UndoMoveRequest, mode: String = MODE_VIRTUAL): com.example.MVP.models.UndoMoveResponse {
+        val payload = mapOf("game_id" to request.gameId)
+        val cmdStr = if (mode == "physical") "play/undo" else "hybrid/play/undo"
+        val envelope = command(cmdStr, gameId = request.gameId, payload = payload, mode = mode)
+        val response = envelope.response
+        
+        return com.example.MVP.models.UndoMoveResponse(
+            success = response?.bool("success") ?: false,
+            message = response?.string("message") ?: fallbackMessage(envelope),
+            state = parseJson(response?.objectOrNull("state"), com.example.MVP.models.HybridRuntimeState::class.java),
+            gameState = parseJson(response?.objectOrNull("game_state"), com.example.MVP.models.GameStatusResponse::class.java)
+        )
+    }
+
+    private suspend fun command(command: String, gameId: String?, payload: Map<String, Any?>, mode: String = MODE_VIRTUAL): GatewayEnvelope {
         return RetrofitClient.api.routeCommand(
             command = command,
             request = GatewayCommandRequest(
                 gameId = gameId,
-                mode = MODE_VIRTUAL,
+                mode = mode,
                 payload = payload
             )
         )

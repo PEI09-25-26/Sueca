@@ -1,13 +1,19 @@
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import JSONResponse
+import requests
+import logging
 from .common import error, get_game_from_request
 from ..core import manager
 from ..core.hybrid_game_coordinator import HybridGameCoordinator
 from ..core.hybrid_vision_service import HybridVisionService
 from apps.emqx import mqtt_client
+from ..card_mapper import CardMapper
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
 
 hybrid_coordinator = HybridGameCoordinator()
 hybrid_vision = HybridVisionService()
@@ -360,3 +366,46 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
     }
     _push_hybrid_state(game, room)
     return response_payload
+
+
+@router.post("/api/hybrid/play/undo")
+async def hybrid_undo_play(data: dict = Body(default_factory=dict)):
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    success, msg, last_play = game.undo_last_play()
+    if not success:
+        return error(msg, 400)
+
+    player_id = last_play['player_id']
+    card_id = int(last_play['card'])
+    room = hybrid_coordinator.undo_play(game_id, player_id, card_id)
+
+    # Convert card_id to rank and suit to notify CV service
+    rank = CardMapper.get_card_rank(card_id)
+    suit_symbol = CardMapper.get_card_suit(card_id)
+    suit_name = {
+        "♣": "clubs",
+        "♦": "diamonds",
+        "♥": "hearts",
+        "♠": "spades",
+    }.get(suit_symbol)
+
+    if suit_name:
+        try:
+            requests.post(f"{hybrid_vision.cv_url}/cv/undo", json={
+                "game_id": game_id,
+                "rank": rank,
+                "suit": suit_name
+            }, timeout=1.0)
+            logger.info(f"Notified CV service of undo for card {rank} of {suit_name}")
+        except Exception as e:
+            logger.warning(f"Failed to notify CV service of undo: {e}")
+
+    _push_hybrid_state(game, room)
+    return {
+        "success": True,
+        "message": msg,
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game))
+    }

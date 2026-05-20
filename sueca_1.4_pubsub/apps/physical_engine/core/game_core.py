@@ -3,6 +3,7 @@ import requests
 from pydantic import BaseModel
 import threading
 import time
+import copy
 
 from card_mapper import CardMapper
 from referee import Referee
@@ -18,6 +19,8 @@ MAX_ROUNDS = 4
 MAX_RODADAS = 10
 current_round = 1
 current_hand = ref.current_player - 1
+ref_history = []
+
 
 
 class CardDTO(BaseModel):
@@ -45,20 +48,22 @@ def _push_state():
 
 
 def reset_game_state():
-	global ref, current_round
+	global ref, current_round, ref_history
 	ref = Referee()
 	current_round = 1
+	ref_history.clear()
 	return {"success": True, "message": "Game reset"}
 
 
 def start_new_round():
-	global ref, current_round
+	global ref, current_round, ref_history
 	team1_vict = ref.team1_victories
 	team2_vict = ref.team2_victories
 	ref = Referee()
 	ref.team1_victories = team1_vict
 	ref.team2_victories = team2_vict
 	current_round += 1
+	ref_history.clear()
 	return {
 		"success": True,
 		"message": f"Nova ronda {current_round} iniciada",
@@ -66,8 +71,9 @@ def start_new_round():
 	}
 
 
+
 def process_card(card: CardDTO):
-	global current_hand
+	global current_hand, ref_history
 	if len(ref.card_queue) == 0:
 		current_hand = ref.current_player - 1
 
@@ -80,7 +86,11 @@ def process_card(card: CardDTO):
 		print("[DEBUG] Invalid card!")
 		return {"success": False, "message": "Invalid card"}
 
+	# Save snapshot of the state before processing the new card
+	ref_history.append((copy.deepcopy(ref), current_round, current_hand, card))
+
 	ref.inject_card(card_id)
+
 	print(f"[DEBUG] Card injected. Queue size: {len(ref.card_queue)}")
 
 	if not ref.trump_set:
@@ -147,3 +157,40 @@ def process_card(card: CardDTO):
 		"current_player": current_hand % 4,
 		"queue_size": len(ref.card_queue),
 	}
+
+
+def undo_last_play():
+	global ref, current_round, current_hand, ref_history
+	if not ref_history:
+		return {"success": False, "message": "No play to undo"}
+
+	old_ref, old_round, old_hand, undone_card = ref_history.pop()
+	ref = old_ref
+	current_round = old_round
+	current_hand = old_hand
+
+	# Call CV service to remove from sent labels so it can be detected again
+	try:
+		# Use default game_id for physical mode
+		requests.post(
+			"http://127.0.0.1:8001/cv/undo",
+			json={
+				"game_id": "default",
+				"rank": undone_card.rank,
+				"suit": undone_card.suit,
+			},
+			timeout=1.0,
+		)
+		print(f"[UNDO] Notified CV service to undo card: {undone_card.rank} of {undone_card.suit}")
+	except Exception as e:
+		print(f"[WARN] Failed to notify CV service: {e}")
+
+	_push_state()
+	# The play that was just undone was made by old_hand % 4
+	undone_player = old_hand % 4
+	return {
+		"success": True,
+		"message": f"Undid play of {undone_card.rank} of {undone_card.suit}",
+		"undone_player": str(undone_player),
+	}
+

@@ -370,3 +370,15 @@ data class GatewayEnvelope(
     val message: String? = null,
     val response: JsonObject? = null
 )
+
+data class UndoMoveRequest(
+    @SerializedName("game_id") val gameId: String
+)
+
+data class UndoMoveResponse(
+    val success: Boolean,
+    val message: String?,
+    val state: HybridRuntimeState? = null,
+    @SerializedName("game_state") val gameState: GameStatusResponse? = null
+)
+

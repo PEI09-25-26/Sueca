@@ -115,7 +115,9 @@ class GameState:
         self.round_plays = []
         self.round_suit = None
         self.round_resolving = False
+        self.round_timer = None
         self.current_player = None
+
         self.last_winner = None
         self.turn_order = []
         self.match_history = []
@@ -136,7 +138,9 @@ class GameState:
         self.round_plays = []
         self.round_suit = None
         self.round_resolving = False
+        self.round_timer = None
         self.current_player = None
+
         self.last_winner = None
         self.turn_order = []
 
@@ -564,7 +568,9 @@ class GameState:
         if len(self.round_plays) == 4:
             self.current_player = None
             self.round_resolving = True
-            threading.Timer(1.69, self._finish_round).start()
+            self.round_timer = threading.Timer(1.69, self._finish_round)
+            self.round_timer.start()
+
 
         # Keep MQTT/state consumers in sync after every accepted play.
         self._push_state('card_played')
@@ -629,10 +635,41 @@ class GameState:
         if len(self.round_plays) == 4:
             self.current_player = None
             self.round_resolving = True
-            threading.Timer(1.69, self._finish_round).start()
+            self.round_timer = threading.Timer(1.69, self._finish_round)
+            self.round_timer.start()
+
 
         self._push_state('card_played')
         return True, f'Played {CardMapper.get_card(card)}'
+
+    def undo_last_play(self):
+        with self._play_lock:
+            if not self.round_plays:
+                return False, 'No plays to undo in the current round', None
+
+            if self.round_resolving:
+                if hasattr(self, 'round_timer') and self.round_timer:
+                    self.round_timer.cancel()
+                    self.round_timer = None
+                self.round_resolving = False
+
+            last_play = self.round_plays.pop()
+            player = self.get_player(last_play['player_id'])
+            card_id = int(last_play['card'])
+            if player:
+                if card_id not in player.hand:
+                    player.hand.append(card_id)
+                    player.hand.sort()
+                self.current_player = player
+
+            if not self.round_plays:
+                self.round_suit = None
+            else:
+                self.round_suit = CardMapper.get_card_suit(int(self.round_plays[0]['card']))
+
+            self._push_state('play_undone')
+            return True, f"Undid play of {CardMapper.get_card(card_id)}", last_play
+
 
     def rematch(self):
         if len(self.players) < self.max_players:

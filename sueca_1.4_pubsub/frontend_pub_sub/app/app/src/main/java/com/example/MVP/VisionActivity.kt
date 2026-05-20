@@ -32,8 +32,8 @@ class VisionActivity : AppCompatActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var webSocket: WebSocket
 
-    private val wsUrl = "ws://192.168.176.252:8000/ws/camera/"  // IP do Mac na rede local
-    // For emulator use: "ws://10.0.2.2:8000/ws/camera/"
+    private val wsUrl = "wss://${com.example.MVP.network.RetrofitClient.API_HOST}/ws/camera/"
+
 
     private var gameId: String = "default"
 
@@ -57,8 +57,12 @@ class VisionActivity : AppCompatActivity() {
 
             val btnBack = findViewById<ImageView>(R.id.backButton)
             val btnStartGame = findViewById<Button>(R.id.btnStartGame)
+            val btnUndoPlay = findViewById<Button>(R.id.btnUndoPlay)
 
             btnBack.setOnClickListener { finish() }
+            btnUndoPlay.setOnClickListener { requestUndoMove() }
+            btnUndoPlay.visibility = android.view.View.VISIBLE
+
             
             btnStartGame.setOnClickListener {
                 lifecycleScope.launch {
@@ -282,8 +286,8 @@ class VisionActivity : AppCompatActivity() {
 
                     val json = JSONObject(text)
 
-                    val detectionjson = json.optString("detection", "{}")
-                    val detection = JSONObject(detectionjson)
+                    val detection = json.optJSONObject("detection") ?: JSONObject()
+
 
                     val rankjson = detection.optString("rank", "").lowercase()
                     Toast.makeText(this@VisionActivity, "Rank: $rankjson", Toast.LENGTH_SHORT).show()
@@ -305,9 +309,8 @@ class VisionActivity : AppCompatActivity() {
                     val cardIdentifier = "${suit}_$rank"
 
                     Toast.makeText(this@VisionActivity, "Card: $cardIdentifier", Toast.LENGTH_SHORT).show()
-                    val state = json.optString("game_state", "{}")
-                    val game_state = JSONObject(state)
-                    val message = game_state.optString("message", "{}")
+                    val game_state = json.optJSONObject("game_state") ?: JSONObject()
+                    val message = game_state.optString("message", "")
                     if (message == "Trump card set"){
                         Toast.makeText(this@VisionActivity, "Trump card set", Toast.LENGTH_SHORT).show()
                         updateCardView(cardIdentifier, trumpCard)
@@ -435,6 +438,28 @@ class VisionActivity : AppCompatActivity() {
         ContextCompat.checkSelfPermission(
             this, Manifest.permission.CAMERA
         ) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestUndoMove() {
+        lifecycleScope.launch {
+            try {
+                val request = com.example.MVP.models.UndoMoveRequest(gameId = gameId)
+                val response = com.example.MVP.network.GatewayClient.undoMove(request, "physical")
+                
+                if (response.success) {
+                    Toast.makeText(this@VisionActivity, "Jogada desfeita com sucesso!", Toast.LENGTH_SHORT).show()
+                    // Revert the undone player's visual card back to back of card
+                    // e.g. "undone_player" will be broadcast via websocket, or we can clear all and wait for websocket sync
+                    // Since physical mode pushes the state immediately, websocket onMessage will receive the updated state and cards!
+                    // Wait, websocket pushes card received, but for undo it pushes physical_play_undone. Let's just rely on that or reset manually if needed.
+                } else {
+                    Toast.makeText(this@VisionActivity, "Não foi possível desfazer: ${response.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("VisionActivity", "Erro ao desfazer jogada", e)
+                Toast.makeText(this@VisionActivity, "Erro ao desfazer", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()

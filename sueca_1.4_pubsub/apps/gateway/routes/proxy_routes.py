@@ -114,6 +114,33 @@ def route_query(
         }
 
 
+
+# Backwards-compatible proxy: forward legacy /api/* requests to the virtual engine
+@router.post("/api/{api_path:path}")
+def proxy_api_post(api_path: str, request_data: dict = None):
+    """Simple POST proxy to virtual engine for legacy clients calling /api/* on the public host.
+
+    This forwards the JSON body to the configured `VIRTUAL_ENGINE_URL` and returns the
+    decoded backend response (or a minimal error envelope on failure).
+    """
+    target = f"{state.VIRTUAL_ENGINE_URL}/api/{api_path}"
+    try:
+        response = state.INTERNAL_HTTP.post(target, json=request_data or {}, timeout=5)
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"success": response.ok, "raw": response.text}
+
+        return {
+            "success": response.ok,
+            "http_status": response.status_code,
+            "target": target,
+            "response": data,
+        }
+    except requests.RequestException as error:
+        return {"success": False, "target": target, "message": str(error)}
+
+
 @router.get("/system/services")
 def service_status():
     return {

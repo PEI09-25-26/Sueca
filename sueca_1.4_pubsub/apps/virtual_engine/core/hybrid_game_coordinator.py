@@ -145,6 +145,22 @@ class HybridGameCoordinator:
 
             return room
 
+    def undo_play(self, game_id: str, player_id: str, card_id: int) -> HybridRoomState:
+        with self._lock:
+            room = self._get_room(game_id)
+            
+            # If the player is virtual, restore the card to virtual_hands.
+            # A confirmed play has no pending selection anymore, so undo must clear it.
+            if room.player_roles.get(player_id) == "virtual":
+                if player_id not in room.virtual_hands:
+                    room.virtual_hands[player_id] = []
+                if int(card_id) not in room.virtual_hands[player_id]:
+                    room.virtual_hands[player_id].append(int(card_id))
+                room.pending_virtual_play = None
+                
+            return room
+
+
     def to_payload(self, room: HybridRoomState, players_by_id: Dict[str, dict]) -> dict:
         payload_roles = {pid: "real" for pid in players_by_id.keys()}
         payload_roles.update(room.player_roles)

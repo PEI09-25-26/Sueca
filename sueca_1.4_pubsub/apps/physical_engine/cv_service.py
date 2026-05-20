@@ -20,9 +20,28 @@ detector: Optional[CornerYoloDetector] = None
 active_games: Dict[str, Dict] = {}
 MAX_CARDS_PER_TRICK = 4
 
+@app.on_event("startup")
+async def startup_event():
+    global detector
+    model_path = resolve_model_path()
+    if model_path is not None:
+        try:
+            print("[CV2] Preloading YOLO model...")
+            detector = CornerYoloDetector(model_path=model_path)
+            print("[CV2] YOLO model loaded successfully.")
+        except Exception as e:
+            print(f"[CV2] Failed to preload YOLO model: {e}")
+
 
 class StartCVRequest(BaseModel):
     game_id: str
+
+
+class UndoCardRequest(BaseModel):
+    game_id: str
+    rank: str
+    suit: str
+
 
 
 def parse_label(label: str):
@@ -165,9 +184,12 @@ async def cv_stream(websocket: WebSocket, game_id: str):
     print(f"[CV2] WebSocket connected for game: {game_id}")
 
     if detector is None:
-        await websocket.send_json({"error": "CV service not initialized. Call /cv/start first."})
-        await websocket.close()
-        return
+        model_path = resolve_model_path()
+        if model_path is None:
+            await websocket.send_json({"error": "No detection model found. Set CV2_MODEL_PATH or place a model in runs/detect/.../best.pt"})
+            await websocket.close()
+            return
+        detector = CornerYoloDetector(model_path=model_path)
 
     if game_id not in active_games:
         active_games[game_id] = {
@@ -286,6 +308,60 @@ async def stop_cv_service(game_id: str):
         del active_games[game_id]
         return {"success": True, "message": "CV service stopped"}
     return {"success": False, "message": "Game not found"}
+
+
+@app.post("/cv/undo")
+async def undo_card(request: UndoCardRequest):
+    game_state = active_games.get(request.game_id)
+    if not game_state:
+        # Fallback: check if "default" game is active if specific game_id not found
+        game_state = active_games.get("default")
+        if not game_state:
+            return {"success": False, "message": f"Game {request.game_id} not found in CV active games"}
+
+    # Map rank names to YOLO labels
+    rank_map = {
+        "king": "K",
+        "queen": "Q",
+        "jack": "J",
+        "ace": "A",
+        "k": "K",
+        "q": "Q",
+        "j": "J",
+        "a": "A",
+    }
+    yolo_rank = rank_map.get(request.rank.lower(), request.rank)
+    yolo_suit = request.suit.capitalize()
+    card_key = f"{yolo_rank}_{yolo_suit}"
+
+    # Try exact match first, then case-insensitive
+    found_key = None
+    if card_key in game_state["sent_labels"]:
+        found_key = card_key
+    else:
+        for sk in list(game_state["sent_labels"]):
+            if sk.lower() == card_key.lower():
+                found_key = sk
+                break
+
+    if found_key:
+        game_state["sent_labels"].remove(found_key)
+        if game_state["trick_count"] > 0:
+            game_state["trick_count"] -= 1
+        game_state["trick_locked"] = False
+        
+        # Pop last exclusion zone if any
+        if game_state["exclusion_zones"]:
+            game_state["exclusion_zones"].pop()
+            
+        print(f"[CV2] Card {found_key} removed from CV history. Remaining: {game_state['sent_labels']}")
+        return {"success": True, "message": f"Card {found_key} removed from CV history"}
+
+    return {
+        "success": False,
+        "message": f"Card {card_key} not found in CV history. Present: {list(game_state['sent_labels'])}"
+    }
+
 
 
 @app.get("/health")
