@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Body
+from fastapi import FastAPI, HTTPException, Depends, Body, Query
 from pydantic import BaseModel
 from shared.auth import get_authenticated_uid
 from shared.firebase_client import (
@@ -92,6 +92,7 @@ def health():
 def get_friends_route(
     user: str | None = None,
     uid: str | None = None,
+    online_only: bool = Query(default=False),
     authenticated_uid: str = Depends(get_authenticated_uid),
 ):
     user_id = user or uid or authenticated_uid
@@ -104,6 +105,11 @@ def get_friends_route(
         friend_doc = get_user(friend_id)
         if not friend_doc:
             continue
+        
+        status = friend_doc.get("status", "offline")
+        if online_only and status == "offline":
+            continue
+
         friends_payload.append({
             "uid": friend_id,
             "username": friend_doc.get("username", ""),
@@ -117,7 +123,7 @@ def get_friends_route(
             "lastLoginAt": friend_doc.get("lastLoginAt"),
             "privacy": friend_doc.get("privacy", "public"),
             "friendsCount": len(get_friends(friend_id)),
-            "status": friend_doc.get("status", "online"),
+            "status": status,
             "friendCode": friend_doc.get("friendCode"),
         })
 

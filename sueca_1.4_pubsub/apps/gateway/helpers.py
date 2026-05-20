@@ -1,5 +1,7 @@
 import threading
 import queue
+import httpx
+import asyncio
 from typing import Optional
 
 from fastapi import Header, HTTPException, status
@@ -92,11 +94,52 @@ def ingest_state(payload: dict, source: str, default_mode: str):
     return canonical_state
 
 
+async def update_user_status(uid: str, status: str):
+    """Update user status via Auth Service."""
+    if not uid or len(uid) < 10: # Skip guests
+        return
+
+    from shared.auth_client import issue_service_token, AUTH_SERVICE_URL
+    from shared.config import SERVICES
+    
+    try:
+        svc_token = await issue_service_token("gateway", "control_plane")
+        if not svc_token:
+            return
+
+        async with httpx.AsyncClient() as client:
+            await client.put(
+                f"{SERVICES.auth_service_url}/user/{uid}/status",
+                json={"uid": uid, "status": status},
+                headers={"Authorization": f"Bearer {svc_token}"},
+                timeout=2.0
+            )
+    except Exception:
+        logging.getLogger("gateway.status").warning("Failed to update status for %s to %s", uid, status)
+
+
 def ingest_event(payload: dict, source: str, default_mode: str):
     mode = infer_mode_from_payload(payload, default_mode)
     envelope = normalize_event(payload, source=source, mode=mode)
     event_payload = to_dict(envelope)
     remember_room_mode(event_payload.get("game_id"), mode)
+
+    # Trigger status updates
+    event_type = event_payload.get("event_type")
+    import asyncio
+    if event_type == "player_joined":
+        # We need the UID. In envelope, it might be player_id
+        uid = event_payload.get("player_id")
+        if uid:
+            asyncio.create_task(update_user_status(uid, "en jogo"))
+    elif event_type in ("player_left", "player_removed", "physical_reset", "room_deleted"):
+        uid = event_payload.get("player_id")
+        if uid:
+            asyncio.create_task(update_user_status(uid, "online"))
+        elif event_type == "room_deleted":
+            # If room is deleted, we might need to reset all players status?
+            # For now, let's keep it simple.
+            pass
 
     if state.FORWARD_TO_FRONTEND:
         FORWARD_DISPATCHER.submit("event", event_payload)

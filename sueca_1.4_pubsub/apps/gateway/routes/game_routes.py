@@ -2,18 +2,89 @@ import json
 import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
 import logging
+import json
 
 from .. import state
 from ..helpers import require_any_token
 from apps.virtual_engine.session import session_manager
 logger = logging.getLogger(__name__)
 from ..dto import CorrectCardRequest, RoundEndData, ScanEventDTO, StartGameRequest, StartGameResponse
-
+from shared.ratelimit import rate_limit_dependency
 
 router = APIRouter()
 INTERNAL_ERROR_MESSAGE = "internal error"
+APPLICATION_JSON = "application/json"
+
+
+def _forward_headers(request: Request) -> dict[str, str]:
+    forwarded = {}
+    authorization = request.headers.get("authorization")
+    if authorization:
+        forwarded["Authorization"] = authorization
+    return forwarded
+
+
+@router.get("/api/invites", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
+def get_invites_proxy(request: Request):
+    target_url = f"{state.VIRTUAL_ENGINE_URL}/api/invites"
+    try:
+        response = state.INTERNAL_HTTP.get(
+            target_url,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except Exception:
+        logger.exception("Error proxying invites to %s", target_url)
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "message": "backend unavailable"}),
+            media_type=APPLICATION_JSON,
+        )
+
+
+@router.post("/api/room/{game_id}/invite", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+async def invite_friend_proxy(game_id: str, request: Request):
+    target_url = f"{state.VIRTUAL_ENGINE_URL}/api/room/{game_id}/invite"
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=body,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except Exception:
+        logger.exception("Error proxying invite to %s", target_url)
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "message": "backend unavailable"}),
+            media_type=APPLICATION_JSON,
+        )
+
+
+@router.post("/api/room/{game_id}/invite/decline", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+async def decline_invite_proxy(game_id: str, request: Request):
+    target_url = f"{state.VIRTUAL_ENGINE_URL}/api/room/{game_id}/invite/decline"
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=body,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except Exception:
+        logger.exception("Error proxying decline invite to %s", target_url)
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "message": "backend unavailable"}),
+            media_type=APPLICATION_JSON,
+        )
 
 
 def _suit_symbol_to_suffix(suit: str) -> str:

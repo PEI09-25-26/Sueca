@@ -4,7 +4,7 @@ import secrets
 import uuid
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Header, status
 from passlib.hash import bcrypt_sha256
 from pydantic import BaseModel, Field
 from shared.logging_config import setup_logging, correlation_id_from_request, set_correlation_id, clear_correlation_id
@@ -258,6 +258,28 @@ async def _add_cid(request: Request, call_next):
         clear_correlation_id()
 
 
+def require_control_plane_token(authorization: str | None = Header(default=None)) -> bool:
+    """Dependency that enforces a signed service JWT for control-plane actions."""
+    if not SUECA_SERVICE_JWT_SECRET:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="server misconfigured")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing or invalid authorization header")
+
+    token = authorization[7:].strip()
+    try:
+        payload = jwt.decode(token, SUECA_SERVICE_JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="service token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid service token")
+
+    if payload.get("scope") != "control_plane":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")
+
+    return True
+
+
 @app.get("/health")
 def health():
     return {"healthy": True}
@@ -498,6 +520,23 @@ def reset_password(req: ResetPasswordRequest):
 # ============================================================
 # CENTRALIZED TOKEN VALIDATION ENDPOINTS
 # ============================================================
+
+class UpdateUserStatusRequest(BaseModel):
+    uid: str
+    status: str
+
+
+@app.put("/user/{uid}/status", dependencies=[Depends(require_control_plane_token)])
+def update_user_status_internal(uid: str, req: UpdateUserStatusRequest):
+    user = get_user(uid)
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    user["status"] = req.status
+    user["updatedAt"] = _now_iso()
+    create_user(uid, user)
+    return {"success": True, "status": req.status}
+
 
 @app.post("/validate/token", dependencies=[Depends(rate_limit_dependency(limit=100, window_seconds=60))])
 def validate_token_endpoint(req: ValidateTokenRequest) -> ValidateTokenResponse:

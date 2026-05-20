@@ -12,6 +12,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.*
 import com.example.MVP.network.RetrofitClient
+import com.example.MVP.network.GatewayClient
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainMenuActivity : AppCompatActivity() {
@@ -22,6 +25,8 @@ class MainMenuActivity : AppCompatActivity() {
     private lateinit var playOptionsContainer: View
     private var lastBadgeRefreshAt: Long = 0L
     private var lastProfileRefreshAt: Long = 0L
+    private var invitePollingJob: Job? = null
+    private var fallbackDisplayName: String? = null
 
     companion object {
         private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
@@ -91,6 +96,93 @@ class MainMenuActivity : AppCompatActivity() {
         super.onResume()
         maybeRefreshFriendRequestsBadge()
         maybeRefreshProfileIcon()
+        startInvitePolling()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopInvitePolling()
+    }
+
+    private fun startInvitePolling() {
+        if (!AuthManager.isLoggedIn()) return
+        if (invitePollingJob != null) return
+
+        invitePollingJob = lifecycleScope.launch {
+            while (true) {
+                try {
+                    val token = AuthManager.getToken()
+                    if (token != null) {
+                        val authHeader = "Bearer $token"
+                        val response = RetrofitClient.api.getInvites(authHeader)
+                        if (response.success && response.invites.isNotEmpty()) {
+                            for (invite in response.invites) {
+                                showInviteNotification(invite)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Fail silently for background polling
+                }
+                delay(3000) // Poll every 3 seconds
+            }
+        }
+    }
+
+    private fun stopInvitePolling() {
+        invitePollingJob?.cancel()
+        invitePollingJob = null
+    }
+
+    private fun showInviteNotification(invite: GameInvite) {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+            .setTitle("Convite de Jogo")
+            .setMessage("${invite.inviterName} convidou-te para um jogo na posição ${invite.position}!")
+            .setPositiveButton("Aceitar") { _, _ ->
+                acceptInvite(invite)
+            }
+            .setNegativeButton("Recusar") { _, _ ->
+                declineInvite(invite)
+            }
+            .show()
+    }
+
+    private fun acceptInvite(invite: GameInvite) {
+        val name = AuthManager.getUsername() ?: randomName()
+        lifecycleScope.launch {
+            try {
+                val authHeader = AuthManager.getAuthHeader()
+                val response = GatewayClient.joinGame(
+                    JoinGameRequest(
+                        name = name,
+                        gameId = invite.gameId,
+                        position = com.example.MVP.models.Position.valueOf(invite.position.uppercase())
+                    ),
+                    authHeader = authHeader
+                )
+
+                if (response.success) {
+                    val intent = Intent(this@MainMenuActivity, RoomActivity::class.java)
+                    intent.putExtra("roomId", invite.gameId)
+                    intent.putExtra("playerId", response.playerId)
+                    intent.putExtra("playerName", name)
+                    startActivity(intent)
+                } else {
+                    Toast.makeText(this@MainMenuActivity, "Erro ao aceitar convite: ${response.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@MainMenuActivity, "Erro de rede ao aceitar convite.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun declineInvite(invite: GameInvite) {
+        lifecycleScope.launch {
+            try {
+                GatewayClient.declineInvite(invite.gameId, invite.position)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun maybeRefreshProfileIcon() {
@@ -250,6 +342,22 @@ class MainMenuActivity : AppCompatActivity() {
 
     private fun randomName(): String {
         return "Player${(1000..9999).random()}"
+    }
+
+    private fun resolveDisplayedName(): String {
+        val authName = AuthManager.getPlayerDisplayName()
+        if (!authName.isNullOrBlank()) {
+            return authName
+        }
+
+        val existingFallback = fallbackDisplayName
+        if (!existingFallback.isNullOrBlank()) {
+            return existingFallback!!
+        }
+
+        val newFallback = randomName()
+        fallbackDisplayName = newFallback
+        return newFallback
     }
 
     private fun showCreateAccountPrompt(message: String) {

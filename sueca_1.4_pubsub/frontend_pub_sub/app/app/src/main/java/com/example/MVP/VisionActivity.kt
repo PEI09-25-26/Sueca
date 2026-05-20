@@ -480,9 +480,27 @@ class VisionActivity : AppCompatActivity() {
         nameEast.text = "E: ${seatNames["0"]}"
 
         namingOverlay.visibility = View.GONE
+        Log.d("VisionActivity", "Names saved. Dealer step: $currentPlayerStep")
+        syncDealerWithBackend()
+        
         setupComplete = true
         startCameraSession()
         updateSetupUI()
+    }
+
+    private fun syncDealerWithBackend() {
+        val dId = currentPlayerStep
+        if (dId != -1) {
+            lifecycleScope.launch {
+                try {
+                    val authHeader = AuthManager.getAuthHeader()
+                    RetrofitClient.api.startGameReady(gameId, dealerId = dId, token = authHeader)
+                    Log.d("VisionActivity", "Dealer $dId synced with physical engine.")
+                } catch (e: Exception) {
+                    Log.e("VisionActivity", "Failed to sync dealer: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun showPlayerSetupDialog(onReady: () -> Unit) {
@@ -560,10 +578,13 @@ class VisionActivity : AppCompatActivity() {
             scoreTeam2.text = "EO: $team2Points (V: $team2Vict)"
             
             // Turn indicator logic
-            if (currentSetupState == SetupState.GAME_RUNNING) {
+            if (currentSetupState == SetupState.GAME_RUNNING || (currentSetupState == SetupState.TRUMP_SELECTION && gameState.optBoolean("trump_set"))) {
                 updateTurnIndicator(currentPlayer)
             } else if (currentSetupState == SetupState.TRUMP_SELECTION) {
                 updateTurnIndicator(currentPlayerStep.toString())
+            } else if (currentSetupState != SetupState.IDLE) {
+                // For Shuffle and Cut states
+                updateSetupUI()
             }
         }
 
@@ -1046,7 +1067,10 @@ class VisionActivity : AppCompatActivity() {
                 val dealer = seatNames[dealerId] ?: "Jogador $dealerId"
                 setupStatusText.text = "Trunfo: $dealer"
                 btnStartGame.text = "▶ Iniciar Jogo"
-                updateTurnIndicator(dealerId)
+                // Only update indicator here if trump NOT detected yet
+                if (!lastDetectedIsTrump) {
+                    updateTurnIndicator(dealerId)
+                }
             }
             SetupState.GAME_RUNNING -> {
                 setupStatusText.text = "Jogo em Curso"

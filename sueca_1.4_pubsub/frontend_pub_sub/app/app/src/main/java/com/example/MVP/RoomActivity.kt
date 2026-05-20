@@ -14,11 +14,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.example.MVP.models.GameStatusResponse
-import com.example.MVP.models.JoinGameRequest
-import com.example.MVP.models.AddBotRequest
-import com.example.MVP.models.Position
-import com.example.MVP.models.RemoveParticipantRequest
+import com.example.MVP.models.*
 import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.network.RetrofitClient
@@ -286,20 +282,21 @@ class RoomActivity : AppCompatActivity() {
 
     private fun applyState(state: GameStatusResponse) {
         latestRoomState = state
+        val players = state.players as? List<GamePlayer> ?: emptyList()
 
         // Keep local player id in sync even after activity recreation.
         if (playerId.isBlank()) {
-            playerId = state.players.firstOrNull { it.name == playerName }?.id ?: ""
+            playerId = players.firstOrNull { it.name == playerName }?.id ?: ""
         }
         updateUI(state)
 
         val isHost = state.creatorId == playerId && playerId.isNotBlank()
-        if (state.players.size == 4 && !state.gameStarted && isHost) {
+        if (players.size == 4 && !state.gameStarted && isHost) {
             lifecycleScope.launch { GatewayClient.startGame(roomId) }
         }
 
         // Move to game as soon as lobby is complete (deck_cutting and beyond).
-        val playerSeated = state.players.any { it.name == playerName || (playerId.isNotBlank() && it.id == playerId) }
+        val playerSeated = players.any { it.name == playerName || (playerId.isNotBlank() && it.id == playerId) }
         val gameProgressed = state.phase != "waiting"
         if (state.gameStarted || (gameProgressed && playerSeated)) {
             goToGame(state)
@@ -307,19 +304,27 @@ class RoomActivity : AppCompatActivity() {
     }
 
     private fun updateUI(state: GameStatusResponse) {
-        val available = state.availableSlots
+        val players = state.players as? List<GamePlayer> ?: emptyList()
+        val availableFromState = state.availableSlots
             ?.map { it.position.uppercase() }
             ?.toSet()
             ?: emptySet()
+        val occupiedPositions = players.mapNotNull { normalizePosition(it.position).takeIf { pos -> pos.isNotBlank() } }.toSet()
+        val allSeatPositions = setOf("NORTH", "EAST", "SOUTH", "WEST")
+        val available = when {
+            availableFromState.isNotEmpty() -> availableFromState
+            state.phase == "waiting" -> allSeatPositions - occupiedPositions
+            else -> availableFromState
+        }
         cachedAvailablePositions = available
 
-        val occupied = state.players.associate {
+        val occupied = players.associate {
             normalizePosition(it.position) to it.name
         }
-        val occupiedPlayers = state.players.associateBy { normalizePosition(it.position) }
+        val occupiedPlayers = players.associateBy { normalizePosition(it.position) }
 
-        val meById = if (playerId.isNotBlank()) state.players.firstOrNull { it.id == playerId } else null
-        val meByName = state.players.firstOrNull { it.name == playerName }
+        val meById = if (playerId.isNotBlank()) players.firstOrNull { it.id == playerId } else null
+        val meByName = players.firstOrNull { it.name == playerName }
         val me = meById ?: meByName
         val mySeat = normalizePosition(me?.position)
         val hasSelectedSeat = mySeat.isNotBlank()
@@ -329,8 +334,8 @@ class RoomActivity : AppCompatActivity() {
         }
 
         val isHost = state.creatorId == playerId ||
-            state.players.firstOrNull()?.id?.let { it == playerId } == true ||
-            state.players.firstOrNull()?.name == playerName
+            players.firstOrNull()?.id?.let { it == playerId } == true ||
+            players.firstOrNull()?.name == playerName
         this.isHost = isHost
 
         val canUseBotActions = state.phase == "waiting" && isHost && available.isNotEmpty()
@@ -621,9 +626,9 @@ class RoomActivity : AppCompatActivity() {
     private fun showInviteFriendDialog(position: String) {
         val uid = AuthManager.getUid() ?: return
         lifecycleScope.launch {
-            FriendsManager.listFriends(uid).onSuccess { friends ->
+            FriendsManager.listFriends(uid, onlineOnly = true).onSuccess { friends ->
                 if (friends.isEmpty()) {
-                    Toast.makeText(this@RoomActivity, "Ainda não tens amigos.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@RoomActivity, "Nenhum amigo online no momento.", Toast.LENGTH_SHORT).show()
                     return@onSuccess
                 }
 
@@ -631,18 +636,38 @@ class RoomActivity : AppCompatActivity() {
                 val adapter = ArrayAdapter(this@RoomActivity, R.layout.dialog_custom_item, names)
 
                 val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
-                titleView.text = "Convidar para Mesa ${position.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}"
+                titleView.text = "Convidar Amigo Online"
 
                 AlertDialog.Builder(this@RoomActivity, R.style.CustomDialogTheme)
                     .setCustomTitle(titleView)
                     .setAdapter(adapter) { _, which ->
                         val friend = friends[which]
-                        Toast.makeText(this@RoomActivity, "Convite enviado para ${friend.username}", Toast.LENGTH_SHORT).show()
+                        sendInvitation(friend.uid, position)
                     }
                     .setNegativeButton("Voltar", null)
                     .show()
             }.onFailure {
                 Toast.makeText(this@RoomActivity, "Erro ao carregar amigos.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun sendInvitation(friendUid: String, position: String) {
+        lifecycleScope.launch {
+            try {
+                val token = GameSessionManager.getAuthHeader(roomId) ?: AuthManager.getAuthHeader() ?: return@launch
+                val response = RetrofitClient.api.inviteFriend(
+                    gameId = roomId,
+                    request = com.example.MVP.models.InviteRequest(friendUid, position.uppercase()),
+                    token = token
+                )
+                if (response.success) {
+                    Toast.makeText(this@RoomActivity, "Convite enviado!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@RoomActivity, "Erro: ${response.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@RoomActivity, "Erro de rede.", Toast.LENGTH_SHORT).show()
             }
         }
     }

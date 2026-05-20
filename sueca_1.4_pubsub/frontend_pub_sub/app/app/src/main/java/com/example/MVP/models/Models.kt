@@ -396,6 +396,29 @@ data class RemoveParticipantRequest(
     @SerializedName("game_id") val gameId: String
 )
 
+// ============ Invitation Models ============
+
+data class InviteRequest(
+    @SerializedName("friend_uid") val friendUid: String,
+    val position: String
+)
+
+data class DeclineInviteRequest(
+    val position: String
+)
+
+data class GameInvite(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("inviter_name") val inviterName: String,
+    val position: String,
+    val timestamp: String
+)
+
+data class InvitesResponse(
+    val success: Boolean,
+    val invites: List<GameInvite>
+)
+
 // ============ Hybrid Mode Models ============
 data class HybridSessionResetRequest(
     @SerializedName("game_id") val gameId: String,

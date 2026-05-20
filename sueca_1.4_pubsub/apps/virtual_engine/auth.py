@@ -46,6 +46,45 @@ def authorize_header(authorization: str | None, game_id: str) -> dict:
     return authorize_request(token, game_id)
 
 
+def identify_user(authorization: str | None) -> dict:
+    """Extracts user identification from either session or account token."""
+    import logging
+    logger = logging.getLogger("virtual_engine.auth")
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        logger.debug("identify_user: No valid authorization header")
+        return {}
+    token = authorization[7:].strip()
+
+    # 1. Try session token
+    from .session import session_manager
+    try:
+        session_data = session_manager.validate_token(token)
+        if session_data:
+            logger.debug(f"identify_user: Found session token for player {session_data.get('player_id')}")
+            return {
+                "uid": session_data.get("player_id"),
+                "name": session_data.get("player_name")
+            }
+    except Exception as e:
+        logger.debug(f"identify_user: Session token validation failed: {e}")
+
+    # 2. Try account token
+    try:
+        from shared.auth import decode_access_token
+        payload = decode_access_token(token)
+        uid = payload.get("uid") or payload.get("sub")
+        name = payload.get("username") or payload.get("name")
+        logger.debug(f"identify_user: Found account token for uid {uid}")
+        return {
+            "uid": uid,
+            "name": name
+        }
+    except Exception as e:
+        logger.debug(f"identify_user: Account token validation failed: {e}")
+        return {}
+
+
 def check_player_turn(game_id: str, player_id: str):
     """Check if it's the player's turn."""
     game = manager.get_game(game_id)

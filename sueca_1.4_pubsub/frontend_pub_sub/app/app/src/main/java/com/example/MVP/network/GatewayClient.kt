@@ -4,6 +4,7 @@ import com.example.MVP.models.AddBotRequest
 import com.example.MVP.models.AddBotResponse
 import com.example.MVP.models.CreateRoomRequest
 import com.example.MVP.models.CreateRoomResponse
+import com.example.MVP.models.DeclineInviteRequest
 import com.example.MVP.models.CutDeckRequest
 import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.GatewayCommandRequest
@@ -18,6 +19,7 @@ import com.example.MVP.models.RemoveParticipantRequest
 import com.example.MVP.models.RoomModeRequest
 import com.example.MVP.models.SelectTrumpRequest
 import com.example.MVP.models.PlayRequest
+import com.example.MVP.AuthManager
 import com.example.MVP.GameSessionManager
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -67,14 +69,14 @@ object GatewayClient {
         return response
     }
 
-    suspend fun joinGame(request: JoinGameRequest): JoinGameResponse {
+    suspend fun joinGame(request: JoinGameRequest, authHeader: String? = null): JoinGameResponse {
         val payload = mutableMapOf<String, Any?>(
             "name" to request.name,
             "position" to request.position
         )
         request.gameId?.let { payload["game_id"] = it }
 
-        val envelope = command("join", gameId = request.gameId, mode = null, payload = payload)
+        val envelope = command("join", gameId = request.gameId, mode = null, payload = payload, authHeader = authHeader)
         val response = envelope.response
 
         val joinResponse = JoinGameResponse(
@@ -90,6 +92,19 @@ object GatewayClient {
             }
         }
         return joinResponse
+    }
+
+    suspend fun declineInvite(gameId: String, position: String): GenericResponse {
+        val token = GameSessionManager.getAuthHeader(gameId) ?: AuthManager.getAuthHeader()
+        if (token.isNullOrBlank()) {
+            return GenericResponse(success = false, message = "No auth token")
+        }
+
+        return RetrofitClient.api.declineInvite(
+            gameId = gameId,
+            request = DeclineInviteRequest(position = position),
+            token = token
+        )
     }
 
     suspend fun addBot(request: AddBotRequest): AddBotResponse {
@@ -275,7 +290,13 @@ object GatewayClient {
             ?: MatchPointsResponse(success = false, message = "Invalid payload")
     }
 
-    private suspend fun command(command: String, gameId: String?, mode: String?, payload: Map<String, Any?>): GatewayEnvelope {
+    private suspend fun command(
+        command: String,
+        gameId: String?,
+        mode: String?,
+        payload: Map<String, Any?>,
+        authHeader: String? = null,
+    ): GatewayEnvelope {
         return RetrofitClient.api.routeCommand(
             command = command,
             request = GatewayCommandRequest(
@@ -283,7 +304,7 @@ object GatewayClient {
                 mode = mode,
                 payload = payload
             ),
-            token = GameSessionManager.getAuthHeader(gameId)
+            token = authHeader ?: GameSessionManager.getAuthHeader(gameId)
         )
     }
 

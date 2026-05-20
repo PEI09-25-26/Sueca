@@ -40,6 +40,18 @@ def _decode_backend_response(response: requests.Response):
 
 @router.post("/game/command/{command:path}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def route_command(command: str, request_data: CommandRequestDTO, request: Request):
+    # Determine authentication context
+    auth_payload = {}
+    authorization = request.headers.get("authorization")
+    if authorization:
+        try:
+            from ..helpers import require_any_token
+            auth_payload = require_any_token(authorization)
+        except Exception as e:
+            logger.debug("Failed to decode token for command injection: %s", e)
+
+    effective_uid = auth_payload.get("uid") or auth_payload.get("player_id")
+
     game_id = request_data.game_id
     mode = request_data.mode or state.room_modes.get(game_id, "virtual")
     mode = normalize_mode(mode)
@@ -49,6 +61,11 @@ def route_command(command: str, request_data: CommandRequestDTO, request: Reques
     if game_id and "game_id" not in payload:
         payload["game_id"] = game_id
     payload.setdefault("mode", mode)
+
+    # Inject authenticated UID if joining a virtual game
+    if mode == "virtual" and command == "join" and effective_uid:
+        payload["player_id"] = effective_uid
+        logger.info("Injecting ID %s into join payload", payload["player_id"])
 
     if mode == "virtual":
         target_url = f"{target}/api/{command}"
@@ -145,20 +162,6 @@ def route_stats(game_id: str):
         )
 
 
-@router.get("/presence", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
-def route_presence(request: Request):
-    try:
-        response = state.INTERNAL_HTTP.get(
-            f"{state.PRESENCE_SERVICE_URL.rstrip('/')}/status",
-            headers=_forward_headers(request),
-            timeout=5,
-        )
-        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
-    except requests.RequestException:
-        logger.exception("Error fetching presence")
-        return Response(status_code=502, content=json.dumps({"success": False, "message": "backend unavailable"}), media_type=APPLICATION_JSON)
-
-
 @router.get("/api/status", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def proxy_api_status(request: Request):
     game_id = request.query_params.get("game_id")
@@ -204,10 +207,28 @@ def proxy_api_rooms(request: Request):
 
 @router.post("/api/create_room", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
 async def proxy_api_create_room(request: Request):
+    # Determine authentication context
+    auth_payload = {}
+    authorization = request.headers.get("authorization")
+    if authorization:
+        try:
+            from ..helpers import require_any_token
+            auth_payload = require_any_token(authorization)
+        except Exception:
+            pass
+
+    effective_uid = auth_payload.get("uid") or auth_payload.get("player_id")
+
     target = target_base_for_mode("virtual")
     target_url = f"{target}/api/create_room"
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
+        
+        # Inject authenticated UID as player_id
+        if effective_uid:
+            body["player_id"] = effective_uid
+            logger.info("Injecting ID %s into create_room payload", body["player_id"])
+
         response = state.INTERNAL_HTTP.post(
             target_url,
             json=body,

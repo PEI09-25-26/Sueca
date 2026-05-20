@@ -116,12 +116,12 @@ object FriendsManager {
         }
     }
 
-    suspend fun listFriends(uid: String): Result<List<UserData>> {
+    suspend fun listFriends(uid: String, onlineOnly: Boolean = false): Result<List<UserData>> {
         return try {
             val token = AuthManager.getAuthHeader()
                 ?: return Result.failure(Exception("No auth token"))
 
-            val response = RetrofitClient.api.listFriends(uid, token)
+            val response = RetrofitClient.api.listFriends(uid, token, onlineOnly)
 
             if (response.success && response.friends != null) {
                 Result.success(response.friends)

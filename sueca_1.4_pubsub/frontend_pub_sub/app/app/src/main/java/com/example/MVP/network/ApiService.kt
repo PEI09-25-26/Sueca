@@ -100,7 +100,8 @@ interface ApiService {
     @GET("/api/friends/list")
     suspend fun listFriends(
         @Query("uid") uid: String,
-        @Header("Authorization") token: String
+        @Header("Authorization") token: String,
+        @Query("online_only") onlineOnly: Boolean = false
     ): FriendsListResponse
 
     @GET("/api/friends/requests")
@@ -170,6 +171,25 @@ interface ApiService {
         @Body request: LeaveRoomRequest,
         @Header("Authorization") token: String? = null
     ): GenericResponse
+
+    @POST("/api/room/{gameId}/invite")
+    suspend fun inviteFriend(
+        @Path("gameId") gameId: String,
+        @Body request: InviteRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @POST("/api/room/{gameId}/invite/decline")
+    suspend fun declineInvite(
+        @Path("gameId") gameId: String,
+        @Body request: DeclineInviteRequest,
+        @Header("Authorization") token: String
+    ): GenericResponse
+
+    @GET("/api/invites")
+    suspend fun getInvites(
+        @Header("Authorization") token: String
+    ): InvitesResponse
 
     // =========== /api/room Endpoints ============
 

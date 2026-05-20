@@ -8,6 +8,9 @@ import com.example.MVP.models.*
 import com.example.MVP.network.RetrofitClient
 import org.json.JSONObject
 import retrofit2.HttpException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 object AuthManager {
 	private const val PREFS_NAME = "SuecaAuthSecure"
@@ -167,6 +170,12 @@ object AuthManager {
 	}
 
 	private fun extractApiErrorMessage(e: Exception): String {
+		when (e) {
+			is SocketTimeoutException -> return "Connection timed out. Check the device network and try again."
+			is UnknownHostException -> return "Cannot reach the server. Check DNS or internet access on this device."
+			is SSLException -> return "Secure connection failed. Check the device date/time and network trust settings."
+		}
+
 		if (e is HttpException) {
 			val body = e.response()?.errorBody()?.string()
 			if (!body.isNullOrBlank()) {
