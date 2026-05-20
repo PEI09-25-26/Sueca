@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from apps.emqx.mqtt_client import connect_mqtt, disconnect_mqtt
 
-from .routes.cv_routes import router
+from .routes import cv_router as router
 
 
 app = FastAPI(title="Computer Vision Service", version="1.0")

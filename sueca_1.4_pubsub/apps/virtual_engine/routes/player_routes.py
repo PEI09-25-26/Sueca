@@ -185,3 +185,23 @@ def remove_player_endpoint(
 
     success, message = game.remove_player(actor_id, target_id)
     return {"success": success, "message": message}
+
+@router.post("/api/invite_friend_to_game", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
+def invite_friend(
+    data: RemovePlayerRequest = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
+    payload = data.dict()
+    game, game_id = get_game_from_request(payload)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    session_data = authorize_header(authorization, game_id)
+    actor_id = session_data["player_id"]
+    check_host(game_id, actor_id)
+    target_id = payload.get("target_id")
+    position_id = payload.get("position_id")
+    if not actor_id or not target_id or not position_id:
+        return error("actor_id, target_id and position_id are required", 400)
+    success, message = game.invite_player(actor_id, target_id, position_id)
+    return {"success": success, "message": message}

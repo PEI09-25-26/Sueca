@@ -6,8 +6,7 @@ from shared.logging_config import setup_logging
 
 setup_logging()
 
-from .routes.cv_routes import router as cv_router
-from .routes.game_routes import router as game_router
+from .routes import cv_router, game_router
 
 
 app = FastAPI(title="Physical Engine", version="1.0")

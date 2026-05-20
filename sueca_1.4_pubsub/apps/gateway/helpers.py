@@ -9,6 +9,7 @@ import logging
 from shared.redis_client import is_jti_revoked
 
 from shared.contracts import normalize_event, normalize_room_state, to_dict
+from shared.auth import decode_access_token as decode_user_token
 
 from . import state
 from apps.virtual_engine.session import session_manager
@@ -173,6 +174,43 @@ def require_session_token(authorization: str | None = Header(default=None)) -> d
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired session token")
 
     return payload
+
+
+def require_any_token(authorization: str | None = Header(default=None)):
+    """Allows either a control plane token, a room session token, or a user auth token.
+    If no authorization is provided, it allows anonymous access (returning empty payload).
+    """
+    if not authorization:
+        # ALLOW ANONYMOUS ACCESS
+        return {}
+    
+    # Try room session first (most common for game actions)
+    try:
+        payload = require_session_token(authorization)
+        if payload:
+            return payload
+    except HTTPException:
+        pass
+        
+    # Try control plane token (service-to-service)
+    try:
+        if require_control_plane_token(authorization):
+            return {"scope": "control_plane"}
+    except HTTPException:
+        pass
+        
+    # Try user auth token (for initial game start)
+    try:
+        token = authorization[7:].strip()
+        payload = decode_user_token(token)
+        if payload:
+            return payload
+    except Exception:
+        pass
+        
+    # If a token was provided but it's invalid, we still fail.
+    # Only true "no token" is allowed as anonymous.
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token")
 
 
 # start_service / stop_managed_services removed — orchestration should be handled by

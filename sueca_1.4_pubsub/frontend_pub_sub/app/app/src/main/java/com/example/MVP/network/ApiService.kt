@@ -186,7 +186,10 @@ interface ApiService {
     ): StartGameResponse
 
     @POST("/game/start")
-    suspend fun startPhysicalGame(@Body request: StartGameRequest): StartGameResponse
+    suspend fun startPhysicalGame(
+        @Body request: StartGameRequest,
+        @Header("Authorization") token: String? = null
+    ): StartGameResponse
 
     @POST("/api/add_bot")
     suspend fun addBot(
@@ -221,10 +224,25 @@ interface ApiService {
     // =========== /game Endpoints ============
 
     @POST("game/ready/{gameId}")
-    suspend fun startGameReady(@Path("gameId") gameId: String): StartGameResponse
+    suspend fun startGameReady(
+        @Path("gameId") gameId: String,
+        @Query("dealer_id") dealerId: Int? = null,
+        @Query("starter_id") starterId: Int? = null,
+        @Header("Authorization") token: String? = null
+    ): StartGameResponse
 
     @POST("game/new_round/{gameId}")
-    suspend fun startNewRound(@Path("gameId") gameId: String): StartGameResponse
+    suspend fun startNewRound(
+        @Path("gameId") gameId: String,
+        @Header("Authorization") token: String? = null
+    ): StartGameResponse
+
+    @POST("game/correct/{gameId}")
+    suspend fun correctGameCard(
+        @Path("gameId") gameId: String,
+        @Body request: CorrectCardRequest,
+        @Header("Authorization") token: String? = null
+    ): GenericResponse
 
     // =========== Hybrid Endpoints ============
 
@@ -271,12 +289,14 @@ interface ApiService {
     @POST("/game/room_mode/{gameId}")
     suspend fun setRoomMode(
         @Path("gameId") gameId: String,
-        @Body request: RoomModeRequest
+        @Body request: RoomModeRequest,
+        @Header("Authorization") token: String? = null
     ): GenericResponse
 
     @GET("/game/room_mode/{gameId}")
     suspend fun getRoomMode(
-        @Path("gameId") gameId: String
+        @Path("gameId") gameId: String,
+        @Header("Authorization") token: String? = null
     ): RoomModeResponse
 
     @POST("/game/command/{command}")

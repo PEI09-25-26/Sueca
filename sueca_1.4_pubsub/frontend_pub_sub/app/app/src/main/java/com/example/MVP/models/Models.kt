@@ -343,13 +343,22 @@ data class JoinRoomResponse(
 
 data class StartGameRequest(
     val playerName: String?,
-    val roomId: String?
+    val roomId: String?,
+    val dealerId: Int? = null
 )
 
 data class StartGameResponse(
     val success: Boolean,
     val message: String?,
-    val gameId: String?
+    val gameId: String?,
+    val token: String? = null,
+    val gameState: GameStatusResponse? = null
+)
+
+data class CorrectCardRequest(
+    val rank: String,
+    val suit: String,
+    @SerializedName("wrong_label") val wrongLabel: String? = null
 )
 
 data class JoinGameRequest(

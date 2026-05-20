@@ -27,13 +27,20 @@ object GatewayClient {
 
     suspend fun setRoomMode(gameId: String, mode: String) {
         runCatching {
-            RetrofitClient.api.setRoomMode(gameId, RoomModeRequest(mode))
+            RetrofitClient.api.setRoomMode(
+                gameId,
+                RoomModeRequest(mode),
+                GameSessionManager.getAuthHeader(gameId)
+            )
         }
     }
 
     suspend fun getRoomMode(gameId: String): String? {
         return runCatching {
-            RetrofitClient.api.getRoomMode(gameId).mode
+            RetrofitClient.api.getRoomMode(
+                gameId,
+                GameSessionManager.getAuthHeader(gameId)
+            ).mode
         }.getOrNull()
     }
 

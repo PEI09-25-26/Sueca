@@ -24,11 +24,11 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Jogo da Sueca"
-            android:textSize="28sp"
+            android:layout_marginBottom="24dp"
+            android:text="Suecada: O Jogo"
             android:textColor="@android:color/white"
-            android:textStyle="bold"
-            android:layout_marginBottom="24dp"/>
+            android:textSize="28sp"
+            android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnPlay"

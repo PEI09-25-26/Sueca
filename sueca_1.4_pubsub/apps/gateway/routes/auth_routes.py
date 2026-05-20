@@ -8,7 +8,7 @@ import jwt
 import logging
 
 from apps.virtual_engine.session import session_manager
-from shared.auth import extract_bearer_token
+from ..helpers import require_any_token
 from shared.ratelimit import rate_limit_dependency
 
 router = APIRouter()
@@ -41,16 +41,9 @@ class GuestSessionResponse(BaseModel):
     response_model=GameTokenResponse,
     dependencies=[Depends(rate_limit_dependency(limit=10, window_seconds=60))],
 )
-def issue_game_token(req: GameTokenRequest, authorization: str | None = Header(default=None)):
+def issue_game_token(req: GameTokenRequest, payload: dict = Depends(require_any_token)):
     """Issue a short-lived JWT for a given game_id to an authenticated player session."""
-    token = extract_bearer_token(authorization)
-    # Only allow room-session tokens to mint camera/game tokens.
-    # This prevents arbitrary authenticated access tokens from granting cross-room access.
-    session_payload = session_manager.validate_token(token)
-    if not session_payload:
-        raise HTTPException(status_code=401, detail="invalid or expired session token")
-
-    if session_payload.get("game_id") != req.game_id:
+    if payload.get("game_id") and payload.get("game_id") != req.game_id:
         raise HTTPException(status_code=403, detail="forbidden")
     secret = os.getenv("SUECA_JWT_SECRET")
     if not secret:
@@ -60,7 +53,7 @@ def issue_game_token(req: GameTokenRequest, authorization: str | None = Header(d
     exp = now + timedelta(seconds=ttl)
     payload = {"game_id": req.game_id, "exp": int(exp.timestamp())}
     token = jwt.encode(payload, secret, algorithm="HS256")
-    logger.info("Issued game token for game_id=%s by session_jti=%s", req.game_id, session_payload.get('jti'))
+    logger.info("Issued game token for game_id=%s by session_jti=%s", req.game_id, payload.get('jti'))
     return GameTokenResponse(token=token, expires_at=exp.isoformat() + "Z")
 
 

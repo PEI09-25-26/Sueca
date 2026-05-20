@@ -35,6 +35,16 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
     # Validate the token using the session manager to ensure it is an active room session
     payload = session_manager.validate_token(token)
     if not payload:
+        # Fallback for short-lived game tokens (which aren't tracked in session_manager memory)
+        try:
+            from apps.virtual_engine.session import decode_session_token
+            payload = decode_session_token(token)
+            if not payload.get("game_id"):
+                payload = None
+        except Exception:
+            payload = None
+
+    if not payload:
         await websocket.close(code=4002)
         logger.warning("Token validation failed for %s", game_id)
         return

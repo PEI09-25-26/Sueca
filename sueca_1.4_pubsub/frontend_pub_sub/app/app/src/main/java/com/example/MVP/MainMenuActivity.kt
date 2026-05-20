@@ -10,7 +10,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.example.MVP.models.StartGameRequest
+import com.example.MVP.models.*
 import com.example.MVP.network.RetrofitClient
 import kotlinx.coroutines.launch
 
@@ -180,14 +180,22 @@ class MainMenuActivity : AppCompatActivity() {
     private fun launchPresentialVisionGame() {
         val name = AuthManager.getPlayerDisplayName() ?: randomName()
         val roomId: String? = null
+        val authHeader = AuthManager.getAuthHeader()
 
         lifecycleScope.launch {
             try {
+                // In physical mode, North (1) is usually the first dealer by default
                 val response = RetrofitClient.api.startPhysicalGame(
-                    StartGameRequest(playerName = name, roomId = roomId)
+                    StartGameRequest(playerName = name, roomId = roomId, dealerId = 1),
+                    authHeader
                 )
 
                 if (response.success) {
+                    val actualGameId = response.gameId ?: "default"
+                    if (!response.token.isNullOrBlank()) {
+                        GameSessionManager.saveToken(actualGameId, response.token)
+                    }
+
                     Toast.makeText(
                         this@MainMenuActivity,
                         "Vision AI Started!",
@@ -196,7 +204,7 @@ class MainMenuActivity : AppCompatActivity() {
 
                     val intent = Intent(this@MainMenuActivity, VisionActivity::class.java)
                     intent.putExtra("playerName", name)
-                    intent.putExtra("roomId", response.gameId)
+                    intent.putExtra("roomId", actualGameId)
                     startActivity(intent)
                 } else {
                     Toast.makeText(

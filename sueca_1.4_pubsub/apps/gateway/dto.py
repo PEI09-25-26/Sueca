@@ -18,12 +18,20 @@ class ScanEventDTO(BaseModel):
 class StartGameRequest(BaseModel):
     playerName: str
     roomId: Optional[str] = None
+    dealerId: Optional[int] = None
 
 
 class StartGameResponse(BaseModel):
     success: bool
     message: str
     gameId: str
+    token: Optional[str] = None
+
+
+class CorrectCardRequest(BaseModel):
+    rank: str
+    suit: str
+    wrong_label: str | None = None
 
 
 class RoundEndData(BaseModel):
