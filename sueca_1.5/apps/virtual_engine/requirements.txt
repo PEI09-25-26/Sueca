@@ -1,0 +1,7 @@
+fastapi[all]
+uvicorn[standard]
+requests
+paho-mqtt
+PyJWT
+redis>=4.6.0
+firebase-admin==7.4.0

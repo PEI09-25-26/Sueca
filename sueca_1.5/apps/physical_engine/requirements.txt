@@ -1,0 +1,6 @@
+fastapi[all]
+uvicorn[standard]
+requests
+opencv-python-headless
+PyJWT==2.8.0
+pydantic==2.11.7
