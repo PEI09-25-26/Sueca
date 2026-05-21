@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="20dp"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Escolhe a cor do banner"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
+
+    <GridLayout
+        android:layout_width="391dp"
+        android:layout_height="166dp"
+        android:columnCount="5">
+
+        <!-- Color circles -->
+        <View
+            android:id="@+id/color_red"
+            style="@style/colorCircle"
+            android:background="#F44336" />
+
+        <View
+            android:id="@+id/color_blue"
+            style="@style/colorCircle"
+            android:background="#2196F3" />
+
+        <View
+            android:id="@+id/color_green"
+            style="@style/colorCircle"
+            android:background="#4CAF50" />
+
+        <View
+            android:id="@+id/color_purple"
+            style="@style/colorCircle"
+            android:background="#9C27B0" />
+
+        <View
+            android:id="@+id/color_orange"
+            style="@style/colorCircle"
+            android:background="#FF9800" />
+
+        <View
+            android:id="@+id/color_pink"
+            style="@style/colorCircle"
+            android:background="#F48FB1" />
+
+        <View
+            android:id="@+id/color_teal"
+            style="@style/colorCircle"
+            android:background="#00ACC1" />
+
+        <View
+            android:id="@+id/color_gold"
+            style="@style/colorCircle"
+            android:background="#FBC02D" />
+
+        <View
+            android:id="@+id/color_rose"
+            style="@style/colorCircle"
+            android:background="#880E4F" />
+
+        <View
+            android:id="@+id/color_slate"
+            style="@style/colorCircle"
+            android:background="#455A64" />
+
+    </GridLayout>
+
+</LinearLayout>
