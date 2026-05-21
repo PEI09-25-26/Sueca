@@ -35,3 +35,4 @@ __pycache__/
 # Cloudflare Tunnel Credentials
 **/apps/cloudflare/*.json
 !**/apps/cloudflare/config.yml
+*.pem
