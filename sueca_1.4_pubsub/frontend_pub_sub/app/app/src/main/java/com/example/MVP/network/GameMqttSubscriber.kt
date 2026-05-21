@@ -1,11 +1,7 @@
 package com.example.MVP.network
-/**
- * Componente de rede que gere a subscrição MQTT para receber atualizações em tempo real.
- * No modo híbrido, é usado para atualizar as cartas distribuídas e as jogadas confirmadas instantaneamente.
- */
+
 import android.util.Log
 import com.example.MVP.models.GameStatusResponse
-import com.example.MVP.models.HybridRuntimeState
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -18,11 +14,12 @@ import org.eclipse.paho.client.mqttv3.MqttException
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
 class GameMqttSubscriber(
     private val brokerHost: String,
     private val brokerPort: Int,
-    private val protocol: String = "wss"  // wss for WebSocket Secure, tcp for raw TCP
+    private val protocol: String = "wss"
 ) {
     private val tag = "SuecaMQTT"
 
@@ -30,13 +27,14 @@ class GameMqttSubscriber(
         val eventType: String?,
         val gameId: String?,
         val state: GameStatusResponse?,
-        val hands: Map<String, List<String>>,
-        val hybridState: HybridRuntimeState? = null,
-        val cameraFrame: String? = null
+        val hands: Map<String, List<String>>
     )
 
     private val gson = Gson()
     private var client: MqttAsyncClient? = null
+    @Volatile private var connectInProgress: Boolean = false
+    private val activeSessionId = AtomicInteger(0)
+    private var probeAcked = false
 
     fun connectAndSubscribe(
         gameId: String,
@@ -44,148 +42,243 @@ class GameMqttSubscriber(
         onConnectionError: (String) -> Unit,
         onBrokerRoundTrip: () -> Unit = {}
     ) {
-        val serverUri = "$protocol://$brokerHost:$brokerPort"
-        val clientId = "android-${UUID.randomUUID()}"
+        val sid = activeSessionId.incrementAndGet()
+        Log.d(tag, "connectAndSubscribe requested gameId=$gameId sid=$sid")
+        connectAndSubscribeInternal(gameId, onEnvelope, onConnectionError, onBrokerRoundTrip, 0, sid)
+    }
+
+    private fun connectAndSubscribeInternal(
+        gameId: String,
+        onEnvelope: (Envelope) -> Unit,
+        onConnectionError: (String) -> Unit,
+        onBrokerRoundTrip: () -> Unit,
+        attempt: Int,
+        sid: Int
+    ) {
+        if (sid != activeSessionId.get()) {
+            Log.i(tag, "Aborting connectAndSubscribe: session $sid is no longer active")
+            return
+        }
+
+        val oldClient: MqttAsyncClient?
+        synchronized(this) {
+            if (connectInProgress && attempt == 0) {
+                Log.w(tag, "connectAndSubscribe skipped gameId=$gameId because a connect is already in progress")
+                return
+            }
+            val existing = client
+            if (existing?.isConnected == true) {
+                Log.i(tag, "connectAndSubscribe skipped gameId=$gameId because client is already connected")
+                return
+            }
+
+            oldClient = existing
+            connectInProgress = true
+            client = null
+        }
+
+        if (oldClient != null) {
+            try {
+                Log.d(tag, "Closing old client for gameId=$gameId")
+                if (oldClient.isConnected) {
+                    oldClient.disconnectForcibly(200, 200)
+                }
+                oldClient.close()
+            } catch (_: Exception) {}
+        }
+
+        // Fix: Use standard URI without port for 443/80 to avoid Paho WebSocket piping bug
+        val serverUri = when {
+            protocol == "wss" && brokerPort == 443 -> "wss://$brokerHost/mqtt"
+            protocol == "ws" && brokerPort == 80 -> "ws://$brokerHost/mqtt"
+            else -> "$protocol://$brokerHost:$brokerPort/mqtt"
+        }
+        
+        // Fix: High-entropy clientId to prevent session collisions on broker or local library
+        val clientId = "and-${UUID.randomUUID().toString().take(6)}-${System.currentTimeMillis() % 1000}"
         val probeTopic = "sueca/games/$gameId/client_probe/$clientId"
         val probePayload = "probe-${UUID.randomUUID()}"
-        var probeAcked = false
-        Log.i(tag, "connectAndSubscribe start gameId=$gameId uri=$serverUri clientId=$clientId (pls work)")
+        probeAcked = false
+
+        Log.i(tag, "connectAndSubscribe start gameId=$gameId sid=$sid uri=$serverUri clientId=$clientId (attempt=$attempt)")
 
         try {
-            // Android file persistence was randomly exploding, so memory persistence it is.
             val mqttClient = MqttAsyncClient(serverUri, clientId, MemoryPersistence())
             mqttClient.setCallback(object : MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
-                    Log.e(tag, "connectionLost gameId=$gameId cause=${cause?.message} (well... there it goes)", cause)
+                    if (sid != activeSessionId.get()) return
+                    Log.e(tag, "connectionLost gameId=$gameId sid=$sid cause=${cause?.message}", cause)
                     onConnectionError("MQTT disconnected: ${cause?.message ?: "unknown"}")
                 }
 
                 override fun messageArrived(topic: String?, message: MqttMessage?) {
+                    if (sid != activeSessionId.get()) return
                     val payload = message?.payload?.toString(Charsets.UTF_8) ?: return
+                    
+                    Log.d(tag, "Message arrived (sid=$sid) topic=$topic payloadBytes=${message.payload.size}")
+
                     if (!probeAcked && topic == probeTopic && payload == probePayload) {
                         probeAcked = true
-                        Log.i(tag, "broker round-trip ack received gameId=$gameId topic=$probeTopic (nice)")
+                        Log.i(tag, "broker round-trip ack received gameId=$gameId sid=$sid")
                         onBrokerRoundTrip()
                         return
                     }
-                    Log.d(
-                        tag,
-                        "messageArrived gameId=$gameId topic=$topic payloadBytes=${message?.payload?.size ?: 0} qos=${message?.qos} retained=${message?.isRetained}"
-                    )
                     val envelope = parseEnvelope(payload)
-                    if (envelope.state == null && envelope.eventType == null && envelope.hands.isEmpty() 
-                        && envelope.hybridState == null && envelope.cameraFrame == null) {
-                        Log.w(tag, "message parsed with empty envelope gameId=$gameId topic=$topic (maybe backend sent vibes)")
-                    }
+                    Log.d(tag, "Parsed envelope (sid=$sid) eventType=${envelope.eventType} hasState=${envelope.state != null}")
                     onEnvelope(envelope)
                 }
 
-                override fun deliveryComplete(token: IMqttDeliveryToken?) {
-                    // Subscriber only.
-                }
+                override fun deliveryComplete(token: IMqttDeliveryToken?) {}
             })
 
             val options = MqttConnectOptions().apply {
-                isAutomaticReconnect = true
-                isCleanSession = false
-                connectionTimeout = 8
-                keepAliveInterval = 30
+                isAutomaticReconnect = false
+                isCleanSession = true
+                connectionTimeout = 20
+                keepAliveInterval = 60
+                if (protocol == "wss") {
+                    socketFactory = javax.net.ssl.SSLSocketFactory.getDefault()
+                    isHttpsHostnameVerificationEnabled = false
+                }
             }
 
             mqttClient.connect(options, null, object : IMqttActionListener {
                 override fun onSuccess(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?) {
-                    Log.i(tag, "connect success gameId=$gameId, subscribing topics (go go go)")
+                    if (sid != activeSessionId.get()) {
+                        Log.w(tag, "Connect success for stale session $sid, disconnecting...")
+                        try { mqttClient.disconnectForcibly(100, 100); mqttClient.close() } catch (_: Exception) {}
+                        return
+                    }
+
+                    Log.i(tag, "connect success gameId=$gameId sid=$sid")
+                    connectInProgress = false
+                    client = mqttClient
+                    
                     try {
-                        subscribeWithLog(mqttClient, "sueca/games/$gameId/state", gameId)
-                        subscribeWithLog(mqttClient, "sueca/games/$gameId/events", gameId)
-                        subscribeWithLog(mqttClient, "sueca/games/$gameId/players/+", gameId)
-                        subscribeWithLog(mqttClient, "sueca/games/$gameId/hybrid", gameId)
-                        subscribeWithLog(mqttClient, "sueca/games/$gameId/camera", gameId)
+                        subscribeWithLog(mqttClient, "sueca/games/$gameId/state", gameId, sid)
+                        subscribeWithLog(mqttClient, "sueca/games/$gameId/events", gameId, sid)
+                        subscribeWithLog(mqttClient, "sueca/games/$gameId/players/+", gameId, sid)
                         subscribeWithLog(
                             mqttClient = mqttClient,
                             topic = probeTopic,
                             gameId = gameId,
+                            sid = sid,
                             onSubscribed = {
-                                publishProbe(mqttClient, probeTopic, probePayload, gameId)
+                                publishProbe(mqttClient, probeTopic, probePayload, gameId, sid)
                             }
                         )
                     } catch (e: MqttException) {
-                        Log.e(tag, "subscribe error gameId=$gameId (pain)", e)
+                        Log.e(tag, "subscribe error gameId=$gameId sid=$sid", e)
                         onConnectionError("MQTT subscribe error: ${e.message}")
                     }
                 }
 
-                override fun onFailure(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?, exception: Throwable?) {
-                    Log.e(tag, "connect failure gameId=$gameId error=${exception?.message} (not today)", exception)
-                    onConnectionError("MQTT connect error: ${exception?.message ?: "unknown"}")
+                override fun onFailure(
+                    asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?,
+                    exception: Throwable?
+                ) {
+                    if (sid != activeSessionId.get()) {
+                        Log.d(tag, "Ignoring connect failure for stale session $sid")
+                        try { mqttClient.close() } catch (_: Exception) {}
+                        return
+                    }
+
+                    val stackTrace = Log.getStackTraceString(exception)
+                    val errorMsg = exception?.message ?: "unknown"
+                    Log.e(tag, "connect failure gameId=$gameId sid=$sid error=$errorMsg", exception)
+                    
+                    val alreadyConnected = stackTrace.lowercase().contains("already connected") ||
+                            errorMsg.lowercase().contains("already connected")
+
+                    if (alreadyConnected && attempt < 5) {
+                        // Exponential backoff with jitter
+                        val delay = (1500L * (attempt + 1)) + (Math.random() * 500).toLong()
+                        Log.w(tag, "Hit Paho 'Already connected' bug (sid=$sid). Retrying in ${delay}ms... (attempt ${attempt + 1})")
+                        connectInProgress = false
+                        try { mqttClient.close() } catch (_: Exception) {}
+                        
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            connectAndSubscribeInternal(gameId, onEnvelope, onConnectionError, onBrokerRoundTrip, attempt + 1, sid)
+                        }, delay)
+                        return
+                    }
+
+                    connectInProgress = false
+                    try {
+                        if (mqttClient.isConnected) mqttClient.disconnectForcibly(200, 200)
+                        mqttClient.close()
+                    } catch (_: Exception) {}
+                    
+                    onConnectionError("MQTT connect error: $errorMsg")
                 }
             })
 
-            client = mqttClient
-            Log.d(tag, "client instance created gameId=$gameId (caffeine mode)")
         } catch (e: Exception) {
-            Log.e(tag, "setup error gameId=$gameId (well, I guess it's not working)", e)
-            onConnectionError("MQTT setup error: ${e.message}")
+            if (sid == activeSessionId.get()) {
+                connectInProgress = false
+                Log.e(tag, "setup error gameId=$gameId sid=$sid", e)
+                onConnectionError("MQTT setup error: ${e.message}")
+            }
         }
     }
 
     fun disconnect() {
-        val mqttClient = client ?: return
-        try {
-            if (mqttClient.isConnected) {
-                Log.i(tag, "disconnect requested (someone kick this guy out)")
-                mqttClient.disconnect()
-            }
-            mqttClient.close()
-            Log.i(tag, "client closed (done)")
-        } catch (e: Exception) {
-            Log.w("GameMqttSubscriber", "Error disconnecting MQTT", e)
-        } finally {
-            client = null
-        }
-    }
-
-    fun publishCameraFrame(gameId: String, frameBase64: String) {
-        val mqttClient = client ?: return
-        if (!mqttClient.isConnected) return
+        val sid = activeSessionId.incrementAndGet() // Invalidate any ongoing connect attempts
+        val mqttClient = client
+        client = null
+        connectInProgress = false
         
-        try {
-            val topic = "sueca/games/$gameId/camera"
-            val payload = JsonObject().apply {
-                addProperty("camera_frame", frameBase64)
-            }.toString()
-            mqttClient.publish(topic, payload.toByteArray(Charsets.UTF_8), 0, false)
-        } catch (e: Exception) {
-            Log.w(tag, "Failed to publish camera frame", e)
-        }
+        Log.i(tag, "disconnect requested, new sid=$sid")
+        
+        if (mqttClient == null) return
+
+        Thread {
+            try {
+                if (mqttClient.isConnected) {
+                    mqttClient.disconnect().waitForCompletion(500)
+                }
+                mqttClient.close()
+                Log.d(tag, "Client closed successfully (sid=$sid)")
+            } catch (e: Exception) {
+                Log.w(tag, "Error during disconnect (sid=$sid): ${e.message}")
+                try { mqttClient.close() } catch (_: Exception) {}
+            }
+        }.start()
     }
 
     private fun subscribeWithLog(
         mqttClient: MqttAsyncClient,
         topic: String,
         gameId: String,
+        sid: Int,
         onSubscribed: (() -> Unit)? = null
     ) {
+        if (sid != activeSessionId.get()) return
+        
         mqttClient.subscribe(topic, 1, null, object : IMqttActionListener {
             override fun onSuccess(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?) {
-                Log.i(tag, "subscribed gameId=$gameId topic=$topic (ok this one worked)")
+                Log.i(tag, "subscribed gameId=$gameId sid=$sid topic=$topic")
                 onSubscribed?.invoke()
             }
 
             override fun onFailure(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?, exception: Throwable?) {
-                Log.e(tag, "subscribe failure gameId=$gameId topic=$topic error=${exception?.message} (why)", exception)
+                if (sid != activeSessionId.get()) return
+                Log.e(tag, "subscribe failure gameId=$gameId sid=$sid topic=$topic error=${exception?.message}", exception)
             }
         })
     }
 
-    private fun publishProbe(mqttClient: MqttAsyncClient, topic: String, payload: String, gameId: String) {
+    private fun publishProbe(mqttClient: MqttAsyncClient, topic: String, payload: String, gameId: String, sid: Int) {
+        if (sid != activeSessionId.get()) return
+
         mqttClient.publish(topic, payload.toByteArray(Charsets.UTF_8), 1, false, null, object : IMqttActionListener {
             override fun onSuccess(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?) {
-                Log.i(tag, "probe published gameId=$gameId topic=$topic (pls echo back)")
+                Log.i(tag, "probe published gameId=$gameId sid=$sid topic=$topic")
             }
 
             override fun onFailure(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?, exception: Throwable?) {
-                Log.e(tag, "probe publish failure gameId=$gameId topic=$topic error=${exception?.message} (sad)", exception)
+                if (sid != activeSessionId.get()) return
+                Log.e(tag, "probe publish failure gameId=$gameId sid=$sid topic=$topic error=${exception?.message}", exception)
             }
         })
     }
@@ -195,21 +288,16 @@ class GameMqttSubscriber(
             val root = JsonParser.parseString(payload).asJsonObject
             val state = root.getAsJsonObjectOrNull("state")
                 ?.let { gson.fromJson(it, GameStatusResponse::class.java) }
-            
-            val hybridState = root.getAsJsonObjectOrNull("hybrid_state")
-                ?.let { gson.fromJson(it, HybridRuntimeState::class.java) }
 
             Envelope(
                 eventType = root.getStringOrNull("event_type"),
                 gameId = root.getStringOrNull("game_id"),
                 state = state,
-                hands = root.getHandsMap(),
-                hybridState = hybridState,
-                cameraFrame = root.getStringOrNull("camera_frame")
+                hands = root.getHandsMap()
             )
         } catch (e: Exception) {
-            Log.w(tag, "parseEnvelope failed payloadPreview=${payload.take(180)} (json said nope)", e)
-            Envelope(null, null, null, emptyMap(), null, null)
+            Log.w(tag, "parseEnvelope failed", e)
+            Envelope(null, null, null, emptyMap())
         }
     }
 

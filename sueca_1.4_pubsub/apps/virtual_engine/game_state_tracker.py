@@ -9,6 +9,8 @@ from .card_analyzer import CardAnalyzer
 
 class GameStateTracker:
     """Tracks all relevant game state for intelligent card play"""
+
+    _POSITION_ORDER = [Positions.NORTH, Positions.WEST, Positions.SOUTH, Positions.EAST]
     
     def __init__(self):
         # Player identity
@@ -18,6 +20,8 @@ class GameStateTracker:
         self.partner_id = None  # partner's name
         self.partner_position = None
         self.opponents = []  # list of opponent names
+        self.current_player_name = None
+        self._player_position_by_name = {}
         
         # Trump
         self.trump_suit = None
@@ -55,7 +59,16 @@ class GameStateTracker:
         Update tracker from server's game state dictionary.
         """
         self.player_name = player_name        
+        self.current_player_name = state.get("current_player") or state.get("current_player_name")
+        self._player_position_by_name = {}
         for player in state.get("players", []):
+            player_name_in_state = player.get("name")
+            if player_name_in_state:
+                raw_position = str(player.get("position", ""))
+                normalized_position = raw_position.split(".")[-1].upper()
+                if normalized_position in Positions.__members__:
+                    self._player_position_by_name[player_name_in_state] = Positions[normalized_position]
+
             if player["name"] == player_name:
                 raw_position = str(player.get("position", ""))
                 normalized_position = raw_position.split(".")[-1].upper()
@@ -158,6 +171,120 @@ class GameStateTracker:
         Get all unplayed cards of a specific suit.
         """
         return {card for card in self.remaining_cards if CardMapper.get_card_suit(card) == suit}
+
+    def get_my_cards_of_suit(self, suit):
+        """
+        Get my hand cards of a specific suit.
+        """
+        return [card for card in self.my_hand if CardMapper.get_card_suit(card) == suit]
+    
+    def is_partner_winning(self):
+        """
+        Check if partner is currently winning the trick.
+        """
+        if not self.current_trick:
+            return False
+        winner = self.get_current_trick_winner()
+        return winner == self.partner_id
+    
+    def get_current_trick_winner(self):
+        """
+        Determine who's currently winning the trick.
+        """
+        if not self.current_trick:
+            return None
+        
+        trump_cards=[]
+        for player, card in self.current_trick:
+            suit = CardMapper.get_card_suit(card)
+            if suit == self.trump_suit:
+                trump_cards.append((player, card))
+
+        if trump_cards:
+            candidate_cards = trump_cards
+        else:
+            lead_suit = CardMapper.get_card_suit(self.current_trick[0][1])
+            candidate_cards = [(player, card) for player, card in self.current_trick
+                            if CardMapper.get_card_suit(card) == lead_suit]
+
+        winner_player, _ = max(candidate_cards, key=lambda x: CardAnalyzer.get_card_strength(x[1], self.trump_suit, self.lead_suit))
+
+        return winner_player
+
+    def get_trick_points(self, trick=None):
+        """
+        Calculate total points in a trick.
+        """
+        if trick is None:
+            trick = self.current_trick
+        
+        total = 0
+        for _, card_id in trick:
+            total += CardMapper.get_card_points(card_id)
+            
+        return total
+
+    def is_player_void(self, player_name, suit):
+        """
+        Check whether a player has already shown they cannot follow a suit.
+        """
+        if not player_name or not suit:
+            return False
+        return suit in self.void_suits_by_player.get(player_name, set())
+
+    def is_ace_gone(self, suit):
+        """
+        Check whether the ace of a suit has already been played.
+        """
+        if not suit:
+            return False
+        ace_card = next(
+            (card for card in range(40) if CardMapper.get_card_suit(card) == suit and CardMapper.get_card_rank(card) == "A"),
+            None,
+        )
+        return ace_card is not None and ace_card not in self.remaining_cards
+
+    def get_players_after_self(self):
+        """
+        Return the remaining players in the current trick after this agent's turn.
+
+        The virtual engine resolves tricks in the order NORTH -> WEST -> SOUTH -> EAST,
+        rotated so the previous trick winner leads the next trick.
+        """
+        if not self.player_name or not self.position or not self.current_trick:
+            return []
+
+        lead_player_name = self.current_trick[0][0]
+        lead_position = self._player_position_by_name.get(lead_player_name)
+        if lead_position is None:
+            lead_position = self.position
+
+        try:
+            lead_index = self._POSITION_ORDER.index(lead_position)
+        except ValueError:
+            lead_index = 0
+
+        trick_order = self._POSITION_ORDER[lead_index:] + self._POSITION_ORDER[:lead_index]
+        played_players = {player for player, _ in self.current_trick}
+
+        players_after_self = []
+        seen_self = False
+        for position in trick_order:
+            player_name = next(
+                (name for name, player_position in self._player_position_by_name.items() if player_position == position),
+                None,
+            )
+            if player_name is None:
+                continue
+            if player_name == self.player_name:
+                seen_self = True
+                continue
+            if player_name in played_players:
+                continue
+            if seen_self:
+                players_after_self.append(player_name)
+
+        return players_after_self
 
     def get_my_cards_of_suit(self, suit):
         """

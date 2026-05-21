@@ -1,7 +1,159 @@
 package com.example.MVP.models
 
-import com.google.gson.annotations.SerializedName
 import com.google.gson.JsonObject
+import com.google.gson.annotations.SerializedName
+
+// ============ Auth Models ============
+data class RegisterRequest(
+    val username: String,
+    val email: String,
+    val password: String
+)
+
+data class RegisterResponse(
+    val success: Boolean,
+    val message: String,
+    @SerializedName("verificationRequired") val verificationRequired: Boolean? = null,
+    @SerializedName("verificationId") val verificationId: String? = null
+)
+
+data class VerifyEmailRequest(
+    @SerializedName("verification_id") val verificationId: String,
+    val code: String
+)
+
+data class LoginRequest(
+    val username: String,
+    val password: String
+)
+
+data class UpdateUserRequest(
+    val description: String? = null,
+    val photoURL: String? = null,
+    val bannerURL: String? = null,
+    val privacy: String? = null,
+    val status: String? = null,
+    val password: String? = null
+)
+
+data class LogoutRequest(
+    val uid: String
+)
+
+data class DeleteAccountRequest(
+    val uid: String
+)
+
+data class ConfirmDeleteAccountRequest(
+    val uid: String,
+    @SerializedName("verification_id") val verificationId: String,
+    val code: String
+)
+
+data class AuthResponse(
+    val success: Boolean,
+    val message: String,
+    val user: UserData? = null,
+    val token: String? = null
+)
+
+data class RecoverPasswordResponse(
+    val success: Boolean,
+    val message: String? = null,
+    @SerializedName("verificationId") val verificationId: String? = null
+)
+
+data class ResetPasswordRequest(
+    @SerializedName("verification_id") val verificationId: String,
+    val code: String,
+    @SerializedName("new_password") val newPassword: String
+)
+
+data class UserResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val user: UserData? = null
+)
+
+data class UserData(
+    val uid: String,
+    val username: String,
+    val email: String,
+    @SerializedName("emailVerified") val emailVerified: Boolean,
+    val description: String,
+    val photoURL: String,
+    val bannerURL: String,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName("lastLoginAt") val lastLoginAt: String?,
+    val privacy: String,
+    @SerializedName("friendsCount") val friendsCount: Int,
+    val status: String,
+    @SerializedName("friendCode") val friendCode: String? = null
+)
+
+// ============ Friend Models ============
+data class SendFriendRequestRequest(
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_uid") val toUid: String
+)
+
+data class SendFriendRequestByUsernameRequest(
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_username") val toUsername: String
+)
+
+data class AcceptFriendRequestRequest(
+    @SerializedName("request_id") val requestId: String
+)
+
+data class DeclineFriendRequestRequest(
+    @SerializedName("request_id") val requestId: String
+)
+
+data class FriendRequestResponse(
+    val success: Boolean,
+    val message: String,
+    val request: FriendRequest? = null
+)
+
+data class FriendRequest(
+    val id: String,
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_uid") val toUid: String,
+    val status: String,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String
+)
+
+data class FriendCodeResponse(
+    val code: String,
+    @SerializedName("expires_at") val expiresAt: String? = null
+)
+
+data class FriendsListResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val friends: List<UserData>? = null,
+    val count: Int? = null
+)
+
+data class IncomingFriendRequestData(
+    val id: String,
+    @SerializedName("from_uid") val fromUid: String,
+    @SerializedName("to_uid") val toUid: String,
+    @SerializedName("from_username") val fromUsername: String,
+    val status: String,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String
+)
+
+data class FriendRequestsListResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val requests: List<IncomingFriendRequestData>? = null,
+    val count: Int? = null
+)
 
 // ============ Card Data ============
 data class Card(
@@ -33,6 +185,8 @@ data class GameStatusResponse(
     @SerializedName("current_round") val currentRound: Int,
     @SerializedName("round_suit") val roundSuit: String?,
     @SerializedName("game_started") val gameStarted: Boolean,
+    @SerializedName("creator_id") val creatorId: String? = null,
+    @SerializedName("is_public") val isPublic: Boolean? = null,
     val scores: Map<String, Int>?,
     @SerializedName("available_slots") val availableSlots: List<LobbySlot>? = emptyList(),
     @SerializedName("match_points") val matchPoints: MatchPoints? = null
@@ -99,14 +253,26 @@ data class CutDeckRequest(
 
 data class SelectTrumpRequest(
     @SerializedName("player_id") val playerId: String,
-    val choice: String, // "top" or "bottom"
+    val choice: Choice, // "top" or "bottom"
     @SerializedName("game_id") val gameId: String? = null
+)
+
+data class RoomVisibilityRequest(
+    @SerializedName("player_id") val playerId: String,
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("is_public") val isPublic: Boolean
+)
+
+data class LeaveRoomRequest(
+    @SerializedName("player_id") val playerId: String,
+    @SerializedName("game_id") val gameId: String
 )
 
 // ============ Responses ============
 data class GenericResponse(
     val success: Boolean,
-    val message: String?
+    val message: String?,
+    @SerializedName("verificationId") val verificationId: String? = null
 )
 
 data class JoinResponse(
@@ -134,7 +300,8 @@ data class RoomState(
 )
 
 data class CreateRoomRequest(
-    val playerName: String
+    val name: String? = null,
+    val position: String? = null
 )
 
 data class CreateRoomResponse(
@@ -142,6 +309,24 @@ data class CreateRoomResponse(
     @SerializedName("room_id") val roomId: String? = null,
     @SerializedName("player_id") val playerId: String? = null,
     @SerializedName("game_id") val gameId: String? = null,
+    val token: String? = null,
+    val message: String? = null
+)
+
+data class RoomSummary(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("player_count") val playerCount: Int,
+    @SerializedName("max_players") val maxPlayers: Int,
+    val players: List<String> = emptyList(),
+    val phase: String? = null,
+    @SerializedName("is_public") val isPublic: Boolean? = null,
+    @SerializedName("game_started") val gameStarted: Boolean = false
+)
+
+data class RoomsResponse(
+    val success: Boolean,
+    val rooms: List<RoomSummary>? = null,
+    @SerializedName("total_rooms") val totalRooms: Int = 0,
     val message: String? = null
 )
 
@@ -158,32 +343,42 @@ data class JoinRoomResponse(
 
 data class StartGameRequest(
     val playerName: String?,
-    val roomId: String?
+    val roomId: String?,
+    val dealerId: Int? = null
 )
 
 data class StartGameResponse(
     val success: Boolean,
     val message: String?,
-    val gameId: String?
+    val gameId: String?,
+    val token: String? = null,
+    val gameState: GameStatusResponse? = null
+)
+
+data class CorrectCardRequest(
+    val rank: String,
+    val suit: String,
+    @SerializedName("wrong_label") val wrongLabel: String? = null
 )
 
 data class JoinGameRequest(
     val name: String,
     @SerializedName("game_id") val gameId: String? = null,
-    val position: String? = null
+    val position: Position? = null
 )
 
 data class JoinGameResponse(
     val success: Boolean,
     val message: String?,
     @SerializedName("game_id") val gameId: String?,
-    @SerializedName("player_id") val playerId: String?
+    @SerializedName("player_id") val playerId: String?,
+    val token: String? = null
 )
 
 data class AddBotRequest(
     @SerializedName("player_id") val playerId: String,
     @SerializedName("game_id") val gameId: String,
-    val position: String,
+    val position: Position,
     val difficulty: String,
     val name: String
 )
@@ -201,6 +396,29 @@ data class RemoveParticipantRequest(
     @SerializedName("game_id") val gameId: String
 )
 
+// ============ Invitation Models ============
+
+data class InviteRequest(
+    @SerializedName("friend_uid") val friendUid: String,
+    val position: String
+)
+
+data class DeclineInviteRequest(
+    val position: String
+)
+
+data class GameInvite(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("inviter_name") val inviterName: String,
+    val position: String,
+    val timestamp: String
+)
+
+data class InvitesResponse(
+    val success: Boolean,
+    val invites: List<GameInvite>
+)
+
 // ============ Hybrid Mode Models ============
 data class HybridSessionResetRequest(
     @SerializedName("game_id") val gameId: String,
@@ -212,6 +430,19 @@ data class HybridRecognizeRequest(
     @SerializedName("frame_base64") val frameBase64: String,
     @SerializedName("target_count") val targetCount: Int = 10
 )
+
+
+enum class Position {
+    @SerializedName("NORTH") NORTH,
+    @SerializedName("SOUTH") SOUTH,
+    @SerializedName("EAST") EAST,
+    @SerializedName("WEST") WEST
+}
+
+enum class Choice {
+    @SerializedName("top") TOP,
+    @SerializedName("bottom") BOTTOM
+}
 
 data class HybridCardPayload(
     val id: Int,
@@ -355,6 +586,21 @@ data class RoomModeRequest(
     val mode: String
 )
 
+data class RoomModeResponse(
+    val success: Boolean,
+    @SerializedName("game_id") val gameId: String? = null,
+    val mode: String? = null
+)
+
+data class GameTokenRequest(
+    @SerializedName("game_id") val gameId: String
+)
+
+data class GameTokenResponse(
+    val token: String,
+    @SerializedName("expires_at") val expiresAt: String
+)
+
 data class GatewayCommandRequest(
     @SerializedName("game_id") val gameId: String? = null,
     val mode: String? = null,
@@ -370,15 +616,3 @@ data class GatewayEnvelope(
     val message: String? = null,
     val response: JsonObject? = null
 )
-
-data class UndoMoveRequest(
-    @SerializedName("game_id") val gameId: String
-)
-
-data class UndoMoveResponse(
-    val success: Boolean,
-    val message: String?,
-    val state: HybridRuntimeState? = null,
-    @SerializedName("game_state") val gameState: GameStatusResponse? = null
-)
-

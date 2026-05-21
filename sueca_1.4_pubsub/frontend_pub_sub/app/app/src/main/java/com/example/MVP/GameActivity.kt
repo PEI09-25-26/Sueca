@@ -98,19 +98,24 @@ class GameActivity : AppCompatActivity() {
 
         setupUI()
         startRealtimeUpdates()
+        startPolling()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
+    override fun onPause() {
+        super.onPause()
         pollingJob?.cancel()
         mqttSubscriber?.disconnect()
         mqttSubscriber = null
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+    }
+
     private fun setupUI() {
 
         findViewById<ImageView>(R.id.backButton).setOnClickListener {
-            AlertDialog.Builder(this)
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
                 .setMessage("Desistir do jogo?")
                 .setPositiveButton("Sim") { _, _ -> finish() }
                 .setNegativeButton("Nao", null)
@@ -177,6 +182,7 @@ class GameActivity : AppCompatActivity() {
 
     private fun startRealtimeUpdates() {
         if (gameId.isBlank()) return
+        if (mqttSubscriber != null) return
 
         Log.i(logTag, "Starting realtime updates gameId=$gameId broker=${RetrofitClient.MQTT_BROKER_HOST}:${RetrofitClient.MQTT_BROKER_PORT} (pls work)")
 
@@ -230,7 +236,29 @@ class GameActivity : AppCompatActivity() {
         )
     }
 
-    // Polling removed in favor of MQTT.
+    // Fallback polling in case MQTT is temporarily unavailable.
+    private fun startPolling() {
+        pollingJob = lifecycleScope.launch {
+            while (true) {
+                try {
+                    val staleRealtime = (System.currentTimeMillis() - lastRealtimeUpdateMs) > 15000
+                    if (staleRealtime) {
+                        if (!usingPollingFallback) {
+                            Log.w(logTag, "Switching to polling fallback gameId=$gameId staleMs=${System.currentTimeMillis() - lastRealtimeUpdateMs} (plan B)")
+                            usingPollingFallback = true
+                        }
+                        fetchGameState()
+                        fetchHand()
+                    }
+                } catch (e: Exception) {
+                    Log.e(logTag, "Polling error gameId=$gameId (why now)", e)
+                    txtStatus.text = "Connection error: ${e.message}"
+                }
+
+                delay(5000)
+            }
+        }
+    }
 
     private suspend fun fetchGameState() {
         try {
@@ -503,7 +531,7 @@ class GameActivity : AppCompatActivity() {
                 val team2 = points?.team2 ?: 0
                 val matchesPlayed = response.matchesPlayed ?: 0
 
-                AlertDialog.Builder(this@GameActivity)
+                AlertDialog.Builder(this@GameActivity, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
                     .setTitle("Match Scoreboard")
                     .setMessage(
                         "Team 1 (N/S): $team1\n" +
@@ -524,7 +552,7 @@ class GameActivity : AppCompatActivity() {
         input.hint = "1 - 40"
         input.inputType = android.text.InputType.TYPE_CLASS_NUMBER
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("Cut deck")
             .setView(input)
             .setPositiveButton("Cut") { _, _ ->
@@ -570,10 +598,11 @@ class GameActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
 
+                val choiceEnum = if (choice.equals("top", ignoreCase = true)) Choice.TOP else Choice.BOTTOM
                 val res = GatewayClient.selectTrump(
                     SelectTrumpRequest(
                         playerId = if (playerId.isNotBlank()) playerId else playerName,
-                        choice = choice,
+                        choice = choiceEnum,
                         gameId = gameId.ifBlank { null }
                     )
                 )

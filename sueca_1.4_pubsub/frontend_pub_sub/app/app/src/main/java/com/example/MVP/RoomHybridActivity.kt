@@ -12,16 +12,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.JoinGameRequest
-import com.example.MVP.network.GameMqttSubscriber
+import com.example.MVP.models.Position
 import com.example.MVP.network.GatewayClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Atividade que gere o lobby (sala) antes de iniciar uma partida em modo Híbrido.
- * Aqui os jogadores escolhem os seus lugares e decidem se querem ser jogadores Virtuais ou Reais.
- */
 class RoomHybridActivity : AppCompatActivity() {
 
     private lateinit var roomId: String
@@ -40,11 +36,18 @@ class RoomHybridActivity : AppCompatActivity() {
     private lateinit var txtSeatSouthPlayer: TextView
     private lateinit var txtSeatWestPlayer: TextView
 
+    private lateinit var roomVisibilityContainer: View
+    private lateinit var imgRoomVisibilityLock: ImageView
+    private lateinit var txtRoomVisibilityHint: TextView
+
     private lateinit var txtSeatHint: TextView
     private lateinit var btnStartHybridGame: Button
+    private var isRegisteredInRoom: Boolean = false
+    private var gameStarted: Boolean = false
+    private var roomIsPublic: Boolean = true
     private lateinit var switchVirtualRole: Switch
 
-    private var mqttSubscriber: GameMqttSubscriber? = null
+    private var pollingJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,11 +76,16 @@ class RoomHybridActivity : AppCompatActivity() {
         txtSeatSouthPlayer = findViewById(R.id.txtSeatSouthPlayer)
         txtSeatWestPlayer = findViewById(R.id.txtSeatWestPlayer)
 
+        roomVisibilityContainer = findViewById(R.id.roomVisibilityContainer)
+        imgRoomVisibilityLock = findViewById(R.id.imgRoomVisibilityLock)
+        txtRoomVisibilityHint = findViewById(R.id.txtRoomVisibilityHint)
+
         txtSeatHint = findViewById(R.id.txtSeatHint)
         btnStartHybridGame = findViewById(R.id.btnStartHybridGame)
         switchVirtualRole = findViewById(R.id.switchVirtualRole)
 
         txtRoom.text = "Sala hibrida: $roomId"
+        roomIsPublic = HybridMenuActivity.isMockRoomPublic(roomId)
 
         if (isHost) {
             switchVirtualRole.isChecked = false
@@ -86,6 +94,8 @@ class RoomHybridActivity : AppCompatActivity() {
         }
 
         btnBack.setOnClickListener { finish() }
+        imgRoomVisibilityLock.setOnClickListener { toggleRoomVisibility() }
+        updateRoomVisibilityUi(canToggle = isHost)
         wireSeatSelection()
 
         btnStartHybridGame.setOnClickListener {
@@ -100,44 +110,38 @@ class RoomHybridActivity : AppCompatActivity() {
         btnStartHybridGame.visibility = View.GONE
     }
 
+    override fun onDestroy() {
+        if (isFinishing && isRegisteredInRoom && !gameStarted) {
+            HybridMenuActivity.unregisterMockRoomPlayer(roomId, playerName)
+        }
+        super.onDestroy()
+    }
+
     override fun onResume() {
         super.onResume()
-        startMqttUpdates()
+        startPolling()
     }
 
     override fun onPause() {
         super.onPause()
-        mqttSubscriber?.disconnect()
+        pollingJob?.cancel()
     }
 
-    /**
-     * Inicia a receção de atualizações em tempo real via MQTT.
-     * Isto é crucial para que todos os jogadores vejam quem já escolheu lugar sem precisar de fazer refresh manual.
-     */
-    private fun startMqttUpdates() {
-        mqttSubscriber?.disconnect()
-        
-        val subscriber = GameMqttSubscriber(
-            brokerHost = "mqtt.suecadaojogo.com",
-            brokerPort = 443,
-            protocol = "wss"
-        )
-        
-        subscriber.connectAndSubscribe(
-            gameId = roomId,
-            onEnvelope = { envelope ->
-                runOnUiThread {
-                    envelope.state?.let { state ->
+    private fun startPolling() {
+        pollingJob?.cancel()
+        pollingJob = lifecycleScope.launch {
+            while (true) {
+                try {
+                    val state = GatewayClient.getStatus(roomId)
+                    if (state != null) {
                         updateUI(state)
                     }
+                } catch (_: Exception) {
+                    // Keep current UI state if server temporarily fails.
                 }
-            },
-            onConnectionError = { error ->
-                // Optional: Fallback to polling if needed, but let's stick to MQTT for now.
+                delay(1000)
             }
-        )
-        
-        mqttSubscriber = subscriber
+        }
     }
 
     private fun wireSeatSelection() {
@@ -147,10 +151,6 @@ class RoomHybridActivity : AppCompatActivity() {
         btnSeatWest.setOnClickListener { joinWithPosition("west") }
     }
 
-    /**
-     * Faz a chamada ao servidor para ocupar um lugar específico (Norte, Sul, Este ou Oeste).
-     * @param position A posição escolhida pelo utilizador.
-     */
     private fun joinWithPosition(position: String) {
         lifecycleScope.launch {
             try {
@@ -158,7 +158,7 @@ class RoomHybridActivity : AppCompatActivity() {
                     JoinGameRequest(
                         name = playerName,
                         gameId = roomId,
-                        position = position
+                        position = Position.valueOf(position.uppercase())
                     )
                 )
 
@@ -182,10 +182,6 @@ class RoomHybridActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Atualiza a interface gráfica com base no estado atual da sala recebido do servidor.
-     * Mostra quem está em cada lugar e quais os lugares ainda disponíveis.
-     */
     private fun updateUI(state: GameStatusResponse) {
         val occupied = state.players.associate { it.position.uppercase() to it.name }
         val available = state.availableSlots?.map { it.position.uppercase() }?.toSet() ?: emptySet()
@@ -222,6 +218,45 @@ class RoomHybridActivity : AppCompatActivity() {
         button.isEnabled = available
     }
 
+    private fun toggleRoomVisibility() {
+        if (!isHost) {
+            Toast.makeText(this, "So o criador da sala pode alterar a visibilidade.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val newVisibility = !roomIsPublic
+        val updated = HybridMenuActivity.setMockRoomVisibility(roomId, newVisibility)
+        if (!updated) {
+            Toast.makeText(this, "Nao foi possivel alterar a visibilidade da sala.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        roomIsPublic = newVisibility
+        updateRoomVisibilityUi(canToggle = true)
+
+        val feedback = if (roomIsPublic) {
+            "Sala publica no menu hibrido."
+        } else {
+            "Sala privada. Entrada apenas por codigo."
+        }
+        Toast.makeText(this, feedback, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateRoomVisibilityUi(canToggle: Boolean) {
+        roomVisibilityContainer.visibility = View.VISIBLE
+        imgRoomVisibilityLock.setImageResource(
+            if (roomIsPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed
+        )
+        txtRoomVisibilityHint.text = if (roomIsPublic) {
+            "Qualquer pessoa pode entrar"
+        } else {
+            "Necessario codigo para entrar"
+        }
+
+        imgRoomVisibilityLock.isEnabled = canToggle
+        imgRoomVisibilityLock.alpha = if (canToggle) 1f else 0.55f
+    }
+
     private fun hideAllSeatButtons() {
         btnSeatNorth.visibility = View.GONE
         btnSeatEast.visibility = View.GONE
@@ -237,11 +272,8 @@ class RoomHybridActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Transição para a atividade principal do jogo híbrido (HybridActivity).
-     * Passa as configurações escolhidas (lugar, se é host, se é virtual) via Intent.
-     */
     private fun goToHybridGame() {
+        gameStarted = true
         val intent = Intent(this, HybridActivity::class.java)
         intent.putExtra("roomId", roomId)
         intent.putExtra("playerName", playerName)

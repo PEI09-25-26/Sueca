@@ -1,15 +1,21 @@
-import os
-import subprocess
 import threading
 import queue
-from pathlib import Path
+import httpx
+import asyncio
 from typing import Optional
 
-import requests
+from fastapi import Header, HTTPException, status
+import os
+import jwt
+import logging
+from shared.redis_client import is_jti_revoked
 
 from shared.contracts import normalize_event, normalize_room_state, to_dict
+from shared.auth import decode_access_token as decode_user_token
 
 from . import state
+from apps.virtual_engine.session import session_manager
+from fastapi import HTTPException, status
 
 
 class _ForwardDispatcher:
@@ -28,7 +34,7 @@ class _ForwardDispatcher:
         try:
             self._queue.put_nowait((kind, payload))
         except queue.Full:
-            print(f"[Middleware] Dropping {kind} payload because forwarding queue is full")
+            logging.getLogger("gateway.forward").warning("Dropping %s payload because forwarding queue is full", kind)
 
     def _run(self):
         while not self._stop.is_set():
@@ -43,7 +49,7 @@ class _ForwardDispatcher:
                 else:
                     state.frontend.send_event(payload)
             except Exception as error:
-                print(f"[Middleware] Failed to push {kind} to frontend: {error}")
+                logging.getLogger("gateway.forward").exception("Failed to push %s to frontend", kind)
             finally:
                 self._queue.task_done()
 
@@ -88,11 +94,52 @@ def ingest_state(payload: dict, source: str, default_mode: str):
     return canonical_state
 
 
+async def update_user_status(uid: str, status: str):
+    """Update user status via Auth Service."""
+    if not uid or len(uid) < 10: # Skip guests
+        return
+
+    from shared.auth_client import issue_service_token, AUTH_SERVICE_URL
+    from shared.config import SERVICES
+    
+    try:
+        svc_token = await issue_service_token("gateway", "control_plane")
+        if not svc_token:
+            return
+
+        async with httpx.AsyncClient() as client:
+            await client.put(
+                f"{SERVICES.auth_service_url}/user/{uid}/status",
+                json={"uid": uid, "status": status},
+                headers={"Authorization": f"Bearer {svc_token}"},
+                timeout=2.0
+            )
+    except Exception:
+        logging.getLogger("gateway.status").warning("Failed to update status for %s to %s", uid, status)
+
+
 def ingest_event(payload: dict, source: str, default_mode: str):
     mode = infer_mode_from_payload(payload, default_mode)
     envelope = normalize_event(payload, source=source, mode=mode)
     event_payload = to_dict(envelope)
     remember_room_mode(event_payload.get("game_id"), mode)
+
+    # Trigger status updates
+    event_type = event_payload.get("event_type")
+    import asyncio
+    if event_type == "player_joined":
+        # We need the UID. In envelope, it might be player_id
+        uid = event_payload.get("player_id")
+        if uid:
+            asyncio.create_task(update_user_status(uid, "en jogo"))
+    elif event_type in ("player_left", "player_removed", "physical_reset", "room_deleted"):
+        uid = event_payload.get("player_id")
+        if uid:
+            asyncio.create_task(update_user_status(uid, "online"))
+        elif event_type == "room_deleted":
+            # If room is deleted, we might need to reset all players status?
+            # For now, let's keep it simple.
+            pass
 
     if state.FORWARD_TO_FRONTEND:
         FORWARD_DISPATCHER.submit("event", event_payload)
@@ -114,39 +161,100 @@ def is_service_up(url: str) -> bool:
         return False
 
 
-def start_service(name: str, command: list[str], health_url: str, cwd: Optional[Path] = None):
-    if is_service_up(health_url):
-        return
+def require_control_plane_token(authorization: str | None = Header(default=None)) -> bool:
+    """Dependency that enforces a signed service JWT for control-plane actions.
 
-    # Ensure ROOT_DIR is in PYTHONPATH so absolute imports like 'apps.emqx...' work
-    env = os.environ.copy()
-    root_str = str(state.ROOT_DIR)
-    current_pythonpath = env.get("PYTHONPATH", "")
-    if current_pythonpath:
-        env["PYTHONPATH"] = f"{root_str}{os.pathsep}{current_pythonpath}"
-    else:
-        env["PYTHONPATH"] = root_str
+    Expects a Bearer token signed with `SUECA_SERVICE_JWT_SECRET` and containing
+    a claim `scope: "control_plane"`. Also checks the token `jti` against the
+    Redis denylist to ensure revoked service tokens are rejected.
+    """
+    logger = logging.getLogger(__name__)
+    secret = os.getenv("SUECA_SERVICE_JWT_SECRET")
+    if not secret:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="server misconfigured")
 
-    process = subprocess.Popen(
-        command,
-        cwd=str(cwd or state.ROOT_DIR),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        env=env,
-    )
-    state.service_processes[name] = process
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing or invalid authorization header")
+
+    token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
+
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="service token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid service token")
+
+    # ensure scope
+    if payload.get("scope") != "control_plane":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")
+
+    # denylist check
+    jti = payload.get("jti")
+    if jti and is_jti_revoked(jti):
+        logger.warning("Rejected revoked service token jti=%s", jti)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="service token revoked")
+
+    return True
 
 
-def stop_managed_services():
-    for name, process in tuple(state.service_processes.items()):
-        try:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=3)
-        except Exception:
-            try:
-                process.kill()
-            except Exception:
-                pass
-        finally:
-            state.service_processes.pop(name, None)
+def require_session_token(authorization: str | None = Header(default=None)) -> dict:
+    """Dependency that enforces a valid player session token (Bearer token).
+
+    Returns the session payload dict on success, or raises HTTPException on failure.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing or invalid authorization header")
+
+    token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
+
+    payload = session_manager.validate_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired session token")
+
+    return payload
+
+
+def require_any_token(authorization: str | None = Header(default=None)):
+    """Allows either a control plane token, a room session token, or a user auth token.
+    If no authorization is provided, it allows anonymous access (returning empty payload).
+    """
+    if not authorization:
+        # ALLOW ANONYMOUS ACCESS
+        return {}
+    
+    # Try room session first (most common for game actions)
+    try:
+        payload = require_session_token(authorization)
+        if payload:
+            return payload
+    except HTTPException:
+        pass
+        
+    # Try control plane token (service-to-service)
+    try:
+        if require_control_plane_token(authorization):
+            return {"scope": "control_plane"}
+    except HTTPException:
+        pass
+        
+    # Try user auth token (for initial game start)
+    try:
+        token = authorization[7:].strip()
+        payload = decode_user_token(token)
+        if payload:
+            return payload
+    except Exception:
+        pass
+        
+    # If a token was provided but it's invalid, we still fail.
+    # Only true "no token" is allowed as anonymous.
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token")
+
+
+# start_service / stop_managed_services removed — orchestration should be handled by
+# container tooling (docker-compose / k8s) or external process managers.

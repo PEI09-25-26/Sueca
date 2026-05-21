@@ -50,49 +50,72 @@
                     android:background="@drawable/banner_background"
                     android:scaleType="centerCrop" />
 
-                <ImageView
-                    android:id="@+id/image_profile"
+                <FrameLayout
                     android:layout_width="112dp"
                     android:layout_height="112dp"
                     android:layout_gravity="center"
-                    android:background="@drawable/profile_avatar_circle"
-                    android:clipToOutline="true"
-                    android:outlineProvider="background"
-                    android:scaleType="centerCrop"
-                    android:translationY="28dp" />
+                    android:translationY="28dp">
+
+                    <ImageView
+                        android:id="@+id/image_profile"
+                        android:layout_width="112dp"
+                        android:layout_height="112dp"
+                        android:background="@drawable/profile_avatar_circle"
+                        android:clipToOutline="true"
+                        android:outlineProvider="background"
+                        android:scaleType="centerCrop" />
+
+                    <View
+                        android:id="@+id/statusIndicator"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="bottom|end"
+                        android:background="@drawable/status_indicator_online"
+                        android:contentDescription="Online Status" />
+
+                </FrameLayout>
 
             </FrameLayout>
 
             <TextView
-                android:id="@+id/name_profile"
+                android:id="@+id/usernameTextView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:gravity="center"
-                android:text="nomedaconta"
+                android:text="@string/username"
                 android:textColor="@android:color/white"
-                android:textSize="26sp"
-                android:textStyle="bold" />
+                android:textSize="20sp" />
 
             <TextView
-                android:id="@+id/description_profile"
+                android:id="@+id/emailTextView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="@string/email"
+                android:textColor="@android:color/darker_gray"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/descriptionTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
                 android:background="@drawable/section_outline"
                 android:gravity="start"
                 android:minHeight="84dp"
                 android:padding="12dp"
-                android:text="isto aqui é uma descição super fixe. Qual é a tua opinião sobre descrições grandes? concordo!"
+                android:text="@string/description"
                 android:textColor="@android:color/white"
-                android:textSize="17sp" />
+                android:textSize="16sp" />
 
             <TextView
                 android:id="@+id/statisticstext_profile"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
-                android:text="Estatísticas:"
+                android:text="Estatisticas:"
                 android:textColor="@android:color/white"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -111,7 +134,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Vitórias: x"
+                    android:text="Vitorias: x"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
 
@@ -138,14 +161,23 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Streak de Vitórias: x"
+                    android:text="Streak de Vitorias: x"
+                    android:textColor="@android:color/white"
+                    android:textSize="17sp" />
+
+                <TextView
+                    android:id="@+id/friendsCountTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/friends_count"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
             </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
-                android:layout_height="28dp" />
+                android:layout_height="16dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/edit_profile"
@@ -162,11 +194,11 @@
                 app:iconPadding="8dp" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/leave_account_profile"
+                android:id="@+id/logoutButton"
                 android:layout_width="match_parent"
                 android:layout_height="54dp"
                 android:layout_marginBottom="8dp"
-                android:text="Sair da Conta"
+                android:text="Logout"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
                 android:textSize="19sp"

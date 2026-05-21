@@ -8,7 +8,7 @@ class CornerYoloDetector:
     def __init__(
         self,
         model_path: str,
-        min_conf: float = 0.50,
+        min_conf: float = 0.75,
         iou: float = 0.5,
         imgsz: int = 640,
         max_det: int = 10,
@@ -59,30 +59,3 @@ class CornerYoloDetector:
 
         detections.sort(key=lambda d: d["confidence"], reverse=True)
         return detections
-
-
-class CardClassifier:
-    def __init__(self, model_path: str, imgsz: int = 224) -> None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[CV2-Fallback] Loading classifier model on {device}: {model_path}")
-        self.model = YOLO(model_path)
-        self.model.to(device)
-        self.imgsz = imgsz
-
-    def classify(self, image_bgr) -> tuple[Optional[str], float]:
-        results = self.model.predict(source=image_bgr, imgsz=self.imgsz, verbose=False)
-        if not results:
-            return None, 0.0
-
-        probs = getattr(results[0], "probs", None)
-        if probs is None:
-            return None, 0.0
-
-        top1 = getattr(probs, "top1", None)
-        top1_conf = getattr(probs, "top1conf", None)
-        if top1 is None or top1_conf is None:
-            return None, 0.0
-
-        label = results[0].names.get(int(top1), str(top1))
-        confidence = float(top1_conf.item())
-        return label, confidence

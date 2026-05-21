@@ -29,6 +29,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.MVP.models.Card
+import com.example.MVP.models.Choice
 import com.example.MVP.models.GameStatusResponse
 import com.example.MVP.models.HybridConfirmCaptureRequest
 import com.example.MVP.models.HybridConfirmTrumpCaptureRequest
@@ -38,8 +39,7 @@ import com.example.MVP.models.HybridRegisterPlayerRequest
 import com.example.MVP.models.HybridRuntimeState
 import com.example.MVP.models.HybridSelectCardRequest
 import com.example.MVP.models.SelectTrumpRequest
-import com.example.MVP.network.GameMqttSubscriber
-import com.example.MVP.network.GatewayClient
+import com.example.MVP.network.RetrofitClient
 import com.example.MVP.utils.CardMapper
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
@@ -48,10 +48,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Atividade principal do Modo Híbrido. 
- * Gere a câmara (se for Host), a sincronização via MQTT e a interação entre o mundo físico e virtual.
- */
 class HybridActivity : AppCompatActivity() {
 
     private lateinit var modeSwitch: Switch
@@ -65,8 +61,6 @@ class HybridActivity : AppCompatActivity() {
     private lateinit var trumpSelectionControls: View
     private lateinit var btnTrumpTop: Button
     private lateinit var btnTrumpBottom: Button
-    private lateinit var btnUndoMove: Button
-    private lateinit var hostCameraPreview: ImageView
 
     private lateinit var handAdapter: CardsAdapter
 
@@ -80,7 +74,8 @@ class HybridActivity : AppCompatActivity() {
     private var hybridState: HybridRuntimeState? = null
 
     private var isRunning = false
-    private var mqttSubscriber: GameMqttSubscriber? = null
+    private var pollHybridJob: Job? = null
+    private var pollGameJob: Job? = null
     private var flashJob: Job? = null
 
     private var inFlightRecognition = false
@@ -126,38 +121,29 @@ class HybridActivity : AppCompatActivity() {
         trumpSelectionControls = findViewById(R.id.trumpSelectionControls)
         btnTrumpTop = findViewById(R.id.btnTrumpTop)
         btnTrumpBottom = findViewById(R.id.btnTrumpBottom)
-        btnUndoMove = findViewById(R.id.btnUndoMove)
-        hostCameraPreview = findViewById(R.id.hostCameraPreview)
 
         clearTableCards()
         setupHand()
         setupSwitch()
         setupTrumpControls()
-        setupUndoControl()
 
         if (isHost) {
             ensureCameraPermissionsAndStart()
         } else {
             previewView.visibility = View.GONE
-            // Permitimos que o jogador virtual alterne entre mesa e câmara do host
-            modeSwitch.isEnabled = true 
-            modeSwitch.isChecked = true // Começa na mesa (virtual) como solicitado
+            modeSwitch.isChecked = true
+            modeSwitch.isEnabled = false
         }
 
         lifecycleScope.launch {
             hybridRoleRegistered = registerHybridRole()
-            startMqttUpdates()
+            startRuntimeLoops()
         }
     }
 
     private fun setupTrumpControls() {
-        btnTrumpTop.setOnClickListener { submitTrumpChoice("top") }
-        btnTrumpBottom.setOnClickListener { submitTrumpChoice("bottom") }
-    }
-
-    private fun setupUndoControl() {
-        btnUndoMove.setOnClickListener { requestUndoMove() }
-        btnUndoMove.visibility = View.GONE
+        btnTrumpTop.setOnClickListener { submitTrumpChoice(Choice.TOP) }
+        btnTrumpBottom.setOnClickListener { submitTrumpChoice(Choice.BOTTOM) }
     }
 
     private fun setupHand() {
@@ -181,25 +167,12 @@ class HybridActivity : AppCompatActivity() {
                 modeSwitch.text = "Camera ativa"
                 modeText.text = "Modo atual: camera"
                 mesaContainer.visibility = View.GONE
-                
-                if (isHost) {
-                    previewView.visibility = View.VISIBLE
-                    hostCameraPreview.visibility = View.GONE
-                } else {
-                    previewView.visibility = View.GONE
-                    hostCameraPreview.visibility = View.VISIBLE
-                }
-                
-                // Only host should see the recognition overlay
-                recognitionOverlay.visibility = if (isRunning && isHost) View.VISIBLE else View.GONE
+                previewView.visibility = if (isHost) View.VISIBLE else View.GONE
+                recognitionOverlay.visibility = if (isRunning) View.VISIBLE else View.GONE
             }
         }
     }
 
-    /**
-     * Regista o papel do jogador no servidor (Real ou Virtual).
-     * Essencial para que o servidor saiba quem precisa de "ver" as cartas no telemóvel.
-     */
     private suspend fun registerHybridRole(): Boolean {
         if (playerId.isBlank()) {
             syncPlayerIdFromStatus()
@@ -211,7 +184,7 @@ class HybridActivity : AppCompatActivity() {
         }
 
         try {
-            GatewayClient.hybridRegisterPlayer(
+            RetrofitClient.api.hybridRegisterPlayer(
                 HybridRegisterPlayerRequest(
                     gameId = roomId,
                     playerId = playerId,
@@ -226,16 +199,12 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Reinicia o estado de distribuição de cartas para o Host.
-     * Prepara o sistema de reconhecimento de imagem para começar a "dar" cartas aos jogadores virtuais.
-     */
     private suspend fun resetDealForHost() {
         if (playerId.isBlank()) {
             return
         }
         try {
-            val response = GatewayClient.hybridDealReset(
+            val response = RetrofitClient.api.hybridDealReset(
                 HybridDealResetRequest(
                     gameId = roomId,
                     playerId = playerId,
@@ -251,54 +220,50 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Conecta-se ao broker MQTT para receber atualizações automáticas do jogo.
-     * O "envelope" recebido contém tanto o estado geral do jogo (pontos, mesa) como o estado específico do modo híbrido (cartas distribuídas).
-     */
-    private fun startMqttUpdates() {
-        if (isRunning) return
+    private fun startRuntimeLoops() {
+        if (isRunning) {
+            return
+        }
         isRunning = true
         recognitionOverlay.visibility = View.VISIBLE
         modeSwitch.isEnabled = false
 
-        val subscriber = GameMqttSubscriber(
-            brokerHost = "mqtt.suecadaojogo.com",
-            brokerPort = 443, // WSS via Cloudflare usually goes through 443
-            protocol = "wss"
-        )
+        pollHybridJob?.cancel()
+        pollGameJob?.cancel()
 
-        subscriber.connectAndSubscribe(
-            gameId = roomId,
-            onEnvelope = { envelope ->
-                runOnUiThread {
-                    envelope.state?.let { state ->
-                        gameState = state
-                        updateUiFromGameState(state)
+        pollHybridJob = lifecycleScope.launch {
+            while (isRunning) {
+                try {
+                    if (!hybridRoleRegistered) {
+                        hybridRoleRegistered = registerHybridRole()
                     }
-                    envelope.hybridState?.let { hybrid ->
-                        hybridState = hybrid
-                        updateUiFromHybridState(hybrid)
-                    }
-                    
-                    envelope.cameraFrame?.let { frame ->
-                        if (!isHost) {
-                            displayHostFrame(frame)
-                        }
-                    }
+                    val response = RetrofitClient.api.hybridState(roomId)
+                    hybridState = response.state
+                    updateUiFromHybridState(response.state)
+                } catch (e: Exception) {
+                    Log.w("HybridActivity", "hybridState poll failed: ${e.message}")
                 }
-            },
-            onConnectionError = { error ->
-                Log.e("HybridActivity", "MQTT Error: $error")
-                // Optional: Fallback to polling if MQTT fails completely
+                delay(700)
             }
-        )
+        }
 
-        mqttSubscriber = subscriber
+        pollGameJob = lifecycleScope.launch {
+            while (isRunning) {
+                try {
+                    if (!hybridRoleRegistered) {
+                        hybridRoleRegistered = registerHybridRole()
+                    }
+                    val state = RetrofitClient.api.getStatus(roomId)
+                    gameState = state
+                    updateUiFromGameState(state)
+                } catch (e: Exception) {
+                    Log.w("HybridActivity", "game status poll failed: ${e.message}")
+                }
+                delay(700)
+            }
+        }
     }
 
-    /**
-     * Decide se a UI deve mostrar a fase de Distribuição ou a fase de Jogo.
-     */
     private fun updateUiFromHybridState(state: HybridRuntimeState) {
         if (gameState?.phase != "playing") {
             handAdapter.isEnabled = false
@@ -313,26 +278,8 @@ class HybridActivity : AppCompatActivity() {
         showPlayPhase(state)
     }
 
-    private fun displayHostFrame(frameBase64: String) {
-        try {
-            val decodedString = android.util.Base64.decode(frameBase64, android.util.Base64.DEFAULT)
-            val decodedByte = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
-            runOnUiThread {
-                hostCameraPreview.setImageBitmap(decodedByte)
-            }
-        } catch (e: Exception) {
-            Log.w("HybridActivity", "Failed to decode host frame", e)
-        }
-    }
-
-    /**
-     * Gere a UI durante a distribuição de cartas. 
-     * Se for Host, indica qual o próximo jogador virtual que deve receber uma carta da câmara.
-     * Se for Virtual, mostra as cartas que o Host já leu para nós.
-     */
     private fun showDealPhase(state: HybridRuntimeState) {
         recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
-        btnUndoMove.visibility = View.GONE
 
         if (isHost) {
             val nextTarget = state.virtualPlayers.firstOrNull { it.cardsCount < state.cardsPerVirtual }
@@ -366,15 +313,9 @@ class HybridActivity : AppCompatActivity() {
         handAdapter.isEnabled = false
     }
 
-    /**
-     * Gere a UI durante as jogadas.
-     * O Host vê o que a câmara capta. Os Virtuais veem as suas cartas para poderem escolher uma.
-     */
     private fun showPlayPhase(state: HybridRuntimeState) {
         val pending = state.pendingVirtualPlay
         val currentPlayerId = gameState?.currentPlayerId
-        btnUndoMove.visibility = View.VISIBLE
-        btnUndoMove.isEnabled = pending != null || (gameState?.roundPlays?.isNotEmpty() == true)
 
         if (isHost) {
             if (pending != null) {
@@ -422,39 +363,7 @@ class HybridActivity : AppCompatActivity() {
             recognitionProgressText.text = "Jogador real: acompanhar mao do jogador da vez"
         }
 
-        modeSwitch.isEnabled = true
-    }
-
-    private fun requestUndoMove() {
-        if (roomId.isBlank()) {
-            return
-        }
-
-        lifecycleScope.launch {
-            try {
-                val response = GatewayClient.undoMove(
-                    com.example.MVP.models.UndoMoveRequest(
-                        gameId = roomId
-                    ), "virtual"
-                )
-
-                if (response.success) {
-                    response.state?.let {
-                        hybridState = it
-                        updateUiFromHybridState(it)
-                    }
-                    response.gameState?.let {
-                        gameState = it
-                        updateUiFromGameState(it)
-                    }
-                } else {
-                    recognitionProgressText.text = response.message ?: "Nao foi possivel desfazer a jogada"
-                }
-            } catch (e: Exception) {
-                Log.w("HybridActivity", "requestUndoMove failed: ${e.message}")
-                recognitionProgressText.text = "Erro ao desfazer a jogada"
-            }
-        }
+        modeSwitch.isEnabled = isHost
     }
 
     private fun updateUiFromGameState(state: GameStatusResponse) {
@@ -468,9 +377,6 @@ class HybridActivity : AppCompatActivity() {
         }
 
         trumpSelectionControls.visibility = View.GONE
-        if (phase != "playing") {
-            btnUndoMove.visibility = View.GONE
-        }
 
         if (isHost && state.phase == "playing" && !dealResetRequested) {
             lifecycleScope.launch {
@@ -498,7 +404,6 @@ class HybridActivity : AppCompatActivity() {
 
     private fun showTrumpSelectionPhase(state: GameStatusResponse) {
         trumpSelectionControls.visibility = View.VISIBLE
-        btnUndoMove.visibility = View.GONE
         recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
         handAdapter.isEnabled = false
         handAdapter.updateCards(emptyList())
@@ -523,7 +428,7 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
-    private fun submitTrumpChoice(choice: String) {
+    private fun submitTrumpChoice(choice: Choice) {
         if (playerId.isBlank()) {
             recognitionProgressText.text = "Nao foi possivel identificar o teu jogador"
             return
@@ -531,7 +436,7 @@ class HybridActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val response = GatewayClient.selectTrump(
+                val response = RetrofitClient.api.selectTrump(
                     SelectTrumpRequest(
                         playerId = playerId,
                         choice = choice,
@@ -563,10 +468,6 @@ class HybridActivity : AppCompatActivity() {
         // Decision is executed by analyzer thread; this method only updates intent.
     }
 
-    /**
-     * Chamada quando um jogador virtual clica numa carta no ecrã.
-     * A carta fica num estado "pendente" até o Host a confirmar fisicamente na mesa com a câmara.
-     */
     private fun onVirtualCardTap(card: Card) {
         if (!isVirtualPlayer) {
             return
@@ -582,7 +483,7 @@ class HybridActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val response = GatewayClient.hybridSelectCard(
+                val response = RetrofitClient.api.hybridSelectCard(
                     HybridSelectCardRequest(
                         gameId = roomId,
                         playerId = playerId,
@@ -624,11 +525,9 @@ class HybridActivity : AppCompatActivity() {
 
     private suspend fun syncPlayerIdFromStatus() {
         try {
-            val state = GatewayClient.getStatus(roomId)
-            if (state != null) {
-                val me = state.players.firstOrNull { it.name == playerName }
-                playerId = me?.id ?: playerId
-            }
+            val state = RetrofitClient.api.getStatus(roomId)
+            val me = state.players.firstOrNull { it.name == playerName }
+            playerId = me?.id ?: playerId
         } catch (_: Exception) {
             // Will retry from next polling cycle.
         }
@@ -647,10 +546,6 @@ class HybridActivity : AppCompatActivity() {
         )
     }
 
-    /**
-     * Configura o pipeline da câmara usando CameraX.
-     * Define um 'analyzer' que processa frames em tempo real para detetar cartas.
-     */
     private fun startCameraPipeline() {
         val providerFuture = ProcessCameraProvider.getInstance(this)
         frameExecutor = Executors.newSingleThreadExecutor()
@@ -684,27 +579,9 @@ class HybridActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    /**
-     * A função mais importante para o Host:
-     * 1. Captura o frame da câmara.
-     * 2. Converte-o para Base64.
-     * 3. Envia-o para o servidor dependendo da fase (Capturar Trunfo, Distribuir Cartas ou Confirmar Jogada).
-     */
     private fun analyzeFrameForHybrid(imageProxy: ImageProxy) {
         try {
             if (!isHost || !isRunning || inFlightRecognition) {
-                return
-            }
-
-            val localHybrid = hybridState
-            val localGame = gameState
-            val currentPlayerId = localGame?.currentPlayerId
-            val currentRole = localHybrid?.playerRoles?.get(currentPlayerId)
-            val pending = localHybrid?.pendingVirtualPlay
-
-            // Se for a vez de um virtual e ele ainda não escolheu, paramos de enviar frames (mas mantemos o preview)
-            // IMPORTANTE: Só impedimos se a distribuição já estiver concluída.
-            if (localHybrid?.dealDone == true && currentRole == "virtual" && pending == null) {
                 return
             }
 
@@ -717,13 +594,13 @@ class HybridActivity : AppCompatActivity() {
             lastFrameSentAt = now
             inFlightRecognition = true
 
-            // Share frame with virtual players via MQTT
-            mqttSubscriber?.publishCameraFrame(roomId, frameBase64)
+            val localHybrid = hybridState
+            val localGame = gameState
 
             lifecycleScope.launch {
                 try {
                     if (localGame?.phase == "trump_selection") {
-                        val response = GatewayClient.hybridConfirmTrumpCapture(
+                        val response = RetrofitClient.api.hybridConfirmTrumpCapture(
                             HybridConfirmTrumpCaptureRequest(
                                 gameId = roomId,
                                 hostPlayerId = playerId,
@@ -731,10 +608,9 @@ class HybridActivity : AppCompatActivity() {
                             )
                         )
                         if (response.success) {
-                            Log.i("HybridActivity", "Trump confirmed: ${response.capturedDisplay}")
                             response.gameState?.let {
                                 gameState = it
-                                runOnUiThread { updateUiFromGameState(it) }
+                                updateUiFromGameState(it)
                             }
                             response.state?.let {
                                 hybridState = it
@@ -742,7 +618,7 @@ class HybridActivity : AppCompatActivity() {
                             flashCheck("Trunfo captado")
                         }
                     } else if (localHybrid != null && !localHybrid.dealDone && localGame?.phase == "playing") {
-                        val response = GatewayClient.hybridDealRecognize(
+                        val response = RetrofitClient.api.hybridDealRecognize(
                             HybridDealRecognizeRequest(
                                 gameId = roomId,
                                 playerId = playerId,
@@ -766,7 +642,7 @@ class HybridActivity : AppCompatActivity() {
                         }
 
                         if (!capturePlayerId.isNullOrBlank()) {
-                            val response = GatewayClient.hybridConfirmCapture(
+                            val response = RetrofitClient.api.hybridConfirmCapture(
                                 HybridConfirmCaptureRequest(
                                     gameId = roomId,
                                     playerId = capturePlayerId,
@@ -775,14 +651,6 @@ class HybridActivity : AppCompatActivity() {
                                 )
                             )
                             if (response.success) {
-                                // Validar se a carta captada corresponde à selecionada pelo virtual (se aplicável)
-                                if (pending != null && response.capturedCardId != null && response.capturedCardId != pending.cardId) {
-                                    runOnUiThread {
-                                        flashError("Carta errada! Esperada: ${CardMapper.getCard(pending.cardId)}")
-                                    }
-                                    return@launch
-                                }
-
                                 response.state?.let {
                                     hybridState = it
                                     updateUiFromHybridState(it)
@@ -809,22 +677,9 @@ class HybridActivity : AppCompatActivity() {
         flashJob?.cancel()
         flashJob = lifecycleScope.launch {
             recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check)
-            recognitionStateImage.colorFilter = null
             recognitionProgressText.text = text
             delay(1200)
             recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
-        }
-    }
-
-    private fun flashError(text: String) {
-        flashJob?.cancel()
-        flashJob = lifecycleScope.launch {
-            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check) // Or a cross if available
-            recognitionStateImage.setColorFilter(ContextCompat.getColor(this@HybridActivity, android.R.color.holo_red_dark))
-            recognitionProgressText.text = text
-            delay(2000)
-            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
-            recognitionStateImage.colorFilter = null
         }
     }
 
@@ -934,7 +789,8 @@ class HybridActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         isRunning = false
-        mqttSubscriber?.disconnect()
+        pollHybridJob?.cancel()
+        pollGameJob?.cancel()
         flashJob?.cancel()
         frameExecutor?.shutdown()
         cameraProvider?.unbindAll()

@@ -5,109 +5,158 @@ import threading
 import time
 import copy
 
-from card_mapper import CardMapper
-from referee import Referee
+from ..card_mapper import CardMapper
+from ..referee import Referee
+from shared.config import SERVICES
 
 ref = Referee()
 state_sync_lock = threading.Lock()
+GAME_SESSIONS: dict[str, Referee] = {"default": ref}
+PRE_ROUND_SESSIONS: dict[str, Referee] = {}
 
-MIDDLEWARE_URL = "http://localhost:8000/game/state"
-MIDDLEWARE_ROUND_END_URL = "http://localhost:8000/game/round_end"
+MIDDLEWARE_URL = f"{SERVICES.gateway_url}/game/physical/state"
+MIDDLEWARE_ROUND_END_URL = f"{SERVICES.gateway_url}/game/round_end"
 
 # Game constants
 MAX_ROUNDS = 4
 MAX_RODADAS = 10
-current_round = 1
-current_hand = ref.current_player - 1
-ref_history = []
-
-
-
 class CardDTO(BaseModel):
 	rank: str
 	suit: str
 	confidence: Optional[float] = None
+	game_id: Optional[str] = None
 
 
-def get_state_data():
-	return ref.state()
+def _normalize_game_id(game_id: Optional[str]) -> str:
+	normalized_game_id = (game_id or "default").strip()
+	return normalized_game_id or "default"
 
 
-def _send_state_to_middleware():
+def _get_ref(game_id: Optional[str] = None) -> Referee:
+	normalized_game_id = _normalize_game_id(game_id)
+	game_ref = GAME_SESSIONS.get(normalized_game_id)
+	if game_ref is None:
+		game_ref = Referee(game_id=normalized_game_id)
+		GAME_SESSIONS[normalized_game_id] = game_ref
+	return game_ref
+
+
+def get_state_data(game_id: Optional[str] = None):
+	return _get_ref(game_id).state()
+
+
+def _send_state_to_middleware(game_id: Optional[str] = None):
 	with state_sync_lock:
 		time.sleep(0.05)
 		try:
-			requests.post(MIDDLEWARE_URL, json=ref.state(), timeout=1.0)
+			state_payload = _get_ref(game_id).state()
+			requests.post(MIDDLEWARE_URL, json=state_payload, timeout=1.0)
 			print("[SYNC] State pushed to middleware")
 		except requests.exceptions.RequestException as error:
 			print(f"[WARN] State sync failed: {error}")
 
 
-def _push_state():
-	threading.Thread(target=_send_state_to_middleware, daemon=True).start()
+def _push_state(game_id: Optional[str] = None):
+	threading.Thread(target=_send_state_to_middleware, args=(game_id,), daemon=True).start()
 
 
-def reset_game_state():
-	global ref, current_round, ref_history
-	ref = Referee()
-	current_round = 1
-	ref_history.clear()
-	return {"success": True, "message": "Game reset"}
-
-
-def start_new_round():
-	global ref, current_round, ref_history
-	team1_vict = ref.team1_victories
-	team2_vict = ref.team2_victories
-	ref = Referee()
-	ref.team1_victories = team1_vict
-	ref.team2_victories = team2_vict
-	current_round += 1
-	ref_history.clear()
-	return {
-		"success": True,
-		"message": f"Nova ronda {current_round} iniciada",
-		"round": current_round,
-	}
-
-
-
-def process_card(card: CardDTO):
-	global current_hand, ref_history
-	if len(ref.card_queue) == 0:
-		current_hand = ref.current_player - 1
-
-	print(f"[DEBUG] Received card: {card.rank} {card.suit}")
+def _card_to_id(card: CardDTO) -> Optional[int]:
 	try:
 		rank_index = CardMapper.RANKS.index(card.rank)
 		suit_index = CardMapper.SUITS.index(card.suit)
-		card_id = suit_index * CardMapper.SUITSIZE + rank_index
+		return suit_index * CardMapper.SUITSIZE + rank_index
 	except ValueError:
 		print("[DEBUG] Invalid card!")
+		return None
+
+
+def reset_game_state(game_id: Optional[str] = None, dealer_id: int = -1, starter_id: int = -1):
+	normalized_game_id = _normalize_game_id(game_id)
+	ref = Referee(game_id=normalized_game_id)
+	ref.dealer = dealer_id
+	
+	# If starter is provided, use it. 
+	# Otherwise, if dealer is provided, starter is dealer + 3 (Right of dealer).
+	# Otherwise, default to 0.
+	if starter_id != -1:
+		ref.current_player = starter_id
+	elif dealer_id != -1:
+		ref.current_player = (dealer_id + 3) % 4
+	else:
+		ref.current_player = 0
+		
+	ref.phase = "waiting"
+	GAME_SESSIONS[normalized_game_id] = ref
+	return {
+		"success": True, 
+		"message": "Game reset", 
+		"dealer": dealer_id, 
+		"starter": ref.current_player,
+		"game_state": ref.state()
+	}
+
+
+def start_new_round(game_id: Optional[str] = None):
+	game_ref = _get_ref(game_id)
+	team1_vict = game_ref.team1_victories
+	team2_vict = game_ref.team2_victories
+	new_ref = Referee(game_id=game_ref.game_id)
+	new_ref.team1_victories = team1_vict
+	new_ref.team2_victories = team2_vict
+	# Standard Sueca: next player becomes the dealer
+	new_ref.dealer = (game_ref.dealer + 1) % 4
+	new_ref.current_player = new_ref.dealer
+	new_ref.current_round = game_ref.current_round + 1
+	GAME_SESSIONS[game_ref.game_id] = new_ref
+	return {
+		"success": True,
+		"message": f"Nova ronda {new_ref.current_round} iniciada",
+		"round": new_ref.current_round,
+		"game_state": new_ref.state()
+	}
+
+
+def process_card(card: CardDTO):
+	game_id = _normalize_game_id(card.game_id)
+	ref = _get_ref(game_id)
+
+	# Identify who played based on current state
+	who_played = ref.current_player
+	
+	print(f"[DEBUG] Received card: {card.rank} {card.suit} from player {who_played}")
+	card_id = _card_to_id(card)
+	if card_id is None:
 		return {"success": False, "message": "Invalid card"}
 
-	# Save snapshot of the state before processing the new card
-	ref_history.append((copy.deepcopy(ref), current_round, current_hand, card))
-
 	ref.inject_card(card_id)
-
 	print(f"[DEBUG] Card injected. Queue size: {len(ref.card_queue)}")
 
 	if not ref.trump_set:
-		print("[DEBUG] Setting trump...")
+		print(f"[DEBUG] Setting trump for dealer {ref.dealer}...")
 		ref.set_trump()
-		print(f"[DEBUG] Trump now: {CardMapper.get_card(ref.trump)} (suit: {ref.trump_suit})")
-		_push_state()
-		current_hand -= 1
-		return {
+		# ref.set_trump advances ref.current_player to starter
+		_push_state(game_id)
+		res = ref.state()
+		res.update({
 			"success": True,
 			"message": "Trump card set",
-		}
+			"who_played": str(who_played),
+			"next_player": str(ref.current_player),
+			"card": card.rank + card.suit
+		})
+		return res
 
-	current_hand += 1
+	# Advance current_player for the next card within this trick
+	# Standard Sueca: person to the right plays next (counter-clockwise)
+	next_player = (who_played + 1) % 4
+	ref.current_player = next_player
 
 	if len(ref.card_queue) >= 4:
 		print("[DEBUG] Enough cards for a round, playing round...")
+		# Backup before processing to allow corrections
+		PRE_ROUND_SESSIONS[game_id] = copy.deepcopy(ref)
+		
+		# play_round updates ref.current_player to the trick winner
 		round_ok = ref.play_round()
 		print(f"[REFEREE] Round played. Team 1 points: {ref.team1_points}, Team 2 points: {ref.team2_points}")
 
@@ -137,60 +186,62 @@ def process_card(card: CardDTO):
 		if round_ended:
 			try:
 				round_data = {
-					"round_number": current_round,
+					"round_number": ref.current_round,
 					"winner_team": winner_team,
 					"winner_points": winner_points,
 					"team1_points": ref.team1_points,
 					"team2_points": ref.team2_points,
-					"game_ended": current_round >= MAX_ROUNDS,
+					"game_ended": ref.current_round >= MAX_ROUNDS,
+					"reason": "renuncia" if not round_ok else "score",
 				}
 				requests.post(MIDDLEWARE_ROUND_END_URL, json=round_data, timeout=1)
 				print("[SYNC] Round end notification sent to middleware")
 			except Exception as error:
 				print(f"[WARN] Failed to notify middleware: {error}")
 
-		_push_state()
+	_push_state(game_id)
 
-	return {
+	res = ref.state()
+	res.update({
 		"success": True,
 		"message": "Card queued",
-		"current_player": current_hand % 4,
+		"who_played": str(who_played),
+		"next_player": str(ref.current_player),
 		"queue_size": len(ref.card_queue),
-	}
+	})
+	return res
 
 
-def undo_last_play():
-	global ref, current_round, current_hand, ref_history
-	if not ref_history:
-		return {"success": False, "message": "No play to undo"}
+def correct_last_card(card: CardDTO):
+	game_id = _normalize_game_id(card.game_id)
+	ref = _get_ref(game_id)
 
-	old_ref, old_round, old_hand, undone_card = ref_history.pop()
-	ref = old_ref
-	current_round = old_round
-	current_hand = old_hand
+	# If queue is empty, it means the last card triggered a round (or renúncia)
+	# Restore from backup to allow correcting that 4th card
+	if not ref.card_queue and game_id in PRE_ROUND_SESSIONS:
+		print(f"[DEBUG] Restoring state from pre-round backup for {game_id}")
+		ref = copy.deepcopy(PRE_ROUND_SESSIONS[game_id])
+		GAME_SESSIONS[game_id] = ref
 
-	# Call CV service to remove from sent labels so it can be detected again
-	try:
-		# Use default game_id for physical mode
-		requests.post(
-			"http://127.0.0.1:8001/cv/undo",
-			json={
-				"game_id": "default",
-				"rank": undone_card.rank,
-				"suit": undone_card.suit,
-			},
-			timeout=1.0,
-		)
-		print(f"[UNDO] Notified CV service to undo card: {undone_card.rank} of {undone_card.suit}")
-	except Exception as e:
-		print(f"[WARN] Failed to notify CV service: {e}")
+	if not ref.card_queue:
+		return {"success": False, "message": "No pending card to correct"}
 
-	_push_state()
-	# The play that was just undone was made by old_hand % 4
-	undone_player = old_hand % 4
-	return {
+	print(f"[DEBUG] Correcting last card to: {card.rank} {card.suit}")
+	card_id = _card_to_id(card)
+	if card_id is None:
+		return {"success": False, "message": "Invalid card"}
+
+	if not ref.replace_last_card(card_id):
+		return {"success": False, "message": "No pending card to correct"}
+
+	print(f"[DEBUG] Card corrected. Queue size: {len(ref.card_queue)}")
+	_push_state(game_id)
+
+	res = ref.state()
+	res.update({
 		"success": True,
-		"message": f"Undid play of {undone_card.rank} of {undone_card.suit}",
-		"undone_player": str(undone_player),
-	}
-
+		"message": "Card corrected",
+		"who_played": str(ref.current_player), # Best guess
+		"queue_size": len(ref.card_queue),
+	})
+	return res

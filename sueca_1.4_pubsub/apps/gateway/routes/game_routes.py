@@ -1,16 +1,106 @@
 import json
 import asyncio
+import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request, Response
+import logging
+import json
 
 from .. import state
-from ..dto import RoundEndData, ScanEventDTO, StartGameRequest, StartGameResponse
-
+from ..helpers import require_any_token
+from apps.virtual_engine.session import session_manager
+logger = logging.getLogger(__name__)
+from ..dto import CorrectCardRequest, RoundEndData, ScanEventDTO, StartGameRequest, StartGameResponse
+from shared.ratelimit import rate_limit_dependency
 
 router = APIRouter()
+INTERNAL_ERROR_MESSAGE = "internal error"
+APPLICATION_JSON = "application/json"
 
 
-@router.post("/game/round_end")
+def _forward_headers(request: Request) -> dict[str, str]:
+    forwarded = {}
+    authorization = request.headers.get("authorization")
+    if authorization:
+        forwarded["Authorization"] = authorization
+    return forwarded
+
+
+@router.get("/api/invites", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
+def get_invites_proxy(request: Request):
+    target_url = f"{state.VIRTUAL_ENGINE_URL}/api/invites"
+    try:
+        response = state.INTERNAL_HTTP.get(
+            target_url,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except Exception:
+        logger.exception("Error proxying invites to %s", target_url)
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "message": "backend unavailable"}),
+            media_type=APPLICATION_JSON,
+        )
+
+
+@router.post("/api/room/{game_id}/invite", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+async def invite_friend_proxy(game_id: str, request: Request):
+    target_url = f"{state.VIRTUAL_ENGINE_URL}/api/room/{game_id}/invite"
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=body,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except Exception:
+        logger.exception("Error proxying invite to %s", target_url)
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "message": "backend unavailable"}),
+            media_type=APPLICATION_JSON,
+        )
+
+
+@router.post("/api/room/{game_id}/invite/decline", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+async def decline_invite_proxy(game_id: str, request: Request):
+    target_url = f"{state.VIRTUAL_ENGINE_URL}/api/room/{game_id}/invite/decline"
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith(APPLICATION_JSON) else {}
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=body,
+            headers=_forward_headers(request),
+            timeout=5,
+        )
+        return Response(content=response.content, status_code=response.status_code, media_type=response.headers.get("Content-Type"))
+    except Exception:
+        logger.exception("Error proxying decline invite to %s", target_url)
+        return Response(
+            status_code=502,
+            content=json.dumps({"success": False, "message": "backend unavailable"}),
+            media_type=APPLICATION_JSON,
+        )
+
+
+def _suit_symbol_to_suffix(suit: str) -> str:
+    normalized = suit.strip()
+    if normalized in {"♣", "clubs", "Club", "club", "Clubs"}:
+        return "c"
+    if normalized in {"♦", "diamonds", "Diamond", "diamond", "Diamonds"}:
+        return "d"
+    if normalized in {"♥", "hearts", "Heart", "heart", "Hearts"}:
+        return "h"
+    if normalized in {"♠", "spades", "Spade", "spade", "Spades"}:
+        return "s"
+    return normalized[-1:].lower()
+
+
+@router.post("/game/round_end", dependencies=[Depends(require_any_token)])
 async def round_end(data: RoundEndData):
     for game_id, ws in state.active_connections.items():
         try:
@@ -25,13 +115,13 @@ async def round_end(data: RoundEndData):
             }
             await ws.send_text(json.dumps(message))
             print(f"[MIDDLEWARE] Round end notification sent to game {game_id}")
-        except Exception as error:
-            print(f"[MIDDLEWARE] Failed to send round end to {game_id}: {error}")
+        except Exception:
+            logger.exception("Failed to send round end to %s", game_id)
 
     return {"success": True}
 
 
-@router.post("/game/new_round/{game_id}")
+@router.post("/game/new_round/{game_id}", dependencies=[Depends(require_any_token)])
 async def new_round(game_id: str):
     try:
         reset_message = {"action": "reset_cards"}
@@ -47,56 +137,156 @@ async def new_round(game_id: str):
         )
         if response.status_code == 200:
             return {"success": True, "message": "Nova ronda iniciada"}
-        return {"success": False, "message": "Erro ao iniciar nova ronda"}
-    except Exception as error:
-        print(f"[MIDDLEWARE] Error starting new round: {error}")
-        return {"success": False, "message": str(error)}
+        return {"success": False, "message": INTERNAL_ERROR_MESSAGE}
+    except Exception:
+        logger.exception("Error starting new round for %s", game_id)
+        return {"success": False, "message": INTERNAL_ERROR_MESSAGE}
 
 
 @router.post("/game/start")
-async def start_game(request: StartGameRequest):
+async def start_game(request: StartGameRequest, payload = Depends(require_any_token)):
+    # Always generate a unique game_id for new physical sessions if not provided
+    game_id = request.roomId or f"phys_{uuid.uuid4().hex[:8]}"
     try:
+        # 1. Start CV service
         response = await asyncio.to_thread(
             state.INTERNAL_HTTP.post,
             f"{state.CV_SERVICE_URL}/cv/start",
-            json={"game_id": request.roomId or "default"},
+            json={"game_id": game_id},
             timeout=5,
         )
 
         if response.status_code == 200:
+            # 2. Reset the referee state for this specific game_id and dealer
+            dealer_id = request.dealerId if request.dealerId is not None else 1 # Default North
+            
+            await asyncio.to_thread(
+                state.INTERNAL_HTTP.post,
+                f"{state.GAME_SERVICE_URL}/reset",
+                params={"game_id": game_id, "dealer_id": dealer_id},
+                timeout=2
+            )
+
+            token = None
+            # Use uid if logged in, otherwise generate a guest player_id
+            is_guest = not payload.get("uid")
+            player_id = payload.get("uid") or f"guest_{uuid.uuid4().hex[:8]}"
+            player_name = request.playerName or payload.get("username") or "Host"
+            
+            # Always issue a session token for physical game management
+            token = session_manager.create_session(game_id, player_id, player_name)
+            logger.info("Started NEW physical game id=%s for %s", game_id, "guest" if is_guest else "user")
+
             return StartGameResponse(
                 success=True,
                 message="Game started successfully",
-                gameId=request.roomId or "default",
+                gameId=game_id,
+                token=token
             )
 
+        logger.warning("Failed to start CV service: %s", response.text)
         return StartGameResponse(
             success=False,
-            message=f"Failed to start CV service: {response.text}",
+            message="failed to start CV service",
             gameId="",
         )
-    except Exception as error:
-        print(f"[Middleware] Error starting CV service: {error}")
+    except Exception:
+        logger.exception("Error starting CV service for request: %s", request)
         return StartGameResponse(
             success=False,
-            message=f"CV service unavailable: {str(error)}",
+            message="CV service unavailable",
             gameId="",
         )
 
 
-@router.post("/game/ready/{game_id}")
-async def game_ready(game_id: str):
+@router.post("/game/ready/{game_id}", dependencies=[Depends(require_any_token)])
+async def game_ready(game_id: str, dealer_id: int | None = None, starter_id: int | None = None):
     if game_id in state.cv_connections:
         cv_ws = state.cv_connections[game_id]
         try:
+            # Sync dealer and/or starter if provided
+            game_state = None
+            if dealer_id is not None or starter_id is not None:
+                params = {"game_id": game_id}
+                if dealer_id is not None: params["dealer_id"] = dealer_id
+                if starter_id is not None: params["starter_id"] = starter_id
+                
+                response = await asyncio.to_thread(
+                    state.INTERNAL_HTTP.post,
+                    f"{state.GAME_SERVICE_URL}/reset",
+                    params=params,
+                    timeout=2
+                )
+                if response.status_code == 200:
+                    game_state = response.json().get("game_state")
+
             reset_command = json.dumps({"action": "reset_cards"})
             await cv_ws.send(reset_command)
             print(f"[Middleware] Game started for {game_id} - CV history reset")
-            return {"success": True, "message": "Game started, ready for cards"}
-        except Exception as error:
-            print(f"[Middleware] Error resetting CV: {error}")
-            return {"success": False, "message": str(error)}
+            
+            # Notify mobile client that game is ready for next player
+            if game_id in state.active_connections:
+                mobile_ws = state.active_connections[game_id]
+                try:
+                    await mobile_ws.send_json({
+                        "success": True,
+                        "message": "game_ready",
+                        "status": "Ready for next player's card",
+                        "game_state": game_state
+                    })
+                    print(f"[Middleware] Notified mobile client for {game_id}: game ready")
+                except Exception as e:
+                    print(f"[Middleware] Failed to notify mobile: {e}")
+            
+            return {"success": True, "message": "Game started, ready for cards", "game_state": game_state}
+        except Exception:
+            logger.exception("Error resetting CV for %s", game_id)
+            return {"success": False, "message": INTERNAL_ERROR_MESSAGE}
     return {"success": False, "message": "Game not found"}
+
+
+@router.post("/game/correct/{game_id}", dependencies=[Depends(require_any_token)])
+async def correct_card(game_id: str, request: CorrectCardRequest):
+    try:
+        if game_id in state.cv_connections and request.wrong_label:
+            cv_ws = state.cv_connections[game_id]
+            await cv_ws.send(json.dumps({
+                "action": "correct_card",
+                "wrong_label": request.wrong_label,
+                "correct_label": f"{request.rank}{_suit_symbol_to_suffix(request.suit)}",
+            }))
+            print(f"[Middleware] CV correction sent for game {game_id}")
+
+        response = await asyncio.to_thread(
+            state.INTERNAL_HTTP.post,
+            f"{state.GAME_SERVICE_URL}/card/correct",
+            json={
+                "rank": request.rank,
+                "suit": request.suit,
+                "game_id": game_id,
+            },
+            timeout=5,
+        )
+
+        if response.status_code == 200:
+            payload = response.json()
+            if game_id in state.active_connections:
+                mobile_ws = state.active_connections[game_id]
+                try:
+                    await mobile_ws.send_json({
+                        "success": True,
+                        "message": "card_corrected",
+                        "game_state": payload,
+                    })
+                except Exception:
+                    logger.exception("Failed to notify mobile of correction for %s", game_id)
+            return {"success": True, "message": "Carta corrigida", "backend_response": payload}
+
+        logger.warning("Failed to correct card for %s: %s", game_id, response.text)
+        return {"success": False, "message": "Erro ao corrigir carta"}
+    except Exception:
+        logger.exception("Error correcting card for %s", game_id)
+        return {"success": False, "message": INTERNAL_ERROR_MESSAGE}
 
 
 @router.post("/scan")

@@ -26,24 +26,9 @@
         android:textSize="20sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="@+id/backButton"
-        app:layout_constraintEnd_toStartOf="@+id/btnUndoMove"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/backButton"
         app:layout_constraintTop_toTopOf="@+id/backButton" />
-
-    <Button
-        android:id="@+id/btnUndoMove"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
-        android:text="Desfazer Jogada"
-        android:textAllCaps="false"
-        android:backgroundTint="@color/teal_700"
-        android:textColor="@android:color/white"
-        android:textSize="12sp"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/backButton"
-        app:layout_constraintBottom_toBottomOf="@+id/backButton" />
-
 
     <Switch
         android:id="@+id/activity_hybrid_switch"
@@ -108,14 +93,6 @@
             android:id="@+id/previewView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
-
-        <ImageView
-            android:id="@+id/hostCameraPreview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:visibility="gone"
-            android:contentDescription="Feed da camara do host" />
 
         <LinearLayout
             android:id="@+id/recognitionOverlay"

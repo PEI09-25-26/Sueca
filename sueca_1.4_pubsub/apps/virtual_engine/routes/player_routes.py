@@ -1,5 +1,9 @@
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Header, Query, Depends
+from pydantic import BaseModel, constr
+from enum import Enum
+from shared.ratelimit import rate_limit_dependency
 
+from ..auth import authorize_header, check_host
 from ..core import BotFactory, launch_bot_thread
 from ..event_publisher import publish_bot_added, publish_position_changed
 from .common import error, get_game_from_request
@@ -8,14 +12,43 @@ from .common import error, get_game_from_request
 router = APIRouter()
 
 
-@router.post("/api/change_position")
-def change_position(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+class PositionEnum(str, Enum):
+    NORTH = "NORTH"
+    SOUTH = "SOUTH"
+    EAST = "EAST"
+    WEST = "WEST"
+
+
+class ChangePositionRequest(BaseModel):
+    game_id: str | None = None
+    position: str | None = None
+
+
+class AddBotRequest(BaseModel):
+    game_id: str | None = None
+    position: str | None = None
+    name: str | None = None
+    difficulty: str | None = "random"
+
+
+class RemovePlayerRequest(BaseModel):
+    game_id: str | None = None
+    target_id: str | None = None
+
+
+@router.post("/api/change_position", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def change_position(
+    data: ChangePositionRequest = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
+    payload = data.dict()
+    game, game_id = get_game_from_request(payload)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    player_id = data.get("player_id") or data.get("player")
-    new_position = data.get("position")
+    session_data = authorize_header(authorization, game_id)
+    player_id = session_data["player_id"]
+    new_position = payload.get("position")
     if not player_id or not new_position:
         return error("Player and new position required", 400)
 
@@ -36,11 +69,12 @@ def change_position(data: dict = Body(default_factory=dict)):
             return error(f"Position {new_position} is already taken by {other_player.player_name}", 400)
 
     old_position = player.position
-    old_team_key = "team1" if old_position in game._TEAM1_POSITIONS else "team2"
-    new_team_key = "team1" if normalized_new_position in game._TEAM1_POSITIONS else "team2"
+    if old_position:
+        old_team_key = "team1" if old_position in game._TEAM1_POSITIONS else "team2"
+        if old_position not in game.available_team_positions[old_team_key]:
+            game.available_team_positions[old_team_key].append(old_position)
 
-    if old_position not in game.available_team_positions[old_team_key]:
-        game.available_team_positions[old_team_key].append(old_position)
+    new_team_key = "team1" if normalized_new_position in game._TEAM1_POSITIONS else "team2"
     if normalized_new_position not in game.available_team_positions[new_team_key]:
         return error(f"Position {new_position} is not available", 400)
     game.available_team_positions[new_team_key].remove(normalized_new_position)
@@ -53,31 +87,33 @@ def change_position(data: dict = Body(default_factory=dict)):
     else:
         game.teams[1].append(player)
 
-    publish_position_changed(game_id, player_id, player.player_name, old_position.name, normalized_new_position.name)
+    publish_position_changed(game_id, player_id, player.player_name, old_position.name if old_position else "NONE", normalized_new_position.name)
     game._push_state("position_changed")
     return {"success": True, "message": f"Position changed to {player.position.name}", "state": game.get_state()}
 
 
-@router.post("/api/add_bot")
-def add_bot(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+@router.post("/api/add_bot", dependencies=[Depends(rate_limit_dependency(limit=10, window_seconds=60))])
+def add_bot(
+    data: AddBotRequest = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
+    payload = data.dict()
+    game, game_id = get_game_from_request(payload)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    requester_id = data.get("player_id")
-    if not requester_id:
-        return error("player_id required", 400)
-    if game.creator_id != requester_id:
-        return error("Only room creator can add bots", 403)
+    session_data = authorize_header(authorization, game_id)
+    requester_id = session_data["player_id"]
+    check_host(game_id, requester_id)
 
-    position = data.get("position")
+    position = payload.get("position")
     if not position:
         return error("Position required", 400)
     if game.game_started:
         return error("Cannot add bots after game has started", 400)
 
-    bot_name = data.get("name", f"Bot_{position}")
-    difficulty = data.get("difficulty", "random")
+    bot_name = payload.get("name", f"Bot_{position}")
+    difficulty = payload.get("difficulty", "random")
     agent = BotFactory.create_bot(bot_name, position, game_id, difficulty)
     if not agent:
         available = ", ".join(BotFactory.get_available_bots())
@@ -110,11 +146,18 @@ def add_bot(data: dict = Body(default_factory=dict)):
     )
 
 
-@router.get("/api/hand/{player_id}")
-def get_hand(player_id: str, game_id: str | None = Query(default=None)):
+@router.get("/api/hand/{player_id}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
+def get_hand(
+    player_id: str,
+    game_id: str | None = Query(default=None),
+    authorization: str = Header(default=None),
+):
     game, resolved_game_id = get_game_from_request(game_id_query=game_id)
     if not game:
         return error(f"Game {resolved_game_id} not found", 404)
+    session_data = authorize_header(authorization, resolved_game_id)
+    if session_data["player_id"] != player_id:
+        return error("Forbidden", 403)
 
     player = game.get_player(player_id)
     if not player:
@@ -122,17 +165,43 @@ def get_hand(player_id: str, game_id: str | None = Query(default=None)):
     return {"success": True, "hand": [str(card) for card in player.hand]}
 
 
-@router.post("/api/remove_player")
-@router.post("/api/the_council_has_decided_your_fate")
-def remove_player_endpoint(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+@router.post("/api/remove_player", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
+@router.post("/api/the_council_has_decided_your_fate", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
+def remove_player_endpoint(
+    data: RemovePlayerRequest = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
+    payload = data.dict()
+    game, game_id = get_game_from_request(payload)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    actor_id = data.get("actor_id")
-    target_id = data.get("target_id")
+    session_data = authorize_header(authorization, game_id)
+    actor_id = session_data["player_id"]
+    check_host(game_id, actor_id)
+    target_id = payload.get("target_id")
     if not actor_id or not target_id:
         return error("Both actor_id and target_id are required", 400)
 
     success, message = game.remove_player(actor_id, target_id)
+    return {"success": success, "message": message}
+
+@router.post("/api/invite_friend_to_game", dependencies=[Depends(rate_limit_dependency(limit=20, window_seconds=60))])
+def invite_friend(
+    data: RemovePlayerRequest = Body(default_factory=dict),
+    authorization: str = Header(default=None),
+):
+    payload = data.dict()
+    game, game_id = get_game_from_request(payload)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    session_data = authorize_header(authorization, game_id)
+    actor_id = session_data["player_id"]
+    check_host(game_id, actor_id)
+    target_id = payload.get("target_id")
+    position_id = payload.get("position_id")
+    if not actor_id or not target_id or not position_id:
+        return error("actor_id, target_id and position_id are required", 400)
+    success, message = game.invite_player(actor_id, target_id, position_id)
     return {"success": success, "message": message}
