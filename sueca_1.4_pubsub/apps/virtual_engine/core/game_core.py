@@ -10,10 +10,11 @@ from ..agents.weak_agent import WeakAgent
 from apps.agents.agents import AverageAgent
 from apps.agents.agents import SmartAgent
 import logging
+import os
+import queue
 import requests
 import threading
 import uuid
-import queue
 from datetime import datetime, timezone
 
 from apps.emqx import mqtt_client
@@ -21,6 +22,17 @@ from ..event_publisher import publish_room_event
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+try:
+    from shared.firebase_client import get_firestore_db
+    from firebase_admin import firestore as admin_firestore
+except Exception:
+    get_firestore_db = None
+    admin_firestore = None
+
+FIRESTORE_STATS_ENABLED = os.getenv("SUECA_FIRESTORE_STATS_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+FIRESTORE_GAME_HISTORY_COLLECTION = os.getenv("SUECA_FIRESTORE_GAME_HISTORY_COLLECTION", "player_game_history")
+FIRESTORE_PLAYER_STATS_COLLECTION = os.getenv("SUECA_FIRESTORE_PLAYER_STATS_COLLECTION", "player_stats")
 
 
 ACTIVE_BOT_THREADS: dict[str, threading.Thread] = {}
@@ -129,6 +141,8 @@ class GameState:
         self.match_points = {'team1': 0, 'team2': 0}
         self.next_match_number = 1
         self.current_match_number = None
+        self.starting_hands = {}
+        self._published_match_ids = set()
         # Dealer rotates each match. Initial dealer is WEST to preserve current first-match behavior.
         self.dealer_index = self.positions.index(Positions.WEST)
         self._push_state('game_reset')
@@ -146,6 +160,7 @@ class GameState:
         self.current_player = None
         self.last_winner = None
         self.turn_order = []
+        self.starting_hands = {}
 
         for player in self.players:
             player.hand = []
@@ -458,6 +473,8 @@ class GameState:
                 player.hand.append(self.deck.cards.pop(0))
             player.hand.sort()
 
+        self._snapshot_starting_hands()
+
         # SOUTH always starts in this implementation
         for player in self.players:
             if player.position == Positions.SOUTH:
@@ -478,6 +495,88 @@ class GameState:
 
         if self.turn_order:
             self.current_player = self.turn_order[0]
+
+    def _snapshot_starting_hands(self):
+        self.starting_hands = {
+            player.player_id: [str(card) for card in player.hand]
+            for player in self.players
+            if getattr(player, "player_id", None)
+        }
+
+    def _player_team_key(self, player):
+        if player in self.teams[0]:
+            return "team1"
+        if player in self.teams[1]:
+            return "team2"
+        return None
+
+    def _build_game_history_payload(self, player, match_entry):
+        team_scores = match_entry.get("team_scores") or {}
+        position = player.position.name if getattr(player, "position", None) else None
+        return {
+            "player_name": player.player_name,
+            "game_id": self.game_id,
+            "position": position,
+            "starting_hand": self.starting_hands.get(player.player_id, []),
+            "trump_suit": self.trump_suit,
+            "match_number": match_entry.get("match_number"),
+            "finished_at": match_entry.get("finished_at"),
+            "game_stats": {
+                "team1_points": team_scores.get("team1", 0),
+                "team2_points": team_scores.get("team2", 0),
+                "winner": match_entry.get("winner_label"),
+            },
+        }
+
+    def _build_player_stats_update(self, player, match_entry):
+        winner_team = match_entry.get("winner_team")
+        team_key = self._player_team_key(player)
+        is_draw = winner_team is None
+        is_win = (team_key is not None and winner_team == team_key)
+        is_loss = (team_key is not None and winner_team != team_key and not is_draw)
+
+        return {
+            "player_name": player.player_name,
+            "games_played": admin_firestore.Increment(1),
+            "wins": admin_firestore.Increment(1 if is_win else 0),
+            "losses": admin_firestore.Increment(1 if is_loss else 0),
+            "draws": admin_firestore.Increment(1 if is_draw else 0),
+        }
+
+    def _publish_match_stats(self, match_entry):
+        if not FIRESTORE_STATS_ENABLED:
+            return
+        if get_firestore_db is None or admin_firestore is None:
+            logger.warning("Firestore client not available; skipping stats publish")
+            return
+
+        match_number = match_entry.get("match_number")
+        match_id = f"{self.game_id}:{match_number}" if match_number is not None else f"{self.game_id}:unknown"
+        if match_id in self._published_match_ids:
+            return
+
+        try:
+            db = get_firestore_db()
+        except Exception:
+            logger.exception("Failed to initialize Firestore client")
+            return
+
+        for player in self.players:
+            if not getattr(player, "player_id", None):
+                continue
+            history_doc_id = f"{player.player_id}_{self.game_id}_{match_number}" if match_number is not None else f"{player.player_id}_{self.game_id}"
+            history_ref = db.collection(FIRESTORE_GAME_HISTORY_COLLECTION).document(history_doc_id)
+            try:
+                if history_ref.get().exists:
+                    continue
+                history_payload = self._build_game_history_payload(player, match_entry)
+                history_ref.set(history_payload)
+                stats_ref = db.collection(FIRESTORE_PLAYER_STATS_COLLECTION).document(player.player_id)
+                stats_ref.set(self._build_player_stats_update(player, match_entry), merge=True)
+            except Exception:
+                logger.exception("Failed to publish match stats for player %s (game %s)", player.player_id, self.game_id)
+
+        self._published_match_ids.add(match_id)
 
     def start_game(self):
         if self.game_started:
@@ -577,13 +676,15 @@ class GameState:
                     match_winner_team = 'team2'
                     self.match_points['team2'] += 1
 
-                self.match_history.append({
+                match_entry = {
                     'match_number': self.current_match_number,
                     'winner_team': match_winner_team,
                     'winner_label': 'Team 1 (N/S)' if match_winner_team == 'team1' else ('Team 2 (E/W)' if match_winner_team == 'team2' else 'draw'),
                     'team_scores': {'team1': self.team_scores[0], 'team2': self.team_scores[1]},
                     'finished_at': datetime.now(timezone.utc).isoformat(),
-                })
+                }
+                self.match_history.append(match_entry)
+                self._publish_match_stats(match_entry)
             else:
                 self._set_turn_order()
 

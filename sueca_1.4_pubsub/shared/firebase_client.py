@@ -300,3 +300,8 @@ def reject_friend_request(user: str, from_user: str) -> bool:
         return False
     doc_ref.delete()
     return True
+
+
+def get_firestore_db():
+    _ensure_app()
+    return _DB
