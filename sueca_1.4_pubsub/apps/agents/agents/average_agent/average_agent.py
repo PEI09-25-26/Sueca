@@ -17,7 +17,7 @@ class AverageAgent(GameClient):
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
         self.think_time = 1.0
-        self.player_id = None
+        self.player_id = "AverageAI"
         self.game_id = game_id
         self.position = position
         self._last_phase = None

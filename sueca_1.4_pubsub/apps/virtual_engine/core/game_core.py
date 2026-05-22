@@ -33,6 +33,7 @@ except Exception:
 FIRESTORE_STATS_ENABLED = os.getenv("SUECA_FIRESTORE_STATS_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 FIRESTORE_GAME_HISTORY_COLLECTION = os.getenv("SUECA_FIRESTORE_GAME_HISTORY_COLLECTION", "player_game_history")
 FIRESTORE_PLAYER_STATS_COLLECTION = os.getenv("SUECA_FIRESTORE_PLAYER_STATS_COLLECTION", "player_stats")
+FIRESTORE_USERS_COLLECTION = os.getenv("SUECA_FIRESTORE_USERS_COLLECTION", "users")
 
 
 ACTIVE_BOT_THREADS: dict[str, threading.Thread] = {}
@@ -214,9 +215,42 @@ class GameState:
                 return position
         return None
 
+    def _resolve_player_id_from_firestore(self, name: str | None):
+        if not name or get_firestore_db is None:
+            return None
+
+        try:
+            db = get_firestore_db()
+        except Exception:
+            logger.exception("Failed to initialize Firestore client for player lookup")
+            return None
+
+        collection = db.collection(FIRESTORE_USERS_COLLECTION)
+        # Support both generated name and username fields during lookup.
+        for field in ("name", "username"):
+            try:
+                docs = list(collection.where(field, "==", name).limit(1).stream())
+            except Exception:
+                logger.exception("Failed to query Firestore users by %s", field)
+                return None
+
+            if not docs:
+                continue
+
+            data = docs[0].to_dict() or {}
+            friend_code = data.get("friendCode")
+            if friend_code:
+                return str(friend_code)
+            return None
+
+        return None
+
     def add_player(self, name, position_choice, player_id=None):
         if len(self.players) >= self.max_players:
             return False, 'Game is full', None
+
+        if not player_id:
+            player_id = self._resolve_player_id_from_firestore(name)
 
         if player_id and self.get_player(player_id):
             return False, 'Player already in game', None
@@ -245,8 +279,7 @@ class GameState:
                 else:
                     return False, f'Position {position.name} is already taken', None
 
-        player = Player(name)
-        player.player_id = player_id or uuid.uuid4().hex[:8]
+        player = Player(name, player_id)
         player.position = position
         self.players.append(player)
         self.scores[player.player_id] = 0
@@ -514,7 +547,7 @@ class GameState:
         team_scores = match_entry.get("team_scores") or {}
         position = player.position.name if getattr(player, "position", None) else None
         return {
-            "player_name": player.player_name,
+            "player_id": player.player_id,
             "game_id": self.game_id,
             "position": position,
             "starting_hand": self.starting_hands.get(player.player_id, []),
@@ -536,7 +569,7 @@ class GameState:
         is_loss = (team_key is not None and winner_team != team_key and not is_draw)
 
         return {
-            "player_name": player.player_name,
+            "player_id": player.player_id,
             "games_played": admin_firestore.Increment(1),
             "wins": admin_firestore.Increment(1 if is_win else 0),
             "losses": admin_firestore.Increment(1 if is_loss else 0),
