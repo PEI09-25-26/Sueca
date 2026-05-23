@@ -2,7 +2,6 @@
 DecisionMaker - Makes card play decisions using heuristics
 """
 from ...card_analyzer import CardAnalyzer
-from ...card_mapper import CardMapper
 import random
 
 

@@ -3,14 +3,16 @@ Player model for the Sueca virtual engine.
 """
 
 from .card_mapper import CardMapper
+import uuid
 
 class Player:
     """
     Represents a player in the Sueca game
     """
     
-    def __init__(self, player_name):
+    def __init__(self, player_name, player_id=None):
         self.player_name = player_name
+        self.player_id = player_id or uuid.uuid4().hex[:8]
         self.hand = []
         self.position = None
         self.trump_suit = None
