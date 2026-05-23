@@ -35,4 +35,10 @@
     <string name="no_friends_yet">Sem amigos ainda</string>
     <string name="my_friend_code">O meu código</string>
     <string name="get_code">Recuperar</string>
+
+    <string name="hybrid_cv_pause_trump_title">Trunfo registado</string>
+    <string name="hybrid_cv_pause_trump_message">Retira o trunfo da zona visivel da camara (ou aguarda um momento) para nao ser lido como carta de jogo. Quando estiveres pronto, toca em Continuar para distribuir as cartas virtuais.</string>
+    <string name="hybrid_cv_pause_deal_title">Distribuicao concluida</string>
+    <string name="hybrid_cv_pause_deal_message">A distribuicao das cartas virtuais terminou. Organiza a mesa antes de comecar a jogar. Toca em Continuar quando estiveres pronto para detetar jogadas.</string>
+    <string name="hybrid_cv_pause_continue">Continuar</string>
 </resources>

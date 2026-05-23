@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import asyncio
 import base64
 import os
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set
 import logging
+import threading
 
 from apps.hybrid_engine.card_mapper import CardMapper
 
@@ -26,12 +27,33 @@ class RecognizedCard:
     display: str
 
 
+@dataclass
+class GameCvState:
+    """Per-game detection memory across trump, deal and play phases."""
+
+    phase: str = "trump"
+    consumed_card_ids: Set[int] = field(default_factory=set)
+    trump_card_id: Optional[int] = None
+    dealt_card_ids: Set[int] = field(default_factory=set)
+
+
 class HybridVisionService:
     def __init__(self, timeout_s: float = 1.6) -> None:
         self.timeout_s = max(0.5, float(timeout_s))
         self.model_path = self._resolve_model_path()
         self.detector = None
-        self._seen_labels_by_game: dict[str, set[str]] = {}
+        self._game_states: dict[str, GameCvState] = {}
+        self._state_lock = threading.Lock()
+        self._model_lock = threading.Lock()
+        self._infer_lock = threading.Lock()
+
+    def _get_state(self, game_id: str) -> GameCvState:
+        with self._state_lock:
+            state = self._game_states.get(game_id)
+            if state is None:
+                state = GameCvState()
+                self._game_states[game_id] = state
+            return state
 
     def _resolve_model_path(self) -> Optional[str]:
         env_path = os.getenv("HYBRID_CV_MODEL_PATH") or os.getenv("CV2_MODEL_PATH")
@@ -61,20 +83,89 @@ class HybridVisionService:
                 "No hybrid CV model found. Set HYBRID_CV_MODEL_PATH or place best.pt in apps/hybrid_engine/cv/"
             )
             return False
-        try:
-            from apps.hybrid_engine.cv.yolo import CornerYoloDetector
+        with self._model_lock:
+            if self.detector is not None:
+                return True
+            try:
+                from apps.hybrid_engine.cv.yolo import CornerYoloDetector
 
-            self.detector = CornerYoloDetector(model_path=self.model_path)
+                self.detector = CornerYoloDetector(model_path=self.model_path)
+                return True
+            except Exception as exc:
+                logger.exception("Failed to load hybrid CV model: %s", exc)
+                return False
+
+    def warm_up(self) -> bool:
+        """Load the YOLO model and run one inference so the first room does not pay cold-start cost."""
+        if not self._ensure_started():
+            return False
+        try:
+            import numpy as np
+
+            dummy = np.zeros((480, 640, 3), dtype=np.uint8)
+            with self._infer_lock:
+                self.detector.detect(dummy)
+            logger.info("Hybrid CV warm-up inference completed")
             return True
         except Exception as exc:
-            logger.exception("Failed to load hybrid CV model: %s", exc)
+            logger.exception("Hybrid CV warm-up inference failed: %s", exc)
             return False
 
+    def clear_game(self, game_id: str) -> None:
+        with self._state_lock:
+            self._game_states.pop(game_id, None)
+
+    def begin_trump_phase(self, game_id: str) -> None:
+        with self._state_lock:
+            self._game_states[game_id] = GameCvState(phase="trump")
+        logger.info("Hybrid CV trump phase started for game %s", game_id)
+
+    def begin_deal_phase(self, game_id: str, trump_card_id: Optional[int] = None) -> None:
+        with self._state_lock:
+            state = self._game_states.get(game_id) or GameCvState()
+            state.phase = "deal"
+            state.trump_card_id = trump_card_id
+            state.dealt_card_ids = set()
+            state.consumed_card_ids = {int(trump_card_id)} if trump_card_id is not None else set()
+            self._game_states[game_id] = state
+        logger.info("Hybrid CV deal phase started for game %s (trump=%s)", game_id, trump_card_id)
+
+    def begin_play_phase(self, game_id: str) -> None:
+        state = self._get_state(game_id)
+        state.phase = "play"
+        logger.info(
+            "Hybrid CV play phase started for game %s (%d cards blocked until re-play)",
+            game_id,
+            len(state.consumed_card_ids),
+        )
+
+    def record_dealt_card(self, game_id: str, card_id: int) -> None:
+        state = self._get_state(game_id)
+        cid = int(card_id)
+        state.dealt_card_ids.add(cid)
+        state.consumed_card_ids.add(cid)
+
+    def record_played_card(self, game_id: str, card_id: int) -> None:
+        state = self._get_state(game_id)
+        state.consumed_card_ids.add(int(card_id))
+
+    def release_card(self, game_id: str, card_id: int) -> None:
+        state = self._get_state(game_id)
+        cid = int(card_id)
+        state.consumed_card_ids.discard(cid)
+        logger.info("Hybrid CV released card %s for game %s (undo)", cid, game_id)
+
     async def recognize_once(
-        self, game_id: str, frame_base64: str, reset_before: bool = True
+        self,
+        game_id: str,
+        frame_base64: str,
+        *,
+        phase: Optional[str] = None,
+        allow_card_ids: Optional[Set[int]] = None,
     ) -> Optional[RecognizedCard]:
-        if reset_before:
-            self._seen_labels_by_game.setdefault(game_id, set())
+        state = self._get_state(game_id)
+        if phase:
+            state.phase = phase
 
         if not self._ensure_started():
             return None
@@ -83,23 +174,33 @@ class HybridVisionService:
         if frame is None:
             return None
 
-        return await asyncio.to_thread(self._recognize_frame, game_id, frame)
+        allowed = {int(c) for c in allow_card_ids} if allow_card_ids else set()
+        return await asyncio.to_thread(
+            self._recognize_frame, game_id, frame, state, allowed
+        )
 
-    def _recognize_frame(self, game_id: str, frame) -> Optional[RecognizedCard]:
-        detections = self.detector.detect(frame) if self.detector else []
-        seen_labels = self._seen_labels_by_game.setdefault(game_id, set())
+    def _recognize_frame(
+        self,
+        game_id: str,
+        frame,
+        state: GameCvState,
+        allow_card_ids: Set[int],
+    ) -> Optional[RecognizedCard]:
+        try:
+            with self._infer_lock:
+                detections = self.detector.detect(frame) if self.detector else []
+        except Exception as exc:
+            logger.error("Hybrid CV inference failed for game %s: %s", game_id, exc)
+            return None
 
         for detection in detections:
             label = str(detection.get("label", ""))
             rank, suit = self._parse_label(label)
             if not rank or not suit:
                 continue
-            if label in seen_labels:
-                continue
             if not self._should_accept_card(rank, float(detection.get("confidence", 0.0))):
                 continue
 
-            seen_labels.add(label)
             recognized = self._build_from_detection(
                 {
                     "rank": rank,
@@ -107,16 +208,26 @@ class HybridVisionService:
                     "confidence": detection.get("confidence"),
                 }
             )
-            if recognized:
-                logger.info("Detected card locally: %s (game: %s)", recognized.display, game_id)
-                return recognized
+            if not recognized:
+                continue
+
+            card_id = int(recognized.card_id)
+            if card_id in state.consumed_card_ids and card_id not in allow_card_ids:
+                continue
+
+            logger.info(
+                "Detected card locally: %s (game: %s, phase: %s)",
+                recognized.display,
+                game_id,
+                state.phase,
+            )
+            return recognized
 
         return None
 
     async def reset_cv_history(self, game_id: str) -> None:
-        """Reset local recognition history for a clean start of the playing phase."""
-        self._seen_labels_by_game[game_id] = set()
-        logger.info("Hybrid CV history reset for game %s", game_id)
+        """Called when virtual dealing finishes — move to play phase memory."""
+        self.begin_play_phase(game_id)
 
     async def test_cv_service(self) -> bool:
         """Verify that a local detector model is configured (loaded lazily on first capture)."""

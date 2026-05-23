@@ -156,6 +156,8 @@ async def hybrid_deal_reset(data: dict = Body(default_factory=dict)):
         virtual_player_ids=registered_virtual_ids,
         cards_per_virtual=cards_per_virtual,
     )
+    trump_id = int(game.trump_card) if game.trump_card is not None else None
+    hybrid_vision.begin_deal_phase(game_id, trump_id)
     _push_hybrid_state(game, room)
     return {"success": True, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
 
@@ -176,7 +178,13 @@ async def hybrid_confirm_trump_capture(data: dict = Body(default_factory=dict)):
     _maybe_skip_hybrid_cut(game, room)
 
     if game.phase != "trump_selection":
-        return error("Not in trump selection phase", 409)
+        return {
+            "success": False,
+            "recognized": False,
+            "message": "Not in trump selection phase",
+            "game_state": game.get_state(),
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        }
 
     if room.host_player_id and host_player_id != room.host_player_id:
         return error("Only host can submit trump frame", 403)
@@ -185,13 +193,17 @@ async def hybrid_confirm_trump_capture(data: dict = Body(default_factory=dict)):
     if selector is None:
         return error("Trump selector player not found", 400)
 
-    recognized = await hybrid_vision.recognize_once(game_id, frame_base64)
+    recognized = await hybrid_vision.recognize_once(
+        game_id, frame_base64, phase="trump"
+    )
     if recognized is None:
         return error("No valid card detected", 400)
 
     success, message = game.select_trump_by_card(selector.player_id, recognized.card_id)
     if not success:
         return error(message, 400)
+
+    hybrid_vision.begin_deal_phase(game_id, int(recognized.card_id))
 
     response_payload = {
         "success": True,
@@ -235,7 +247,9 @@ async def hybrid_deal_recognize(data: dict = Body(default_factory=dict)):
     if room.host_player_id and room.host_player_id != host_player_id:
         return error("Only host can process deal frames", 403)
 
-    recognized = await hybrid_vision.recognize_once(game_id, frame_base64)
+    recognized = await hybrid_vision.recognize_once(
+        game_id, frame_base64, phase="deal"
+    )
     if recognized is None:
         return {
             "success": True,
@@ -257,9 +271,19 @@ async def hybrid_deal_recognize(data: dict = Body(default_factory=dict)):
         }
 
     ok, message, room = hybrid_coordinator.add_deal_card(game_id, target, recognized.card_id)
-    
+    if not ok:
+        return {
+            "success": True,
+            "recognized": True,
+            "confirmed": False,
+            "message": message,
+            "card": {"id": recognized.card_id, "display": recognized.display},
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        }
+
+    hybrid_vision.record_dealt_card(game_id, recognized.card_id)
+
     room_payload = hybrid_coordinator.to_payload(room, _players_meta(game))
-    # Se a distribuição acabou agora, limpamos o histórico do CV para a fase de jogo
     if room_payload.get("deal_done"):
         await hybrid_vision.reset_cv_history(game_id)
 
@@ -340,12 +364,89 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         if host_player_id != room.host_player_id:
             return error("Only host can submit capture frames", 403)
 
-    recognized = await hybrid_vision.recognize_once(game_id, frame_base64)
+    if game.phase != "playing":
+        return {
+            "success": False,
+            "recognized": False,
+            "message": f"Game is in {game.phase} phase",
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+            "game_state": game.get_state(),
+        }
+
+    if game.round_resolving or len(game.round_plays) >= 4:
+        return {
+            "success": False,
+            "recognized": False,
+            "message": "Round resolving, wait for next turn",
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+            "game_state": game.get_state(),
+        }
+
+    current = game.current_player
+    if current is None:
+        return {
+            "success": False,
+            "recognized": False,
+            "message": "No active player",
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+            "game_state": game.get_state(),
+        }
+
+    if any(play.get("player_id") == player_id for play in game.round_plays):
+        return {
+            "success": False,
+            "recognized": False,
+            "message": "Player already played this round",
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+            "game_state": game.get_state(),
+        }
+
+    if current.player_id != player_id:
+        return {
+            "success": False,
+            "recognized": False,
+            "message": f"Not {player_id}'s turn",
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+            "game_state": game.get_state(),
+        }
+
+    room_payload = hybrid_coordinator.to_payload(room, _players_meta(game))
+    if not room_payload.get("deal_done"):
+        return {
+            "success": False,
+            "recognized": False,
+            "message": "Complete virtual card dealing before playing",
+            "state": room_payload,
+            "game_state": game.get_state(),
+        }
+
+    pending = room.pending_virtual_play
+    played_this_round = {int(play["card"]) for play in game.round_plays}
+
+    allow_cards: set[int] = set()
+    if pending is not None:
+        allow_cards.add(int(pending.card_id))
+    elif game.trump_card is not None:
+        trump_id = int(game.trump_card)
+        if trump_id not in played_this_round:
+            allow_cards.add(trump_id)
+
+    recognized = await hybrid_vision.recognize_once(
+        game_id,
+        frame_base64,
+        phase="play",
+        allow_card_ids=allow_cards,
+    )
     if recognized is None:
-        return error("No valid card detected", 400)
+        return {
+            "success": False,
+            "recognized": False,
+            "message": "No valid card detected",
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+            "game_state": game.get_state(),
+        }
 
     recognized_card = str(recognized.card_id)
-    room = hybrid_coordinator.get_room_state(game_id)
     pending = room.pending_virtual_play
 
     if pending and pending.player_id == player_id:
@@ -356,6 +457,7 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
     if not success:
         return error(message, 400)
 
+    hybrid_vision.record_played_card(game_id, recognized.card_id)
     room = hybrid_coordinator.confirm_play_success(game_id, player_id, recognized.card_id)
     response_payload = {
         "success": True,
@@ -393,13 +495,13 @@ async def hybrid_undo_play(data: dict = Body(default_factory=dict)):
         "♠": "spades",
     }.get(suit_symbol)
 
-    if suit_name:
-        await hybrid_vision.reset_cv_history(game_id)
-        logger.info("Reset hybrid CV history after undo for card %s of %s", rank, suit_name)
+    hybrid_vision.release_card(game_id, card_id)
+    logger.info("Released card %s (%s%s) for re-detection after undo", card_id, rank, suit_symbol)
 
     _push_hybrid_state(game, room)
     return {
         "success": True,
         "message": msg,
-        "state": hybrid_coordinator.to_payload(room, _players_meta(game))
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "game_state": game.get_state(),
     }

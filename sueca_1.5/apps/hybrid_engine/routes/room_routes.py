@@ -90,6 +90,15 @@ def start_room_rematch(game_id: str):
 @router.post("/api/create_room")
 def create_room_endpoint():
     game_id = manager.create_room()
+    try:
+        import apps.hybrid_engine.routes.hybrid_routes as hybrid_routes_module
+
+        vision = hybrid_routes_module.hybrid_vision
+        if vision is not None:
+            vision.clear_game(game_id)
+            vision.begin_trump_phase(game_id)
+    except Exception:
+        pass
     return {"success": True, "game_id": game_id}
 
 

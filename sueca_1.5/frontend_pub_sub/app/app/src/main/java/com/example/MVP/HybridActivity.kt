@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -88,6 +89,11 @@ class HybridActivity : AppCompatActivity() {
     private var lastFrameSentAt = 0L
     private var dealResetRequested = false
     private var hybridRoleRegistered = false
+    private var cvRecognitionPaused = false
+    private var trumpPauseShown = false
+    private var dealPauseShown = false
+    private var lastDealDone = false
+    private var cvPauseDialog: AlertDialog? = null
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
@@ -96,6 +102,11 @@ class HybridActivity : AppCompatActivity() {
     private val cardsPerVirtual = 10
     private val minFrameIntervalMs = 700L
     private val cameraPermissionRequestCode = 11
+
+    private enum class CvPauseReason {
+        AFTER_TRUMP,
+        AFTER_DEAL,
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -244,8 +255,10 @@ class HybridActivity : AppCompatActivity() {
                 )
             )
             hybridState = response.state
+            lastDealDone = response.state?.dealDone == true
             updateUiFromHybridState(response.state)
             dealResetRequested = true
+            dealPauseShown = false
         } catch (e: Exception) {
             Log.w("HybridActivity", "resetDealForHost failed: ${e.message}")
             dealResetRequested = false
@@ -306,12 +319,55 @@ class HybridActivity : AppCompatActivity() {
             return
         }
 
+        if (isHost && state.dealDone && !lastDealDone && !dealPauseShown) {
+            dealPauseShown = true
+            showCvPauseDialog(CvPauseReason.AFTER_DEAL)
+        }
+        lastDealDone = state.dealDone
+
         if (!state.dealDone) {
             showDealPhase(state)
             return
         }
 
         showPlayPhase(state)
+    }
+
+    private fun showCvPauseDialog(reason: CvPauseReason) {
+        if (!isHost) {
+            return
+        }
+
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                return@runOnUiThread
+            }
+
+            cvPauseDialog?.dismiss()
+            cvRecognitionPaused = true
+
+            val titleRes = when (reason) {
+                CvPauseReason.AFTER_TRUMP -> R.string.hybrid_cv_pause_trump_title
+                CvPauseReason.AFTER_DEAL -> R.string.hybrid_cv_pause_deal_title
+            }
+            val messageRes = when (reason) {
+                CvPauseReason.AFTER_TRUMP -> R.string.hybrid_cv_pause_trump_message
+                CvPauseReason.AFTER_DEAL -> R.string.hybrid_cv_pause_deal_message
+            }
+
+            cvPauseDialog = AlertDialog.Builder(this, R.style.CustomDialogTheme)
+                .setTitle(titleRes)
+                .setMessage(messageRes)
+                .setCancelable(false)
+                .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
+                    cvRecognitionPaused = false
+                    dialog.dismiss()
+                    cvPauseDialog = null
+                }
+                .create()
+
+            cvPauseDialog?.show()
+        }
     }
 
     private fun displayHostFrame(frameBase64: String) {
@@ -436,7 +492,8 @@ class HybridActivity : AppCompatActivity() {
                 val response = GatewayClient.undoMove(
                     com.example.MVP.models.UndoMoveRequest(
                         gameId = roomId
-                    ), "virtual"
+                    ),
+                    mode = "hybrid"
                 )
 
                 if (response.success) {
@@ -698,7 +755,7 @@ class HybridActivity : AppCompatActivity() {
      */
     private fun analyzeFrameForHybrid(imageProxy: ImageProxy) {
         try {
-            if (!isHost || !isRunning || inFlightRecognition) {
+            if (!isHost || !isRunning || inFlightRecognition || cvRecognitionPaused) {
                 return
             }
 
@@ -746,6 +803,10 @@ class HybridActivity : AppCompatActivity() {
                                 hybridState = it
                             }
                             flashCheck("Trunfo captado")
+                            if (!trumpPauseShown) {
+                                trumpPauseShown = true
+                                runOnUiThread { showCvPauseDialog(CvPauseReason.AFTER_TRUMP) }
+                            }
                         }
                     } else if (localHybrid != null && !localHybrid.dealDone && localGame?.phase == "playing") {
                         val response = GatewayClient.hybridDealRecognize(
@@ -760,6 +821,10 @@ class HybridActivity : AppCompatActivity() {
                         updateUiFromHybridState(response.state)
                         if (response.confirmed) {
                             flashCheck("Carta distribuida")
+                            if (response.state?.dealDone == true && !dealPauseShown) {
+                                dealPauseShown = true
+                                runOnUiThread { showCvPauseDialog(CvPauseReason.AFTER_DEAL) }
+                            }
                         }
                     } else if (localGame?.phase == "playing") {
                         val pending = localHybrid?.pendingVirtualPlay
@@ -940,6 +1005,8 @@ class HybridActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         isRunning = false
+        cvPauseDialog?.dismiss()
+        cvPauseDialog = null
         mqttSubscriber?.disconnect()
         flashJob?.cancel()
         frameExecutor?.shutdown()

@@ -4,6 +4,7 @@ Hybrid Engine for Sueca 1.5
 Standalone hybrid-mode game engine.
 """
 
+import asyncio
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,6 +69,11 @@ async def startup_event():
             "✅ Built-in CV model configured (%s)",
             hybrid_vision_service.model_path,
         )
+        loaded = await asyncio.to_thread(hybrid_vision_service.warm_up)
+        if loaded:
+            logger.info("✅ Hybrid CV model loaded")
+        else:
+            logger.warning("⚠️ Hybrid CV model failed to load at startup")
     else:
         logger.warning(
             "⚠️ Hybrid CV model not found — place best.pt in apps/hybrid_engine/cv/ "
