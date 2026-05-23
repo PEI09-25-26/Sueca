@@ -577,70 +577,9 @@ class GameState:
 
         return True, f'Played {CardMapper.get_card(card)}'
 
-    def play_card_hybrid_capture(self, player_id, card_str):
-        """
-        Hybrid mode play: trust the physically captured card.
-        Hand membership and follow-suit are not enforced here because
-        physical dealing can differ from backend synthetic dealing.
-        """
-        with self._play_lock:
-            player = self.get_player(player_id)
-            if not player:
-                return False, 'Player not found'
-
-            if self.round_resolving or len(self.round_plays) >= 4:
-                return False, 'Round resolving, wait for next turn'
-
-            if self.current_player != player:
-                waiting_for = self.current_player.player_name if self.current_player else 'next player'
-                return False, f'Not your turn! Waiting for {waiting_for}'
-
-            if any(play.get('player_id') == player.player_id for play in self.round_plays):
-                return False, 'You already played this round'
-
-            try:
-                card = int(card_str)
-            except (TypeError, ValueError):
-                return False, 'Invalid card'
-
-            if card in player.hand:
-                player.hand.remove(card)
-
-            self.round_plays.append({
-                'player_id': player.player_id,
-                'player_name': player.player_name,
-                'card': str(card),
-                'position': str(player.position),
-            })
-
-            if len(self.round_plays) == 1:
-                self.round_suit = CardMapper.get_card_suit(card)
-
-            logger.info('[HYBRID] %s played %s in game %s', player.player_name, CardMapper.get_card(card), self.game_id)
-
-            current_index = self.turn_order.index(player)
-            if current_index + 1 < len(self.turn_order):
-                self.current_player = self.turn_order[current_index + 1]
-
-        event = {
-            'type': 'card_played',
-            'player': player.player_name,
-            'player_id': player.player_id,
-            'card': str(card),
-            'state': self.get_state(),
-            'game_id': self.game_id,
-        }
-        EVENT_DISPATCHER.dispatch(event)
-
-        if len(self.round_plays) == 4:
-            self.current_player = None
-            self.round_resolving = True
-            self.round_timer = threading.Timer(1.69, self._finish_round)
-            self.round_timer.start()
-
-
-        self._push_state('card_played')
-        return True, f'Played {CardMapper.get_card(card)}'
+    # Placeholder: capture behaviour removed from virtual engine core
+    # and implemented by the external service adapter.
+    pass
 
     def undo_last_play(self):
         with self._play_lock:
