@@ -52,8 +52,11 @@ FORWARD_DISPATCHER = _ForwardDispatcher()
 
 
 def normalize_mode(mode: Optional[str]) -> str:
-    if str(mode).strip().lower() == "physical":
+    mode_lower = str(mode).strip().lower()
+    if mode_lower == "physical":
         return "physical"
+    if mode_lower == "hybrid":
+        return "hybrid"
     return "virtual"
 
 
@@ -101,7 +104,10 @@ def ingest_event(payload: dict, source: str, default_mode: str):
 
 
 def target_base_for_mode(mode: str) -> str:
-    if normalize_mode(mode) == "physical":
+    normalized = normalize_mode(mode)
+    if normalized == "hybrid":
+        return state.HYBRID_ENGINE_URL
+    if normalized == "physical":
         return state.PHYSICAL_ENGINE_URL
     return state.VIRTUAL_ENGINE_URL
 

@@ -69,14 +69,37 @@ object GatewayClient {
         return response
     }
 
-    suspend fun joinGame(request: JoinGameRequest, authHeader: String? = null): JoinGameResponse {
+    suspend fun createHybridRoom(playerName: String): CreateRoomResponse {
+        val payload = mapOf("name" to playerName)
+        val envelope = command("create_room", gameId = null, mode = "hybrid", payload = payload)
+        val response = envelope.response
+        
+        val createResponse = CreateRoomResponse(
+            success = response.bool("success") ?: false,
+            message = response.string("message"),
+            gameId = response.string("game_id"),
+            roomId = response.string("game_id"),
+            playerId = response.string("player_id"),
+            token = response.string("token")
+        )
+        
+        if (createResponse.success) {
+            val gameId = createResponse.gameId ?: createResponse.roomId
+            if (!gameId.isNullOrBlank()) {
+                GameSessionManager.saveToken(gameId, createResponse.token)
+            }
+        }
+        return createResponse
+    }
+
+    suspend fun joinGame(request: JoinGameRequest, authHeader: String? = null, mode: String? = null): JoinGameResponse {
         val payload = mutableMapOf<String, Any?>(
             "name" to request.name,
             "position" to request.position
         )
         request.gameId?.let { payload["game_id"] = it }
 
-        val envelope = command("join", gameId = request.gameId, mode = null, payload = payload, authHeader = authHeader)
+        val envelope = command("join", gameId = request.gameId, mode = mode, payload = payload, authHeader = authHeader)
         val response = envelope.response
 
         val joinResponse = JoinGameResponse(

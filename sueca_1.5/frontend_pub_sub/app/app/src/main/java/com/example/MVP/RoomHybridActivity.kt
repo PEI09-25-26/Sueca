@@ -168,7 +168,8 @@ class RoomHybridActivity : AppCompatActivity() {
                         name = playerName,
                         gameId = roomId,
                         position = posEnum
-                    )
+                    ),
+                    mode = "hybrid"
                 )
 
                 if (!response.success) {

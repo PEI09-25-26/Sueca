@@ -10,6 +10,7 @@ class ServiceConfig:
     # Internal service targets use Docker service names (container-to-container).
     virtual_engine_url: str = "http://virtual_engine:5000"
     physical_engine_url: str = "http://physical_engine:8001"
+    hybrid_engine_url: str = "http://hybrid_engine:8002"
     cv_service_url: str = "http://physical_engine:8001"
     cv_service_ws_url: str = "ws://physical_engine:8001"
     # New service endpoints for modular backend

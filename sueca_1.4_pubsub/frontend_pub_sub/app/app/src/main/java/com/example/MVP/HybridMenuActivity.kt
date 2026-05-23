@@ -225,11 +225,23 @@ class HybridMenuActivity : AppCompatActivity() {
 
         btnCreateRoom.setOnClickListener {
             val name = displayedPlayerName
-            val roomId = generateMockRoomId()
-            createMockRoom(roomId, name)
-            renderMockRooms(inputRoomId)
-            Toast.makeText(this, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
-            openHybridRoom(roomId = roomId, playerName = name, isHost = true)
+            lifecycleScope.launch {
+                try {
+                    val response = GatewayClient.createHybridRoom(name)
+                    if (response.success) {
+                        val roomId = response.gameId ?: response.roomId ?: return@launch
+                        createMockRoom(roomId, name)
+                        renderMockRooms(inputRoomId)
+                        Toast.makeText(this@HybridMenuActivity, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
+                        openHybridRoom(roomId = roomId, playerName = name, isHost = true)
+                    } else {
+                        Toast.makeText(this@HybridMenuActivity, "Erro ao criar sala hibrida: ${response.message}", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(this@HybridMenuActivity, "Erro de ligacao. Verifica se o servidor esta a correr.", Toast.LENGTH_LONG).show()
+                }
+            }
         }
 
         btnJoinRoom.setOnClickListener {

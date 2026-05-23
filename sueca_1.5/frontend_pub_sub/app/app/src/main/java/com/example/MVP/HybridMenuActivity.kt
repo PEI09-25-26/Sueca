@@ -44,7 +44,7 @@ class HybridMenuActivity : AppCompatActivity() {
             val name = inputName.text.toString().ifBlank { randomName() }
             lifecycleScope.launch {
                 try {
-                    val response = GatewayClient.createRoom(name)
+                    val response = GatewayClient.createRoom(name, mode = "hybrid")
                     if (!response.success) {
                         Toast.makeText(
                             this@HybridMenuActivity,

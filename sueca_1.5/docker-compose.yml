@@ -57,6 +57,24 @@ services:
       emqx:
         condition: service_healthy
 
+  hybrid_engine:
+    build:
+      context: .
+      dockerfile: apps/hybrid_engine/Dockerfile
+    ports:
+      - "127.0.0.1:8002:8002"
+    env_file:
+      - ./.env
+    environment:
+      - MQTT_SERVICE=hybrid_engine
+      - SUECA_YOLO_DEVICE=cpu
+      - HYBRID_CV_MODEL_PATH=/app/apps/hybrid_engine/cv/best.pt
+    depends_on:
+      auth:
+        condition: service_started
+      emqx:
+        condition: service_healthy
+
   physical_engine:
     build:
       context: .

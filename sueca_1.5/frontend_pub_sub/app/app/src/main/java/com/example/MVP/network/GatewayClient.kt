@@ -2,7 +2,6 @@ package com.example.MVP.network
 
 import com.example.MVP.models.AddBotRequest
 import com.example.MVP.models.AddBotResponse
-import com.example.MVP.models.CreateRoomRequest
 import com.example.MVP.models.CreateRoomResponse
 import com.example.MVP.models.DeclineInviteRequest
 import com.example.MVP.models.CutDeckRequest
@@ -70,26 +69,44 @@ object GatewayClient {
         return parseJson(envelope.response, GameStatusResponse::class.java)
     }
 
-    suspend fun createRoom(playerName: String): CreateRoomResponse {
-        // Create an empty room and let the backend mint a host token without occupying a seat.
-        val response = RetrofitClient.api.createRoomV2(CreateRoomRequest(name = playerName))
-        if (response.success) {
-            val gameId = response.gameId ?: response.roomId
-            if (!gameId.isNullOrBlank()) {
-                GameSessionManager.saveToken(gameId, response.token)
-            }
+    suspend fun createRoom(playerName: String, mode: String? = null): CreateRoomResponse {
+        // Create an empty room through the gateway so we can handle the wrapped response format.
+        val envelope = command(
+            command = "create_room",
+            gameId = null,
+            mode = mode,
+            payload = mapOf("name" to playerName, "mode" to mode)
+        )
+
+        val response = envelope.response
+        val success = response.bool("success") ?: envelope.success
+        val gameId = response.string("game_id") ?: response.string("room_id")
+        val playerId = response.string("player_id")
+        val token = response.string("token")
+
+        if (success && !gameId.isNullOrBlank()) {
+            GameSessionManager.saveToken(gameId, token)
         }
-        return response
+
+        return CreateRoomResponse(
+            success = success,
+            roomId = gameId,
+            playerId = playerId,
+            gameId = gameId,
+            token = token,
+            message = response.string("message") ?: fallbackMessage(envelope)
+        )
     }
 
-    suspend fun joinGame(request: JoinGameRequest, authHeader: String? = null): JoinGameResponse {
+    suspend fun joinGame(request: JoinGameRequest, authHeader: String? = null, mode: String? = null): JoinGameResponse {
         val payload = mutableMapOf<String, Any?>(
             "name" to request.name,
-            "position" to request.position
+            "position" to request.position,
+            "mode" to mode
         )
         request.gameId?.let { payload["game_id"] = it }
 
-        val envelope = command("join", gameId = request.gameId, mode = null, payload = payload, authHeader = authHeader)
+        val envelope = command("join", gameId = request.gameId, mode = mode, payload = payload, authHeader = authHeader)
         val response = envelope.response
 
         val joinResponse = JoinGameResponse(
@@ -311,7 +328,7 @@ object GatewayClient {
             "is_host" to request.isHost
         )
 
-        val envelope = command("hybrid/register_player", gameId = request.gameId, mode = "virtual", payload = payload)
+        val envelope = command("hybrid/register_player", gameId = request.gameId, mode = "hybrid", payload = payload)
         return requireParsed(envelope, HybridStateResponse::class.java)
     }
 
@@ -319,7 +336,7 @@ object GatewayClient {
         val envelope = RetrofitClient.api.routeQuery(
             queryPath = "hybrid/state",
             gameId = gameId,
-            mode = "virtual",
+            mode = "hybrid",
             token = GameSessionManager.getAuthHeader(gameId)
         )
         return requireParsed(envelope, HybridStateResponse::class.java)
@@ -332,7 +349,7 @@ object GatewayClient {
             "cards_per_virtual" to request.cardsPerVirtual
         )
 
-        val envelope = command("hybrid/deal/reset", gameId = request.gameId, mode = "virtual", payload = payload)
+        val envelope = command("hybrid/deal/reset", gameId = request.gameId, mode = "hybrid", payload = payload)
         return requireParsed(envelope, HybridStateResponse::class.java)
     }
 
@@ -344,7 +361,7 @@ object GatewayClient {
             "target_player_id" to request.targetPlayerId
         )
 
-        val envelope = command("hybrid/deal/recognize", gameId = request.gameId, mode = "virtual", payload = payload)
+        val envelope = command("hybrid/deal/recognize", gameId = request.gameId, mode = "hybrid", payload = payload)
         return requireParsed(envelope, HybridDealRecognizeResponse::class.java)
     }
 
@@ -355,7 +372,7 @@ object GatewayClient {
             "card" to request.card
         )
 
-        val envelope = command("hybrid/virtual/select_card", gameId = request.gameId, mode = "virtual", payload = payload)
+        val envelope = command("hybrid/virtual/select_card", gameId = request.gameId, mode = "hybrid", payload = payload)
         return requireParsed(envelope, HybridStateResponse::class.java)
     }
 
@@ -363,7 +380,7 @@ object GatewayClient {
         val envelope = RetrofitClient.api.routeQuery(
             queryPath = "hybrid/pending_play",
             gameId = gameId,
-            mode = "virtual",
+            mode = "hybrid",
             token = GameSessionManager.getAuthHeader(gameId)
         )
 
@@ -378,7 +395,7 @@ object GatewayClient {
             "frame_base64" to request.frameBase64
         )
 
-        val envelope = command("hybrid/play/confirm_capture", gameId = request.gameId, mode = "virtual", payload = payload)
+        val envelope = command("hybrid/play/confirm_capture", gameId = request.gameId, mode = "hybrid", payload = payload)
         return requireParsed(envelope, HybridConfirmCaptureResponse::class.java)
     }
 
@@ -389,7 +406,7 @@ object GatewayClient {
             "frame_base64" to request.frameBase64
         )
 
-        val envelope = command("hybrid/trump/confirm_capture", gameId = request.gameId, mode = "virtual", payload = payload)
+        val envelope = command("hybrid/trump/confirm_capture", gameId = request.gameId, mode = "hybrid", payload = payload)
         return requireParsed(envelope, HybridConfirmTrumpCaptureResponse::class.java)
     }
 

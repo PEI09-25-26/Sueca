@@ -1,0 +1,14 @@
+fastapi[all]
+uvicorn[standard]
+requests
+paho-mqtt
+PyJWT
+redis>=4.6.0
+firebase-admin==7.4.0
+opencv-python-headless
+numpy==2.2.4
+Pillow==11.2.1
+ultralytics==8.4.37
+torch==2.11.0
+pydantic==2.11.7
+python-multipart

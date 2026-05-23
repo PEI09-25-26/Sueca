@@ -3,9 +3,9 @@ from fastapi import APIRouter
 try:
     from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round, undo_last_play
     from ..event_publisher import publish_physical_event
-except ImportError:
-    from core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round, undo_last_play
-    from event_publisher import publish_physical_event
+except (ImportError, ValueError):
+    from apps.physical_engine.core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round, undo_last_play
+    from apps.physical_engine.event_publisher import publish_physical_event
 
 
 router = APIRouter()

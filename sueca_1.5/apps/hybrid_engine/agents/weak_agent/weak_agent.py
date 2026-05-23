@@ -1,20 +1,25 @@
-from apps.virtual_engine.clients.client import GameClient
-from apps.virtual_engine.game_state_tracker import GameStateTracker
-from apps.virtual_engine.card_mapper import CardMapper
-from .decision_maker import DecisionMaker
+"""WeakAgent - AI agent that plays Sueca using simple heuristics."""
+
 import random
 import time
 
+from ...card_mapper import CardMapper
+from ...clients.client import GameClient
+from ...game_state_tracker import GameStateTracker
+from .decision_maker import DecisionMaker
 
-class RandomAgent(GameClient):
-    def __init__(self, agent_name="RandomAI", game_id=None, position=None):
+
+class WeakAgent(GameClient):
+    """Heuristic weak bot adapted for Sueca 1.4 API signatures."""
+
+    def __init__(self, agent_name="WeakAI", game_id=None, position=None):
         super().__init__()
         self.agent_name = agent_name
         self.state_tracker = GameStateTracker()
         self.decision_maker = DecisionMaker(self.state_tracker)
         self.auto_play = True
         self.think_time = 1.0
-        self.player_id = "RandomAI"
+        self.player_id = None
         self.game_id = game_id
         self.position = position
         self._last_phase = None
@@ -22,14 +27,13 @@ class RandomAgent(GameClient):
 
     def run(self):
         success, message, player_id = self.join_game(self.agent_name, self.game_id, self.position)
-        if success:
-            self.player_id = player_id
         if not success:
             print(f"[ERROR] Failed to join game: {message}")
             return
 
         self.player_name = self.agent_name
-        print(f"RandomAgent joined as {self.player_name}\n")
+        self.player_id = player_id
+        print(f"WeakAgent joined as {self.player_name}\n")
 
         while True:
             state = self.get_status()
@@ -60,6 +64,7 @@ class RandomAgent(GameClient):
                     self._last_finished_match = match_number
 
             self._last_phase = phase
+
             time.sleep(random.uniform(0.5, 1.0))
 
     def _handle_deck_cutting(self, state):
@@ -67,22 +72,22 @@ class RandomAgent(GameClient):
             return
 
         cut = self.decision_maker.choose_deck_cut()
-        success, msg = self.cut_deck(cut)
+        success, message = self.cut_deck(cut)
         if success:
             print(f"Agent cutting deck at {cut}")
         else:
-            print(f"[ERROR] Cutting deck failed: {msg}")
+            print(f"[ERROR] Cutting deck failed: {message}")
 
     def _handle_trump_selection(self, state):
         if state.get("west_player_id") != self.player_id and state.get("west_player") != self.player_name:
             return
 
         choice = self.decision_maker.choose_trump_selection()
-        success, msg = self.select_trump(choice)
+        success, message = self.select_trump(choice)
         if success:
             print(f"Agent selecting {choice} card for trump")
         else:
-            print(f"[ERROR] Selecting trump failed: {msg}")
+            print(f"[ERROR] Selecting trump failed: {message}")
 
     def _handle_playing_turn(self, state):
         current_player_name = state.get("current_player_name") or state.get("current_player")
@@ -98,10 +103,8 @@ class RandomAgent(GameClient):
         if card is None:
             return
 
-        card_str = str(card)
-        success, msg = self.play_card(card_str)
+        success, message = self.play_card(str(card))
         if success:
-            card_display = CardMapper.get_card(card)
-            print(f"Agent played: {card_display}")
+            print(f"Agent played: {CardMapper.get_card(card)}")
         else:
-            print(f"[ERROR] Playing card failed: {msg}")
+            print(f"[ERROR] Playing card failed: {message}")

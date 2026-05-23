@@ -1,22 +1,23 @@
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import JSONResponse
-import requests
 import logging
-from .common import error, get_game_from_request
-from ..core import manager
-from ..core.hybrid_game_coordinator import HybridGameCoordinator
-from ..core.hybrid_vision_service import HybridVisionService
+from apps.hybrid_engine.routes.common import error, get_game_from_request
+from apps.hybrid_engine.core import manager
+from apps.hybrid_engine.core.hybrid_game_coordinator import HybridGameCoordinator
+from apps.hybrid_engine.core.hybrid_vision_service import HybridVisionService
 from apps.emqx import mqtt_client
-from ..card_mapper import CardMapper
+from apps.hybrid_engine.card_mapper import CardMapper
+from typing import Optional
+from apps.hybrid_engine.core.game_adapter import play_card_hybrid_capture
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
-hybrid_coordinator = HybridGameCoordinator()
-hybrid_vision = HybridVisionService()
+# Instances will be injected by the hybrid engine main at startup
+hybrid_coordinator: Optional[HybridGameCoordinator] = None
+hybrid_vision: Optional[HybridVisionService] = None
 
 
 def _players_meta(game):
@@ -30,7 +31,7 @@ def _players_meta(game):
 
 
 def _push_hybrid_state(game, room):
-    if not game or not room:
+    if not game or not room or hybrid_coordinator is None:
         return
     payload = {
         "event_type": "hybrid_state_update",
@@ -351,7 +352,7 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         if int(recognized.card_id) != int(pending.card_id):
             return error("Captured card does not match selected virtual card", 400)
 
-    success, message = game.play_card_hybrid_capture(player_id, recognized_card)
+    success, message = play_card_hybrid_capture(game, player_id, recognized_card)
     if not success:
         return error(message, 400)
 
@@ -393,15 +394,8 @@ async def hybrid_undo_play(data: dict = Body(default_factory=dict)):
     }.get(suit_symbol)
 
     if suit_name:
-        try:
-            requests.post(f"{hybrid_vision.cv_url}/cv/undo", json={
-                "game_id": game_id,
-                "rank": rank,
-                "suit": suit_name
-            }, timeout=1.0)
-            logger.info(f"Notified CV service of undo for card {rank} of {suit_name}")
-        except Exception as e:
-            logger.warning(f"Failed to notify CV service of undo: {e}")
+        await hybrid_vision.reset_cv_history(game_id)
+        logger.info("Reset hybrid CV history after undo for card %s of %s", rank, suit_name)
 
     _push_hybrid_state(game, room)
     return {

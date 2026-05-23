@@ -29,6 +29,7 @@ CV_SERVICE_WS_URL = SERVICES.cv_service_ws_url
 GAME_SERVICE_URL = SERVICES.physical_engine_url
 VIRTUAL_ENGINE_URL = SERVICES.virtual_engine_url
 PHYSICAL_ENGINE_URL = SERVICES.physical_engine_url
+HYBRID_ENGINE_URL = SERVICES.hybrid_engine_url
 FORWARD_TO_FRONTEND = SERVICES.frontend_url.rstrip("/") != SERVICES.gateway_url.rstrip("/")
 
 active_connections: dict[str, Any] = {}
@@ -63,6 +64,7 @@ __all__ = [
     "GAME_SERVICE_URL",
     "VIRTUAL_ENGINE_URL",
     "PHYSICAL_ENGINE_URL",
+    "HYBRID_ENGINE_URL",
     "FORWARD_TO_FRONTEND",
     "active_connections",
     "cv_connections",

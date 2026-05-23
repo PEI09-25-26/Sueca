@@ -76,7 +76,7 @@
         <activity
             android:name="com.example.MVP.HybridActivity"
             android:exported="false"
-            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:theme="@style/Theme.Sueca"
             android:screenOrientation="portrait"/>
 
         <activity

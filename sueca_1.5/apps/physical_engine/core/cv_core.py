@@ -12,10 +12,11 @@ from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 try:
-    from cv import CardDetector, CardClassifier
-except ImportError:
-    from cv.opencv import CardDetector
-    from cv.yolo import CardClassifier
+    # Package-local import when running as apps.physical_engine
+    from ..cv import CardDetector, CardClassifier
+except (ImportError, ValueError):
+    # Absolute fallback for container/runtime path differences
+    from apps.physical_engine.cv import CardDetector, CardClassifier
 
 
 detector: Optional[CardDetector] = None

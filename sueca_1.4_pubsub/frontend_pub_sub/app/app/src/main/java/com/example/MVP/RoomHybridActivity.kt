@@ -132,7 +132,7 @@ class RoomHybridActivity : AppCompatActivity() {
         pollingJob = lifecycleScope.launch {
             while (true) {
                 try {
-                    val state = GatewayClient.getStatus(roomId)
+                    val state = GatewayClient.getStatus(roomId, mode = "hybrid")
                     if (state != null) {
                         updateUI(state)
                     }
@@ -159,7 +159,8 @@ class RoomHybridActivity : AppCompatActivity() {
                         name = playerName,
                         gameId = roomId,
                         position = Position.valueOf(position.uppercase())
-                    )
+                    ),
+                    mode = "hybrid"
                 )
 
                 if (!response.success) {
