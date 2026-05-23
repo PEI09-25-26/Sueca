@@ -138,6 +138,7 @@ class GameState:
         self.next_match_number = 1
         self.current_match_number = None
         self.starting_hands = {}
+        self._rounds_by_player = {}
         self._published_match_ids = set()
         # Dealer rotates each match. Initial dealer is WEST to preserve current first-match behavior.
         self.dealer_index = self.positions.index(Positions.WEST)
@@ -159,6 +160,7 @@ class GameState:
         self.last_winner = None
         self.turn_order = []
         self.starting_hands = {}
+        self._rounds_by_player = {}
 
         for player in self.players:
             player.hand = []
@@ -470,6 +472,60 @@ class GameState:
             if getattr(player, "player_id", None)
         }
 
+    def _track_round_play(self, player, card_id):
+        if not getattr(player, "player_id", None):
+            return
+
+        round_key = f"round_{self.current_round}"
+        lead_suit = self.round_suit or CardMapper.get_card_suit(card_id)
+        player_rounds = self._rounds_by_player.setdefault(player.player_id, {})
+        player_rounds[round_key] = {
+            "hand_before_play": [str(card) for card in player.hand],
+            "card_played": str(card_id),
+            "lead_suit": lead_suit,
+            "position_in_trick": len(self.round_plays) + 1,
+            "cards_in_trick": [],
+        }
+
+    def _finalize_round_history(self):
+        if len(self.round_plays) != 4:
+            return
+
+        round_key = f"round_{self.current_round}"
+        cards_in_trick = [str(play.get("card")) for play in self.round_plays]
+        for index, play in enumerate(self.round_plays, start=1):
+            player_id = play.get("player_id")
+            if not player_id:
+                continue
+            player_rounds = self._rounds_by_player.get(player_id)
+            if player_rounds is None:
+                continue
+            entry = player_rounds.get(round_key)
+            if entry is None:
+                entry = {
+                    "hand_before_play": [],
+                    "card_played": str(play.get("card")),
+                    "lead_suit": self.round_suit,
+                    "position_in_trick": index,
+                    "cards_in_trick": [],
+                }
+                player_rounds[round_key] = entry
+            if entry.get("position_in_trick") is None:
+                entry["position_in_trick"] = index
+            entry["cards_in_trick"] = cards_in_trick
+
+    def _remove_round_history_entry(self, player_id, round_number):
+        if not player_id:
+            return
+        player_rounds = self._rounds_by_player.get(player_id)
+        if not player_rounds:
+            return
+        round_key = f"round_{round_number}"
+        if round_key in player_rounds:
+            del player_rounds[round_key]
+        if not player_rounds:
+            self._rounds_by_player.pop(player_id, None)
+
     def _player_team_key(self, player):
         if player in self.teams[0]:
             return "team1"
@@ -485,6 +541,7 @@ class GameState:
             "game_id": self.game_id,
             "position": position,
             "starting_hand": self.starting_hands.get(player.player_id, []),
+            "rounds": self._rounds_by_player.get(player.player_id, {}),
             "trump_suit": self.trump_suit,
             "match_number": match_entry.get("match_number"),
             "finished_at": match_entry.get("finished_at"),
@@ -626,6 +683,7 @@ class GameState:
             )
 
             self.last_winner = winner
+            self._finalize_round_history()
             self.current_round += 1
             self.round_plays = []
             self.round_suit = None
@@ -698,6 +756,7 @@ class GameState:
             if not self._can_play_card(player, card):
                 return False, f'You must follow suit {self.round_suit}!'
 
+            self._track_round_play(player, card)
             player.hand.remove(card)
             self.round_plays.append({
                 'player_id': player.player_id,
@@ -763,6 +822,7 @@ class GameState:
             except (TypeError, ValueError):
                 return False, 'Invalid card'
 
+            self._track_round_play(player, card)
             if card in player.hand:
                 player.hand.remove(card)
 
@@ -814,6 +874,7 @@ class GameState:
                 self.round_resolving = False
 
             last_play = self.round_plays.pop()
+            self._remove_round_history_entry(last_play.get('player_id'), self.current_round)
             player = self.get_player(last_play['player_id'])
             card_id = int(last_play['card'])
             if player:
