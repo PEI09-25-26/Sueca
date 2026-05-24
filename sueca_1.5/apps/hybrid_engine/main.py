@@ -20,6 +20,8 @@ from apps.hybrid_engine.routes import api_router
 import apps.hybrid_engine.routes.hybrid_routes as hybrid_routes_module
 hybrid_routes = hybrid_routes_module.router
 
+from apps.hybrid_engine.core.hybrid_referee import HybridReferee
+
 # Shared utilities
 from shared.logging_config import setup_logging
 
@@ -29,10 +31,12 @@ logger = logging.getLogger(__name__)
 
 hybrid_coordinator = HybridGameCoordinator()
 hybrid_vision_service = HybridVisionService()
+hybrid_referee = HybridReferee()
 
 # Inject instances into hybrid routes module so the router uses the same objects
 hybrid_routes_module.hybrid_coordinator = hybrid_coordinator
 hybrid_routes_module.hybrid_vision = hybrid_vision_service
+hybrid_routes_module.hybrid_referee = hybrid_referee
 
 # FastAPI app
 app = FastAPI(

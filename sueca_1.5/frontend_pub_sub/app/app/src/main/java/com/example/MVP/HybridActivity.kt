@@ -14,6 +14,9 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.LinearLayout
+import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.Camera
@@ -69,6 +72,10 @@ class HybridActivity : AppCompatActivity() {
     private lateinit var btnTrumpBottom: Button
     private lateinit var btnUndoMove: Button
     private lateinit var hostCameraPreview: ImageView
+
+    private lateinit var layoutFinishedBanner: LinearLayout
+    private lateinit var txtEndBanner: TextView
+    private lateinit var layoutActions: LinearLayout
 
     private lateinit var handAdapter: CardsAdapter
 
@@ -140,6 +147,9 @@ class HybridActivity : AppCompatActivity() {
         btnTrumpBottom = findViewById(R.id.btnTrumpBottom)
         btnUndoMove = findViewById(R.id.btnUndoMove)
         hostCameraPreview = findViewById(R.id.hostCameraPreview)
+        layoutFinishedBanner = findViewById<LinearLayout>(R.id.layoutFinishedBanner)
+        txtEndBanner = findViewById(R.id.txtEndBanner)
+        layoutActions = findViewById<LinearLayout>(R.id.layoutActions)
 
         clearTableCards()
         setupHand()
@@ -370,6 +380,72 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
+    private fun showRenunciaDialog(playerId: String, cardId: Int?, cardDisplay: String?) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                return@runOnUiThread
+            }
+
+            cvPauseDialog?.dismiss()
+            cvRecognitionPaused = true
+
+            cvPauseDialog = AlertDialog.Builder(this, R.style.CustomDialogTheme)
+                .setTitle("⚠️ Possível Renúncia")
+                .setMessage("A câmara detetou um [$cardDisplay], o que constitui uma renúncia. A câmara leu a carta corretamente?")
+                .setCancelable(false)
+                .setPositiveButton("Sim (Aplicar Renúncia)") { dialog, _ ->
+                    dialog.dismiss()
+                    cvPauseDialog = null
+                    if (cardId != null) {
+                        applyForceRenuncia(playerId, cardId)
+                    } else {
+                        cvRecognitionPaused = false
+                    }
+                }
+                .setNegativeButton("Não (Tentar Novamente)") { dialog, _ ->
+                    cvRecognitionPaused = false
+                    dialog.dismiss()
+                    cvPauseDialog = null
+                }
+                .create()
+
+            cvPauseDialog?.show()
+        }
+    }
+
+    private fun applyForceRenuncia(playerId: String, cardId: Int) {
+        lifecycleScope.launch {
+            try {
+                val response = GatewayClient.hybridForceRenuncia(
+                    com.example.MVP.models.HybridForceRenunciaRequest(
+                        gameId = roomId,
+                        playerId = playerId,
+                        cardId = cardId
+                    )
+                )
+                if (response.success) {
+                    flashCheck("Renúncia aplicada!")
+                    response.gameState?.let {
+                        gameState = it
+                        updateUiFromGameState(it)
+                    }
+                    response.state?.let {
+                        hybridState = it
+                        updateUiFromHybridState(it)
+                    }
+                    cvRecognitionPaused = false
+                } else {
+                    flashError("Erro ao aplicar renúncia")
+                    cvRecognitionPaused = false
+                }
+            } catch (e: Exception) {
+                Log.w("HybridActivity", "applyForceRenuncia failed: ${e.message}")
+                flashError("Erro na renúncia")
+                cvRecognitionPaused = false
+            }
+        }
+    }
+
     private fun displayHostFrame(frameBase64: String) {
         try {
             val decodedString = android.util.Base64.decode(frameBase64, android.util.Base64.DEFAULT)
@@ -520,6 +596,14 @@ class HybridActivity : AppCompatActivity() {
 
         val phase = state.phase
 
+        if (phase == "finished") {
+            showFinishedBanner(state)
+            return
+        } else {
+            layoutFinishedBanner.visibility = View.GONE
+            findViewById<FrameLayout>(R.id.hybridContentContainer).visibility = View.VISIBLE
+        }
+
         if (phase == "trump_selection") {
             showTrumpSelectionPhase(state)
             return
@@ -578,6 +662,107 @@ class HybridActivity : AppCompatActivity() {
             "E a tua vez de escolher o trunfo (topo/fundo)"
         } else {
             "Aguardar $selectorName escolher o trunfo"
+        }
+    }
+
+    private fun showFinishedBanner(state: GameStatusResponse) {
+        trumpSelectionControls.visibility = View.GONE
+        btnUndoMove.visibility = View.GONE
+        handAdapter.isEnabled = false
+        handAdapter.updateCards(emptyList())
+
+        // Hide camera/table container
+        findViewById<FrameLayout>(R.id.hybridContentContainer).visibility = View.GONE
+        
+        // Show banner
+        layoutFinishedBanner.visibility = View.VISIBLE
+
+        val team1 = state.teamScores?.team1 ?: 0
+        val team2 = state.teamScores?.team2 ?: 0
+        val winnerText = when {
+            team1 > team2 -> "TEAM 1 (N/S) VENCE"
+            team2 > team1 -> "TEAM 2 (E/W) VENCE"
+            else -> "EMPATE"
+        }
+
+        val match = state.matchPoints
+        val matchLine = if (match != null) {
+            "\nPontos do Jogo: ${match.team1} - ${match.team2}"
+        } else {
+            ""
+        }
+
+        txtEndBanner.text = "$winnerText\nPontuação final: $team1 - $team2$matchLine"
+
+        layoutActions.removeAllViews()
+
+        val rematch = Button(this)
+        rematch.text = "Desforra"
+        rematch.setOnClickListener { requestRematch() }
+
+        val score = Button(this)
+        score.text = "Pontos do Jogo"
+        score.setOnClickListener { showMatchScoreDialog() }
+
+        val params = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginEnd = 16 }
+        rematch.layoutParams = params
+
+        layoutActions.addView(rematch)
+        layoutActions.addView(score)
+    }
+
+    private fun requestRematch() {
+        if (roomId.isBlank()) return
+
+        lifecycleScope.launch {
+            try {
+                val res = GatewayClient.requestRematch(roomId)
+                Toast.makeText(
+                    this@HybridActivity,
+                    res.message ?: if (res.success) "Pedido de desforra enviado" else "Erro na desforra",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@HybridActivity, "Erro na desforra: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun showMatchScoreDialog() {
+        if (roomId.isBlank()) return
+
+        lifecycleScope.launch {
+            try {
+                val response = GatewayClient.getMatchPoints(roomId)
+                if (!response.success) {
+                    Toast.makeText(
+                        this@HybridActivity,
+                        response.message ?: "Nao foi possivel obter a pontuacao",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                val points = response.points
+                val team1 = points?.team1 ?: 0
+                val team2 = points?.team2 ?: 0
+                val matchesPlayed = response.matchesPlayed ?: 0
+
+                AlertDialog.Builder(this@HybridActivity, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+                    .setTitle("Placar do Jogo")
+                    .setMessage(
+                        "Equipa 1 (N/S): $team1\n" +
+                        "Equipa 2 (E/W): $team2\n\n" +
+                        "Jogos concluídos: $matchesPlayed"
+                    )
+                    .setPositiveButton("OK", null)
+                    .show()
+            } catch (e: Exception) {
+                Toast.makeText(this@HybridActivity, "Erro ao obter pontuacao: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -845,7 +1030,12 @@ class HybridActivity : AppCompatActivity() {
                                     frameBase64 = frameBase64
                                 )
                             )
-                            if (response.success) {
+                            if (!response.success && response.isRenunciaWarning == true) {
+                                runOnUiThread {
+                                    showRenunciaDialog(capturePlayerId, response.capturedCardId, response.capturedDisplay)
+                                }
+                                return@launch
+                            } else if (response.success) {
                                 // Validar se a carta captada corresponde à selecionada pelo virtual (se aplicável)
                                 if (pending != null && response.capturedCardId != null && response.capturedCardId != pending.cardId) {
                                     runOnUiThread {

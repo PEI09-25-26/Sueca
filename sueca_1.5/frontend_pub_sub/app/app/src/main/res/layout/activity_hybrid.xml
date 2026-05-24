@@ -240,6 +240,40 @@
 
     </FrameLayout>
 
+    <LinearLayout
+        android:id="@+id/layoutFinishedBanner"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#99000000"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/hybridContentContainer"
+        app:layout_constraintEnd_toEndOf="@+id/hybridContentContainer"
+        app:layout_constraintStart_toStartOf="@+id/hybridContentContainer"
+        app:layout_constraintTop_toTopOf="@+id/hybridContentContainer">
+
+        <TextView
+            android:id="@+id/txtEndBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#40FFD700"
+            android:gravity="center"
+            android:padding="16dp"
+            android:text="TEAM 1 WINS!"
+            android:textColor="@android:color/white"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/layoutActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:orientation="horizontal" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/handLabel"
         android:layout_width="wrap_content"

@@ -8,10 +8,12 @@ import logging
 import threading
 from apps.hybrid_engine.card_mapper import CardMapper
 
+from datetime import datetime, timezone
+
 logger = logging.getLogger(__name__)
 
 
-def play_card_hybrid_capture(game, player_id, card_str) -> Tuple[bool, str]:
+def play_card_hybrid_capture(game, player_id, card_str, force_renuncia=False) -> Tuple[bool, str]:
     """Perform a hybrid-style capture play on the provided `game` instance.
 
     This mirrors the previous `play_card_hybrid_capture` method that lived inside
@@ -37,6 +39,38 @@ def play_card_hybrid_capture(game, player_id, card_str) -> Tuple[bool, str]:
         except (TypeError, ValueError):
             return False, 'Invalid card'
 
+        if force_renuncia:
+            # End the game immediately and give 4 points to the innocent team
+            game.phase = 'finished'
+            game.game_started = False
+            
+            innocent_team_idx = 1 if player in game.teams[0] else 0
+            
+            # Opposing team gets 4 match points
+            game.match_points['team1' if innocent_team_idx == 0 else 'team2'] += 4
+            
+            match_entry = {
+                'match_number': game.current_match_number,
+                'winner_team': 'team1' if innocent_team_idx == 0 else 'team2',
+                'winner_label': 'Team 1 (N/S)' if innocent_team_idx == 0 else 'Team 2 (E/W)',
+                'team_scores': {'team1': game.team_scores[0], 'team2': game.team_scores[1]},
+                'finished_at': datetime.now(timezone.utc).isoformat(),
+            }
+            game.match_history.append(match_entry)
+            # Firestore stats publishing exists in the virtual engine GameState
+            # but may not be present in all GameState implementations used
+            # by hybrid_engine. Guard the call to avoid an AttributeError.
+            if hasattr(game, "_publish_match_stats"):
+                try:
+                    game._publish_match_stats(match_entry)
+                except Exception:
+                    logger.exception('Failed to publish match stats for game %s', game.game_id)
+            
+            # Notify everyone
+            game._push_state('renuncia')
+            return True, f'Renúncia penalizada. {match_entry["winner_label"]} ganhou o jogo!'
+
+        # Normal play continues if no renuncia
         if card in player.hand:
             player.hand.remove(card)
 

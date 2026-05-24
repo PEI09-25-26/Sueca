@@ -18,6 +18,7 @@ router = APIRouter()
 # Instances will be injected by the hybrid engine main at startup
 hybrid_coordinator: Optional[HybridGameCoordinator] = None
 hybrid_vision: Optional[HybridVisionService] = None
+hybrid_referee = None
 
 
 def _players_meta(game):
@@ -453,11 +454,23 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         if int(recognized.card_id) != int(pending.card_id):
             return error("Captured card does not match selected virtual card", 400)
 
+    # Check for renuncia BEFORE applying the play
+    is_renuncia, reason = hybrid_referee.check_play(game_id, player_id, recognized.card_id, game.round_suit)
+    if is_renuncia:
+        return {
+            "success": False,
+            "is_renuncia_warning": True,
+            "message": "Renúncia detetada! A câmara leu a carta corretamente?",
+            "captured_card_id": recognized.card_id,
+            "captured_display": recognized.display
+        }
+
     success, message = play_card_hybrid_capture(game, player_id, recognized_card)
     if not success:
         return error(message, 400)
 
     hybrid_vision.record_played_card(game_id, recognized.card_id)
+    hybrid_referee.record_play(game_id, player_id, recognized.card_id, game.round_suit)
     room = hybrid_coordinator.confirm_play_success(game_id, player_id, recognized.card_id)
     response_payload = {
         "success": True,
@@ -480,6 +493,8 @@ async def hybrid_undo_play(data: dict = Body(default_factory=dict)):
     success, msg, last_play = game.undo_last_play()
     if not success:
         return error(msg, 400)
+
+    hybrid_referee.undo_play(game_id)
 
     player_id = last_play['player_id']
     card_id = int(last_play['card'])
@@ -504,4 +519,29 @@ async def hybrid_undo_play(data: dict = Body(default_factory=dict)):
         "message": msg,
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
         "game_state": game.get_state(),
+    }
+
+
+@router.post("/api/hybrid/play/force_renuncia")
+async def hybrid_force_renuncia(data: dict = Body(default_factory=dict)):
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    player_id = data.get("player_id")
+    card_id = data.get("card_id")
+
+    if not player_id or card_id is None:
+        return error("Missing parameters", 400)
+
+    success, message = play_card_hybrid_capture(game, player_id, str(card_id), force_renuncia=True)
+    if not success:
+        return error(message, 400)
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    return {
+        "success": True,
+        "message": message,
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game)) if room else None,
+        "game_state": game.get_state()
     }

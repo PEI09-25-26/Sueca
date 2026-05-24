@@ -513,7 +513,8 @@ data class HybridRuntimeState(
 data class HybridStateResponse(
     val success: Boolean,
     val state: HybridRuntimeState,
-    val message: String? = null
+    val message: String? = null,
+    @SerializedName("game_state") val gameState: GameStatusResponse? = null
 )
 
 data class HybridDealResetRequest(
@@ -561,10 +562,17 @@ data class HybridConfirmCaptureRequest(
 data class HybridConfirmCaptureResponse(
     val success: Boolean,
     val message: String,
+    @SerializedName("is_renuncia_warning") val isRenunciaWarning: Boolean? = null,
     @SerializedName("captured_card_id") val capturedCardId: Int? = null,
     @SerializedName("captured_display") val capturedDisplay: String? = null,
     val state: HybridRuntimeState? = null,
     @SerializedName("game_state") val gameState: GameStatusResponse? = null
+)
+
+data class HybridForceRenunciaRequest(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("player_id") val playerId: String,
+    @SerializedName("card_id") val cardId: Int
 )
 
 data class HybridConfirmTrumpCaptureRequest(

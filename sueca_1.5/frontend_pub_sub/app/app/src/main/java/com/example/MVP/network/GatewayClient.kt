@@ -12,6 +12,7 @@ import com.example.MVP.models.GenericResponse
 import com.example.MVP.models.HandResponse
 import com.example.MVP.models.HybridConfirmCaptureRequest
 import com.example.MVP.models.HybridConfirmCaptureResponse
+import com.example.MVP.models.HybridForceRenunciaRequest
 import com.example.MVP.models.HybridConfirmTrumpCaptureRequest
 import com.example.MVP.models.HybridConfirmTrumpCaptureResponse
 import com.example.MVP.models.HybridDealRecognizeRequest
@@ -396,7 +397,26 @@ object GatewayClient {
         )
 
         val envelope = command("hybrid/play/confirm_capture", gameId = request.gameId, mode = "hybrid", payload = payload)
+        
+        // Don't use requireParsed if it's a renúncia warning (success will be false, but response has data)
+        val responseJson = envelope.response
+        if (responseJson?.bool("is_renuncia_warning") == true) {
+            return parseJson(responseJson, HybridConfirmCaptureResponse::class.java) 
+                ?: throw IllegalStateException("Failed to parse renúncia warning response")
+        }
+        
         return requireParsed(envelope, HybridConfirmCaptureResponse::class.java)
+    }
+
+    suspend fun hybridForceRenuncia(request: HybridForceRenunciaRequest): HybridStateResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "player_id" to request.playerId,
+            "card_id" to request.cardId
+        )
+
+        val envelope = command("hybrid/play/force_renuncia", gameId = request.gameId, mode = "hybrid", payload = payload)
+        return requireParsed(envelope, HybridStateResponse::class.java)
     }
 
     suspend fun hybridConfirmTrumpCapture(request: HybridConfirmTrumpCaptureRequest): HybridConfirmTrumpCaptureResponse {
