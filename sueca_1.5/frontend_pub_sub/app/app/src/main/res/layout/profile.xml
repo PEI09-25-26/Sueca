@@ -134,7 +134,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Vitorias: x"
+                    android:text="Vitorias: 0"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
 
@@ -143,7 +143,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Win Rate: x%"
+                    android:text="Derrotas: 0"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
 
@@ -152,7 +152,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Jogos Totais: x"
+                    android:text="Jogos Totais: 0"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
 
@@ -161,7 +161,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Streak de Vitorias: x"
+                    android:text="Empates: 0"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
 

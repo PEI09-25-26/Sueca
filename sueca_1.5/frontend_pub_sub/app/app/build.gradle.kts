@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -71,4 +72,8 @@ dependencies {
 
     // Security: encrypted shared preferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Firebase (Firestore for player stats)
+    implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
+    implementation("com.google.firebase:firebase-firestore-ktx")
 }
