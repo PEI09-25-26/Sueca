@@ -124,14 +124,25 @@ def route_query(
 @router.post("/api/{api_path:path}")
 def proxy_api_post(api_path: str, request_data: dict = None):
     """Simple POST proxy for legacy clients calling /api/* on the public host."""
-    mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
-    target = f"{target_base_for_mode(mode)}/api/{api_path}"
+    if api_path.startswith("auth/"):
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        mode = "auth"
+    elif api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+        mode = "friends"
+    else:
+        mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
+        target = f"{target_base_for_mode(mode)}/api/{api_path}"
     try:
         response = state.INTERNAL_HTTP.post(target, json=request_data or {}, timeout=5)
         try:
             data = response.json()
         except ValueError:
             data = {"success": response.ok, "raw": response.text}
+
+        # For auth/friends endpoints preserve original backend response shape
+        if mode in ("auth", "friends"):
+            return data
 
         return {
             "success": response.ok,
@@ -147,14 +158,25 @@ def proxy_api_post(api_path: str, request_data: dict = None):
 @router.get("/api/{api_path:path}")
 def proxy_api_get(api_path: str, request: Request):
     """Simple GET proxy for legacy clients calling /api/* on the public host."""
-    mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
-    target = f"{target_base_for_mode(mode)}/api/{api_path}"
+    if api_path.startswith("auth/"):
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        mode = "auth"
+    elif api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+        mode = "friends"
+    else:
+        mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
+        target = f"{target_base_for_mode(mode)}/api/{api_path}"
     try:
         response = state.INTERNAL_HTTP.get(target, params=dict(request.query_params), timeout=5)
         try:
             data = response.json()
         except ValueError:
             data = {"success": response.ok, "raw": response.text}
+
+        # For auth/friends endpoints preserve original backend response shape
+        if mode in ("auth", "friends"):
+            return data
 
         return {
             "success": response.ok,
