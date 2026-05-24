@@ -671,11 +671,20 @@ class HybridActivity : AppCompatActivity() {
         handAdapter.isEnabled = false
         handAdapter.updateCards(emptyList())
 
-        // Hide camera/table container
-        findViewById<FrameLayout>(R.id.hybridContentContainer).visibility = View.GONE
+        // Dim camera/table container (don't fully hide, constraints can collapse if set GONE)
+        val hybridContainer = findViewById<FrameLayout>(R.id.hybridContentContainer)
+        hybridContainer.alpha = 0.25f
+        hybridContainer.isClickable = false
+        
+        // Hide hand and label to avoid visual conflict
+        findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.playerHandRecyclerView).visibility = View.GONE
+        findViewById<TextView>(R.id.handLabel).visibility = View.GONE
         
         // Show banner
         layoutFinishedBanner.visibility = View.VISIBLE
+        layoutFinishedBanner.bringToFront()
+        layoutFinishedBanner.invalidate()
+        layoutFinishedBanner.requestLayout()
 
         val team1 = state.teamScores?.team1 ?: 0
         val team2 = state.teamScores?.team2 ?: 0
@@ -687,12 +696,23 @@ class HybridActivity : AppCompatActivity() {
 
         val match = state.matchPoints
         val matchLine = if (match != null) {
-            "\nPontos do Jogo: ${match.team1} - ${match.team2}"
+            "\nJogos ganhos: ${match.team1} - ${match.team2}"
         } else {
             ""
         }
 
-        txtEndBanner.text = "$winnerText\nPontuação final: $team1 - $team2$matchLine"
+        // Team members (if available)
+        val team1Members = state.teams?.team1 ?: emptyList()
+        val team2Members = state.teams?.team2 ?: emptyList()
+
+        // Teams may contain player names or ids. Normalize to names using `state.players` when possible.
+        val idToName = state.players.associateBy({ it.id }, { it.name })
+        val team1Names = if (team1Members.isNotEmpty()) team1Members.map { idToName[it] ?: it }.joinToString(", ") else "-"
+        val team2Names = if (team2Members.isNotEmpty()) team2Members.map { idToName[it] ?: it }.joinToString(", ") else "-"
+
+        val details = "\n\nEquipe N/S: $team1Names\nEquipe E/W: $team2Names"
+
+        txtEndBanner.text = "$winnerText\nPontuação final: $team1 - $team2$matchLine$details"
 
         layoutActions.removeAllViews()
 
