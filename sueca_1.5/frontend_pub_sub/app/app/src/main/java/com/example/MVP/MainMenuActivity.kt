@@ -23,14 +23,12 @@ class MainMenuActivity : AppCompatActivity() {
     private lateinit var profileIcon: ImageView
     private lateinit var btnPlay: Button
     private lateinit var playOptionsContainer: View
-    private var lastBadgeRefreshAt: Long = 0L
-    private var lastProfileRefreshAt: Long = 0L
     private var invitePollingJob: Job? = null
+    private var uiPollingJob: Job? = null
     private var fallbackDisplayName: String? = null
 
     companion object {
-        private const val BADGE_REFRESH_INTERVAL_MS = 10_000L
-        private const val PROFILE_REFRESH_INTERVAL_MS = 10_000L
+        private const val POLLING_INTERVAL_MS = 10_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,14 +92,16 @@ class MainMenuActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        maybeRefreshFriendRequestsBadge()
-        maybeRefreshProfileIcon()
+        refreshFriendRequestsBadge()
+        refreshProfileIcon()
         startInvitePolling()
+        startUiPolling()
     }
 
     override fun onPause() {
         super.onPause()
         stopInvitePolling()
+        stopUiPolling()
     }
 
     private fun startInvitePolling() {
@@ -124,7 +124,7 @@ class MainMenuActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     // Fail silently for background polling
                 }
-                delay(3000) // Poll every 3 seconds
+                delay(3000) // Poll for game invites every 3 seconds
             }
         }
     }
@@ -132,6 +132,24 @@ class MainMenuActivity : AppCompatActivity() {
     private fun stopInvitePolling() {
         invitePollingJob?.cancel()
         invitePollingJob = null
+    }
+
+    private fun startUiPolling() {
+        if (!AuthManager.isLoggedIn()) return
+        if (uiPollingJob != null) return
+
+        uiPollingJob = lifecycleScope.launch {
+            while (true) {
+                delay(POLLING_INTERVAL_MS)
+                refreshFriendRequestsBadge()
+                refreshProfileIcon()
+            }
+        }
+    }
+
+    private fun stopUiPolling() {
+        uiPollingJob?.cancel()
+        uiPollingJob = null
     }
 
     private fun showInviteNotification(invite: GameInvite) {
@@ -183,24 +201,6 @@ class MainMenuActivity : AppCompatActivity() {
             } catch (_: Exception) {
             }
         }
-    }
-
-    private fun maybeRefreshProfileIcon() {
-        val now = System.currentTimeMillis()
-        if ((now - lastProfileRefreshAt) < PROFILE_REFRESH_INTERVAL_MS) {
-            return
-        }
-        lastProfileRefreshAt = now
-        refreshProfileIcon()
-    }
-
-    private fun maybeRefreshFriendRequestsBadge() {
-        val now = System.currentTimeMillis()
-        if ((now - lastBadgeRefreshAt) < BADGE_REFRESH_INTERVAL_MS) {
-            return
-        }
-        lastBadgeRefreshAt = now
-        refreshFriendRequestsBadge()
     }
 
     private fun refreshProfileIcon() {

@@ -290,11 +290,6 @@ class RoomActivity : AppCompatActivity() {
         }
         updateUI(state)
 
-        val isHost = state.creatorId == playerId && playerId.isNotBlank()
-        if (players.size == 4 && !state.gameStarted && isHost) {
-            lifecycleScope.launch { GatewayClient.startGame(roomId) }
-        }
-
         // Move to game as soon as lobby is complete (deck_cutting and beyond).
         val playerSeated = players.any { it.name == playerName || (playerId.isNotBlank() && it.id == playerId) }
         val gameProgressed = state.phase != "waiting"
@@ -595,6 +590,18 @@ class RoomActivity : AppCompatActivity() {
             return
         }
 
+        val normalizedPosition = position.uppercase(Locale.ROOT)
+        val myCurrentSeat = latestRoomState?.players
+            ?.firstOrNull { it.id == playerId || it.name == playerName }
+            ?.position
+            ?.let { normalizePosition(it) }
+            .orEmpty()
+
+        if (normalizedPosition != myCurrentSeat && normalizedPosition !in cachedAvailablePositions) {
+            Toast.makeText(this, "Esse lugar nao esta livre.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         lifecycleScope.launch {
             try {
                 if (GameSessionManager.getAuthHeader(roomId).isNullOrBlank()) {
@@ -605,7 +612,7 @@ class RoomActivity : AppCompatActivity() {
                 val response = GatewayClient.changePosition(
                     playerId = playerId,
                     gameId = roomId,
-                    position = position.uppercase(Locale.ROOT)
+                    position = normalizedPosition
                 )
 
                 if (response.success) {

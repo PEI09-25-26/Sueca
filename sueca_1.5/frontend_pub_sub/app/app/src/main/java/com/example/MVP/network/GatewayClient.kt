@@ -176,6 +176,7 @@ object GatewayClient {
 
     suspend fun removeParticipant(request: RemoveParticipantRequest): GenericResponse {
         val payload = mapOf(
+            "actor_id" to request.actorId,
             "target_id" to request.targetId,
             "game_id" to request.gameId
         )

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Header, Query
 
 from ..core import BotFactory, launch_bot_thread
+from ..auth import authorize_request
 from ..event_publisher import publish_bot_added, publish_position_changed
 from .common import error, get_game_from_request
 
@@ -9,13 +10,25 @@ router = APIRouter()
 
 
 @router.post("/api/change_position")
-def change_position(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def change_position(
+    data: dict = Body(default_factory=dict),
+    game_id: str | None = Query(default=None),
+    authorization: str = Header(default=None),
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
     player_id = data.get("player_id") or data.get("player")
     new_position = data.get("position")
+
+    if authorization:
+        if not authorization.startswith("Bearer "):
+            return error("Invalid authorization header format", 401)
+        token = authorization[7:]
+        session_data = authorize_request(token, game_id)
+        player_id = session_data["player_id"]
+
     if not player_id or not new_position:
         return error("Player and new position required", 400)
 
@@ -124,15 +137,29 @@ def get_hand(player_id: str, game_id: str | None = Query(default=None)):
 
 @router.post("/api/remove_player")
 @router.post("/api/the_council_has_decided_your_fate")
-def remove_player_endpoint(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def remove_player_endpoint(
+    data: dict = Body(default_factory=dict),
+    game_id: str | None = Query(default=None),
+    authorization: str = Header(default=None),
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
     actor_id = data.get("actor_id")
     target_id = data.get("target_id")
-    if not actor_id or not target_id:
-        return error("Both actor_id and target_id are required", 400)
+
+    if authorization:
+        if not authorization.startswith("Bearer "):
+            return error("Invalid authorization header format", 401)
+        token = authorization[7:]
+        session_data = authorize_request(token, game_id)
+        actor_id = session_data["player_id"]
+
+    if not target_id:
+        return error("target_id is required", 400)
+    if not actor_id:
+        return error("actor_id is required", 400)
 
     success, message = game.remove_player(actor_id, target_id)
     return {"success": success, "message": message}

@@ -17,6 +17,8 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.example.MVP.models.IncomingFriendRequestData
 import com.example.MVP.models.PlayerStatsData
 import com.example.MVP.models.UserData
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class FriendsActivity : AppCompatActivity() {
@@ -33,10 +35,10 @@ class FriendsActivity : AppCompatActivity() {
     private lateinit var txtFriendCode: TextView
 
     private var pendingRequests: List<IncomingFriendRequestData> = emptyList()
-    private var lastRefreshAt: Long = 0L
+    private var refreshPollingJob: Job? = null
 
     companion object {
-        private const val REFRESH_INTERVAL_MS = 5_000L
+        private const val REFRESH_INTERVAL_MS = 10_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -346,13 +348,9 @@ class FriendsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (AuthManager.isLoggedIn()) {
-            val now = System.currentTimeMillis()
-            if ((now - lastRefreshAt) < REFRESH_INTERVAL_MS) {
-                return
-            }
-            lastRefreshAt = now
             loadFriends()
             loadPendingRequests()
+            startPolling()
             
             val savedCode = AuthManager.getSavedFriendCode()
             if (savedCode != null) {
@@ -366,6 +364,27 @@ class FriendsActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopPolling()
+    }
+
+    private fun startPolling() {
+        if (refreshPollingJob != null) return
+        refreshPollingJob = lifecycleScope.launch {
+            while (true) {
+                delay(REFRESH_INTERVAL_MS)
+                loadFriends()
+                loadPendingRequests()
+            }
+        }
+    }
+
+    private fun stopPolling() {
+        refreshPollingJob?.cancel()
+        refreshPollingJob = null
     }
 
     private fun showCreateAccountPrompt() {
