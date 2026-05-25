@@ -30,7 +30,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.MVP.models.Card
 import com.example.MVP.models.GameStatusResponse
@@ -195,8 +195,24 @@ class HybridActivity : AppCompatActivity() {
         handAdapter = CardsAdapter(emptyList()) { card ->
             onVirtualCardTap(card)
         }
-        handRecyclerView.layoutManager = GridLayoutManager(this, 5)
+        handRecyclerView.layoutManager = object : LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false) {
+            override fun canScrollHorizontally(): Boolean = false
+        }
+        handRecyclerView.setHasFixedSize(true)
+        handRecyclerView.itemAnimator = null
+        handRecyclerView.overScrollMode = View.OVER_SCROLL_NEVER
+        handRecyclerView.setPadding(4, 0, 4, 0)
+        handRecyclerView.clipToPadding = false
+        handRecyclerView.clipChildren = false
+        (handRecyclerView.parent as? android.view.ViewGroup)?.clipChildren = false
+        (handRecyclerView.parent as? android.view.ViewGroup)?.clipToPadding = false
         handRecyclerView.adapter = handAdapter
+        handRecyclerView.post {
+            handAdapter.setAvailableWidth(handRecyclerView.width - handRecyclerView.paddingStart - handRecyclerView.paddingEnd)
+        }
+        handRecyclerView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            handAdapter.setAvailableWidth(handRecyclerView.width - handRecyclerView.paddingStart - handRecyclerView.paddingEnd)
+        }
         handAdapter.isEnabled = false
     }
 
