@@ -11,7 +11,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.sueca"
+        applicationId = "com.example.Jogo_da_Sueca"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
