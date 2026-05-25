@@ -105,7 +105,7 @@ class ProfileActivity : AppCompatActivity() {
                     usernameTextView.text = "${user.username}"
                     emailTextView.text = "${user.email}"
                     descriptionTextView.text = "${user.description}"
-                    friendsCountTextView.text = "Amigos: ${user.friendsCount}"
+                    updateFriendsCount(user.uid, user.friendsCount)
                     applyBannerPreview(user.bannerURL)
                     applyPhotoPreview(user.photoURL)
 
@@ -140,6 +140,17 @@ class ProfileActivity : AppCompatActivity() {
         lossesTextView.text = "Derrotas: $losses"
         drawsTextView.text = "Empates: $draws"
         totalGamesTextView.text = "Jogos Totais: $gamesPlayed"
+    }
+
+    private suspend fun updateFriendsCount(uid: String, fallbackCount: Int) {
+        friendsCountTextView.text = "Amigos: $fallbackCount"
+        FriendsManager.listFriends(uid)
+            .onSuccess { friends ->
+                friendsCountTextView.text = "Amigos: ${friends.size}"
+            }
+            .onFailure {
+                // Keep the fallback count on failure.
+            }
     }
 
     private fun applyBannerPreview(bannerKey: String?) {
