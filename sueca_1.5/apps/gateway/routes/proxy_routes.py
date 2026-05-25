@@ -38,20 +38,8 @@ def _extract_forward_headers(request: Request) -> dict[str, str]:
 
 
 def _build_proxy_response(response: requests.Response, data: dict, mode: str, target: str) -> JSONResponse:
-    """Preserve backend HTTP status while keeping the legacy response shape."""
-    if mode in ("auth", "friends"):
-        return JSONResponse(status_code=response.status_code, content=data)
-
-    return JSONResponse(
-        status_code=response.status_code,
-        content={
-            "success": response.ok,
-            "http_status": response.status_code,
-            "mode": mode,
-            "target": target,
-            "response": data,
-        },
-    )
+    """Preserve backend HTTP status and payload shape for legacy /api consumers."""
+    return JSONResponse(status_code=response.status_code, content=data)
 
 
 @router.post("/game/command/{command:path}")

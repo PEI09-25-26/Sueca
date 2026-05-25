@@ -140,6 +140,7 @@ object GatewayClient {
 
     suspend fun addBot(request: AddBotRequest): AddBotResponse {
         val payload = mapOf(
+            "player_id" to request.playerId,
             "game_id" to request.gameId,
             "position" to request.position,
             "difficulty" to request.difficulty,
@@ -159,6 +160,7 @@ object GatewayClient {
 
     suspend fun changePosition(playerId: String, gameId: String, position: String): GenericResponse {
         val payload = mapOf(
+            "player_id" to playerId,
             "game_id" to gameId,
             "position" to position
         )
