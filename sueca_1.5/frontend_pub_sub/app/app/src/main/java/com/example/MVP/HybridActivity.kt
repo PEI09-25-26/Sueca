@@ -78,6 +78,7 @@ class HybridActivity : AppCompatActivity() {
     private lateinit var layoutFinishedBanner: LinearLayout
     private lateinit var txtEndBanner: TextView
     private lateinit var layoutActions: LinearLayout
+    private lateinit var handLabel: TextView
 
     private lateinit var handAdapter: CardsAdapter
 
@@ -153,6 +154,7 @@ class HybridActivity : AppCompatActivity() {
         layoutFinishedBanner = findViewById<LinearLayout>(R.id.layoutFinishedBanner)
         txtEndBanner = findViewById(R.id.txtEndBanner)
         layoutActions = findViewById<LinearLayout>(R.id.layoutActions)
+        handLabel = findViewById(R.id.handLabel)
 
         clearTableCards()
         setupHand()
@@ -168,6 +170,8 @@ class HybridActivity : AppCompatActivity() {
             // Permitimos que o jogador virtual alterne entre mesa e câmara do host
             modeSwitch.isEnabled = true 
             modeSwitch.isChecked = true // Começa na mesa (virtual) como solicitado
+            // Garantir que a visibilidade é aplicada quando alteramos o estado programaticamente
+            applyModeVisibility(modeSwitch.isChecked)
         }
 
         lifecycleScope.launch {
@@ -213,6 +217,8 @@ class HybridActivity : AppCompatActivity() {
             hostCameraPreview.visibility = View.GONE
             recognitionOverlay.visibility = View.GONE
             mesaContainer.visibility = View.VISIBLE
+            handLabel.visibility = View.VISIBLE
+            handRecyclerView.visibility = View.VISIBLE
             mesaContainer.bringToFront()
             mesaContainer.invalidate()
             return
@@ -221,21 +227,23 @@ class HybridActivity : AppCompatActivity() {
         modeSwitch.text = "Camera ativa"
         modeText.text = "Modo atual: camera"
         mesaContainer.visibility = View.GONE
+        handLabel.visibility = View.GONE
+        handRecyclerView.visibility = View.GONE
 
         if (isHost) {
             previewView.visibility = View.VISIBLE
             hostCameraPreview.visibility = View.GONE
             previewView.bringToFront()
             previewView.invalidate()
+            recognitionOverlay.visibility = if (isRunning) View.VISIBLE else View.GONE
+            recognitionOverlay.bringToFront()
         } else {
             previewView.visibility = View.GONE
             hostCameraPreview.visibility = View.VISIBLE
             hostCameraPreview.bringToFront()
             hostCameraPreview.invalidate()
+            recognitionOverlay.visibility = View.GONE
         }
-
-        recognitionOverlay.visibility = if (isRunning && isHost) View.VISIBLE else View.GONE
-        recognitionOverlay.bringToFront()
     }
 
     /**
@@ -302,12 +310,13 @@ class HybridActivity : AppCompatActivity() {
     private fun startMqttUpdates() {
         if (isRunning) return
         isRunning = true
-        recognitionOverlay.visibility = View.VISIBLE
-        modeSwitch.isEnabled = false
+        
+        // CORREÇÃO: O overlay de reconhecimento só deve ser visível para o Host quando em modo câmara.
+        // applyModeVisibility já gere isto. Não forçar visibilidade aqui.
 
         val subscriber = GameMqttSubscriber(
             brokerHost = "mqtt.suecadaojogo.com",
-            brokerPort = 443, // WSS via Cloudflare usually goes through 443
+            brokerPort = 443,
             protocol = "wss"
         )
 
@@ -333,7 +342,6 @@ class HybridActivity : AppCompatActivity() {
             },
             onConnectionError = { error ->
                 Log.e("HybridActivity", "MQTT Error: $error")
-                // Optional: Fallback to polling if MQTT fails completely
             }
         )
 
@@ -402,10 +410,6 @@ class HybridActivity : AppCompatActivity() {
             }
 
             cvPauseDialog?.dismiss()
-            // The prompt is informational; do not block the host pipeline.
-            // Blocking here could prevent the next hybrid phase from advancing for
-            // virtual players because camera recognition would stop until the dialog
-            // is dismissed.
             cvRecognitionPaused = false
 
             val titleRes = when (reason) {
@@ -422,9 +426,6 @@ class HybridActivity : AppCompatActivity() {
                 .setMessage(messageRes)
                 .setCancelable(false)
                 .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
-                    // If this is the AFTER_DEAL dialog, give the host a chance to
-                    // finalize the deal on the server so the system won't return
-                    // to distribution when virtual players later consume cards.
                     if (reason == CvPauseReason.AFTER_DEAL) {
                         lifecycleScope.launch {
                             try {
@@ -540,7 +541,7 @@ class HybridActivity : AppCompatActivity() {
      * Se for Virtual, mostra as cartas que o Host já leu para nós.
      */
     private fun showDealPhase(state: HybridRuntimeState) {
-        recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+        if (isHost) recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
         btnUndoMove.visibility = View.GONE
 
         if (isHost) {
@@ -622,13 +623,14 @@ class HybridActivity : AppCompatActivity() {
             } else {
                 "A aguardar a tua vez"
             }
-            recognitionStateImage.setImageResource(
-                if (pending?.playerId == playerId) R.drawable.ic_hybrid_check else R.drawable.ic_hybrid_eye
-            )
+            if (isHost) {
+                recognitionStateImage.setImageResource(
+                    if (pending?.playerId == playerId) R.drawable.ic_hybrid_check else R.drawable.ic_hybrid_eye
+                )
+            }
         } else {
             handAdapter.updateCards(buildRealCopyHand(state, currentPlayerId, pending))
             handAdapter.isEnabled = false
-            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
             recognitionProgressText.text = "Jogador real: acompanhar mao do jogador da vez"
         }
 
@@ -698,7 +700,7 @@ class HybridActivity : AppCompatActivity() {
         }
 
         if (phase != "playing") {
-            recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+            if (isHost) recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
             handAdapter.isEnabled = false
             handAdapter.updateCards(emptyList())
             recognitionProgressText.text = when (phase) {
@@ -718,7 +720,7 @@ class HybridActivity : AppCompatActivity() {
     private fun showTrumpSelectionPhase(state: GameStatusResponse) {
         trumpSelectionControls.visibility = View.VISIBLE
         btnUndoMove.visibility = View.GONE
-        recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
+        if (isHost) recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
         handAdapter.isEnabled = false
         handAdapter.updateCards(emptyList())
 
@@ -784,8 +786,11 @@ class HybridActivity : AppCompatActivity() {
 
         // Teams may contain player names or ids. Normalize to names using `state.players` when possible.
         val idToName = state.players.associateBy({ it.id }, { it.name })
-        val team1Names = if (team1Members.isNotEmpty()) team1Members.map { idToName[it] ?: it }.joinToString(", ") else "-"
-        val team2Names = if (team2Members.isNotEmpty()) team2Members.map { idToName[it] ?: it }.joinToString(", ") else "-"
+        val team1MembersNames = team1Members.map { idToName[it] ?: it }
+        val team2MembersNames = team2Members.map { idToName[it] ?: it }
+
+        val team1Names = if (team1MembersNames.isNotEmpty()) team1MembersNames.joinToString(", ") else "-"
+        val team2Names = if (team2MembersNames.isNotEmpty()) team2MembersNames.joinToString(", ") else "-"
 
         val details = "\n\nEquipe N/S: $team1Names\nEquipe E/W: $team2Names"
 
@@ -1176,12 +1181,12 @@ class HybridActivity : AppCompatActivity() {
                             }
                         }
                     } else if (localGame?.phase == "playing") {
-                        val pending = localHybrid?.pendingVirtualPlay
-                        val currentPlayerId = localGame.currentPlayerId
+                        val pendingPlay = localHybrid?.pendingVirtualPlay
+                        val currentPlayerIdNow = localGame.currentPlayerId
 
                         val capturePlayerId = when {
-                            pending != null && pending.playerId == currentPlayerId -> pending.playerId
-                            !currentPlayerId.isNullOrBlank() -> currentPlayerId
+                            pendingPlay != null && pendingPlay.playerId == currentPlayerIdNow -> pendingPlay.playerId
+                            !currentPlayerIdNow.isNullOrBlank() -> currentPlayerIdNow
                             else -> null
                         }
 
@@ -1201,9 +1206,9 @@ class HybridActivity : AppCompatActivity() {
                                 return@launch
                             } else if (response.success) {
                                 // Validar se a carta captada corresponde à selecionada pelo virtual (se aplicável)
-                                if (pending != null && response.capturedCardId != null && response.capturedCardId != pending.cardId) {
+                                if (pendingPlay != null && response.capturedCardId != null && response.capturedCardId != pendingPlay.cardId) {
                                     runOnUiThread {
-                                        flashError("Carta errada! Esperada: ${CardMapper.getCard(pending.cardId)}")
+                                        flashError("Carta errada! Esperada: ${CardMapper.getCard(pendingPlay.cardId)}")
                                     }
                                     return@launch
                                 }
@@ -1231,6 +1236,7 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private fun flashCheck(text: String) {
+        if (!isHost) return
         flashJob?.cancel()
         flashJob = lifecycleScope.launch {
             recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check)
@@ -1242,6 +1248,7 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private fun flashError(text: String) {
+        if (!isHost) return
         flashJob?.cancel()
         flashJob = lifecycleScope.launch {
             recognitionStateImage.setImageResource(R.drawable.ic_hybrid_check) // Or a cross if available

@@ -135,9 +135,9 @@ class GameMqttSubscriber(
             })
 
             val options = MqttConnectOptions().apply {
-                isAutomaticReconnect = false
+                isAutomaticReconnect = true
                 isCleanSession = true
-                connectionTimeout = 20
+                connectionTimeout = 30
                 keepAliveInterval = 60
                 if (protocol == "wss") {
                     socketFactory = javax.net.ssl.SSLSocketFactory.getDefault()
