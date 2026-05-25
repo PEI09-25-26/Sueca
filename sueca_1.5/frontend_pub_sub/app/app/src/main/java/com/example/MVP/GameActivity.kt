@@ -12,6 +12,7 @@ import android.text.style.ForegroundColorSpan
 import androidx.core.graphics.toColorInt
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import android.view.Gravity
 import androidx.appcompat.app.AlertDialog
@@ -631,7 +632,7 @@ class GameActivity : AppCompatActivity() {
             cachedMyPos = myPos
         }
         val slot = getSlotForPosition(myPos, myPos)
-        addCardToSlot(slot, card)
+        val playedCardView = addCardToSlotAndReturnView(slot, card)
 
         lifecycleScope.launch {
             try {
@@ -644,14 +645,26 @@ class GameActivity : AppCompatActivity() {
                     )
                 )
 
+                val toastMessage = res.message ?: if (res.success) "Card played" else "Illegal card"
                 Toast.makeText(
                     this@GameActivity,
-                    res.message ?: "Card played",
+                    toastMessage,
                     Toast.LENGTH_SHORT
                 ).show()
 
+                if (!res.success) {
+                    cachedRoundPlays = cachedRoundPlays.filterNot {
+                        it.playerName == playerName && it.card == card.id
+                    }
+                    animateIllegalCardBack(slot, playedCardView)
+                }
+
             } catch (e: Exception) {
                 Toast.makeText(this@GameActivity, e.message, Toast.LENGTH_SHORT).show()
+                cachedRoundPlays = cachedRoundPlays.filterNot {
+                    it.playerName == playerName && it.card == card.id
+                }
+                animateIllegalCardBack(slot, playedCardView)
             }
         }
     }
@@ -863,7 +876,10 @@ class GameActivity : AppCompatActivity() {
     }
 
     private fun addCardToSlot(slot: FrameLayout, card: Card) {
+        addCardToSlotAndReturnView(slot, card)
+    }
 
+    private fun addCardToSlotAndReturnView(slot: FrameLayout, card: Card): View {
         val view = LayoutInflater.from(this)
             .inflate(R.layout.item_card_mvp, slot, false)
 
@@ -872,6 +888,59 @@ class GameActivity : AppCompatActivity() {
 
         slot.removeAllViews()
         slot.addView(view)
+
+        return view
+    }
+
+    private fun animateIllegalCardBack(slot: FrameLayout, cardView: View) {
+        val root = window.decorView.findViewById<ViewGroup>(android.R.id.content) ?: run {
+            slot.removeAllViews()
+            return
+        }
+
+        if (cardView.parent == null) {
+            slot.removeAllViews()
+            return
+        }
+
+        val startLocation = IntArray(2)
+        val rootLocation = IntArray(2)
+        val targetLocation = IntArray(2)
+
+        cardView.getLocationOnScreen(startLocation)
+        root.getLocationOnScreen(rootLocation)
+        rvHand.getLocationOnScreen(targetLocation)
+
+        val startX = startLocation[0] - rootLocation[0]
+        val startY = startLocation[1] - rootLocation[1]
+
+        val cardWidth = if (cardView.width > 0) cardView.width else slot.width
+        val cardHeight = if (cardView.height > 0) cardView.height else slot.height
+
+        val targetX = targetLocation[0] - rootLocation[0] + (rvHand.width / 2) - (cardWidth / 2)
+        val targetY = targetLocation[1] - rootLocation[1] + (rvHand.height / 2) - (cardHeight / 2)
+
+        slot.removeView(cardView)
+
+        cardView.layoutParams = FrameLayout.LayoutParams(cardWidth, cardHeight).apply {
+            leftMargin = startX
+            topMargin = startY
+        }
+        cardView.translationX = 0f
+        cardView.translationY = 0f
+        root.addView(cardView)
+
+        cardView.animate()
+            .translationX((targetX - startX).toFloat())
+            .translationY((targetY - startY).toFloat())
+            .setDuration(300)
+            .setListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    root.removeView(cardView)
+                    slot.removeAllViews()
+                }
+            })
+            .start()
     }
 
     private fun updateTrumpOwnerUi(state: GameStatusResponse) {
