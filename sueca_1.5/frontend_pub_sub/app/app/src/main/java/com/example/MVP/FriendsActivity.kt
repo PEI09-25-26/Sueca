@@ -93,11 +93,14 @@ class FriendsActivity : AppCompatActivity() {
                     loadPendingRequests()
                 }
                 .onFailure { error ->
-                    Toast.makeText(
-                        this@FriendsActivity,
-                        "Erro a enviar pedido: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    val msg = error.message ?: "Erro desconhecido"
+                    if (msg.contains("already friends", ignoreCase = true) || msg.contains("já são amigos", ignoreCase = true)) {
+                        Toast.makeText(this@FriendsActivity, "Já são amigos", Toast.LENGTH_SHORT).show()
+                    } else if (msg.contains("exists", ignoreCase = true)) {
+                        Toast.makeText(this@FriendsActivity, "Pedido já existe", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@FriendsActivity, msg, Toast.LENGTH_SHORT).show()
+                    }
                 }
         }
     }

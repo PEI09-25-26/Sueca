@@ -173,8 +173,12 @@ def request_friend_route(data: FriendRequest = Body(default_factory=dict), authe
         raise HTTPException(status_code=400, detail="cannot friend yourself")
     ok = add_friend_request(from_user, to_user)
     if not ok:
+        # Check if already friends
+        friends = get_friends(from_user)
+        if to_user in friends:
+            return {"success": True, "requested": False, "message": "You are already friends"}
         return {"success": True, "requested": False, "message": "request already exists"}
-    return {"success": True, "requested": True}
+    return {"success": True, "requested": True, "message": "Friend request sent"}
 
 
 @app.get("/friends/requests", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])

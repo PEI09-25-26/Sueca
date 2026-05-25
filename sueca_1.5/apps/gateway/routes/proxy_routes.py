@@ -150,11 +150,12 @@ def route_query(
 @router.post("/api/{api_path:path}")
 def proxy_api_post(api_path: str, request: Request, request_data: dict = None):
     """Simple POST proxy for legacy clients calling /api/* on the public host."""
+    api_path = api_path.strip("/")
     if api_path.startswith("auth/"):
-        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/').strip('/')}"
         mode = "auth"
-    elif api_path.startswith("friends/"):
-        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+    elif api_path == "friends" or api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/').strip('/')}"
         mode = "friends"
     else:
         mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
@@ -182,11 +183,12 @@ def proxy_api_post(api_path: str, request: Request, request_data: dict = None):
 @router.get("/api/{api_path:path}")
 def proxy_api_get(api_path: str, request: Request):
     """Simple GET proxy for legacy clients calling /api/* on the public host."""
+    api_path = api_path.strip("/")
     if api_path.startswith("auth/"):
-        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/').strip('/')}"
         mode = "auth"
-    elif api_path.startswith("friends/"):
-        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+    elif api_path == "friends" or api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/').strip('/')}"
         mode = "friends"
     else:
         mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
@@ -214,11 +216,12 @@ def proxy_api_get(api_path: str, request: Request):
 @router.put("/api/{api_path:path}")
 def proxy_api_put(api_path: str, request: Request, request_data: dict = None):
     """Simple PUT proxy for legacy clients calling /api/* on the public host."""
+    api_path = api_path.strip("/")
     if api_path.startswith("auth/"):
-        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/').strip('/')}"
         mode = "auth"
-    elif api_path.startswith("friends/"):
-        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+    elif api_path == "friends" or api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/').strip('/')}"
         mode = "friends"
     else:
         mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
@@ -246,11 +249,12 @@ def proxy_api_put(api_path: str, request: Request, request_data: dict = None):
 @router.delete("/api/{api_path:path}")
 def proxy_api_delete(api_path: str, request: Request, request_data: dict = None):
     """Simple DELETE proxy for legacy clients calling /api/* on the public host."""
+    api_path = api_path.strip("/")
     if api_path.startswith("auth/"):
-        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/').strip('/')}"
         mode = "auth"
-    elif api_path.startswith("friends/"):
-        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+    elif api_path == "friends" or api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/').strip('/')}"
         mode = "friends"
     else:
         mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"

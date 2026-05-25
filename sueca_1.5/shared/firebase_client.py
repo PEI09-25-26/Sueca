@@ -239,15 +239,24 @@ def get_friends(user: str) -> list:
 
 def remove_friend(user: str, friend: str) -> bool:
     _ensure_app()
-    doc_ref = _DB.collection("friends").document(user)
-    doc = doc_ref.get()
-    if not doc.exists:
-        return False
-    arr = doc.to_dict().get("friends", [])
-    if friend not in arr:
-        return False
-    arr.remove(friend)
-    doc_ref.set({"friends": arr})
+    # Remove friend from user's list
+    doc_ref1 = _DB.collection("friends").document(user)
+    doc1 = doc_ref1.get()
+    if doc1.exists:
+        arr1 = doc1.to_dict().get("friends", [])
+        if friend in arr1:
+            arr1.remove(friend)
+            doc_ref1.set({"friends": arr1})
+
+    # Remove user from friend's list (mutual deletion)
+    doc_ref2 = _DB.collection("friends").document(friend)
+    doc2 = doc_ref2.get()
+    if doc2.exists:
+        arr2 = doc2.to_dict().get("friends", [])
+        if user in arr2:
+            arr2.remove(user)
+            doc_ref2.set({"friends": arr2})
+
     return True
 
 
@@ -265,6 +274,11 @@ def is_token_revoked(jti: str) -> bool:
 # Friend request workflow
 def add_friend_request(from_user: str, to_user: str) -> bool:
     _ensure_app()
+    # Prevent request if already friends
+    friends = get_friends(from_user)
+    if to_user in friends:
+        return False
+
     doc_id = f"{to_user}:{from_user}"
     doc_ref = _DB.collection("friend_requests").document(doc_id)
     if doc_ref.get().exists:

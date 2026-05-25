@@ -36,11 +36,13 @@ def change_position(data: dict = Body(default_factory=dict)):
             return error(f"Position {new_position} is already taken by {other_player.player_name}", 400)
 
     old_position = player.position
-    old_team_key = "team1" if old_position in game._TEAM1_POSITIONS else "team2"
     new_team_key = "team1" if normalized_new_position in game._TEAM1_POSITIONS else "team2"
 
-    if old_position not in game.available_team_positions[old_team_key]:
-        game.available_team_positions[old_team_key].append(old_position)
+    if old_position is not None:
+        old_team_key = "team1" if old_position in game._TEAM1_POSITIONS else "team2"
+        if old_position not in game.available_team_positions[old_team_key]:
+            game.available_team_positions[old_team_key].append(old_position)
+
     if normalized_new_position not in game.available_team_positions[new_team_key]:
         return error(f"Position {new_position} is not available", 400)
     game.available_team_positions[new_team_key].remove(normalized_new_position)
@@ -53,7 +55,8 @@ def change_position(data: dict = Body(default_factory=dict)):
     else:
         game.teams[1].append(player)
 
-    publish_position_changed(game_id, player_id, player.player_name, old_position.name, normalized_new_position.name)
+    previous_position_name = old_position.name if old_position is not None else "UNASSIGNED"
+    publish_position_changed(game_id, player_id, player.player_name, previous_position_name, normalized_new_position.name)
     game._push_state("position_changed")
     return {"success": True, "message": f"Position changed to {player.position.name}", "state": game.get_state()}
 

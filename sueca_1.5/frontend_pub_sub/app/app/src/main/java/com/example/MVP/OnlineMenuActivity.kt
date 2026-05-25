@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.RoomSummary
+import com.example.MVP.models.GameInvite
 import com.example.MVP.network.RetrofitClient
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.models.JoinGameRequest
@@ -45,6 +46,7 @@ class OnlineMenuActivity : AppCompatActivity() {
     private lateinit var txtOnlineRoomsEmpty: TextView
     private var fallbackDisplayName: String? = null
     private var roomsPollingJob: Job? = null
+    private var invitePollingJob: Job? = null
     private var lastBadgeRefreshAt: Long = 0L
     private var lastProfileRefreshAt: Long = 0L
     private var roomsMqttClient: MqttAsyncClient? = null
@@ -161,12 +163,14 @@ class OnlineMenuActivity : AppCompatActivity() {
         super.onResume()
         txtDisplayedName.text = "Nome exibido: ${resolveDisplayedName()}"
         startRoomsPolling()
+        startInvitePolling()
         maybeRefreshFriendRequestsBadge()
         maybeRefreshProfileIcon()
     }
 
     override fun onPause() {
         roomsPollingJob?.cancel()
+        stopInvitePolling()
         try {
             roomsMqttClient?.let { client ->
                 if (client.isConnected) client.disconnect().waitForCompletion(500)
@@ -473,6 +477,83 @@ class OnlineMenuActivity : AppCompatActivity() {
         intent.putExtra("playerName", playerName)
         intent.putExtra("playerId", playerId)
         startActivity(intent)
+    }
+
+    private fun startInvitePolling() {
+        if (!AuthManager.isLoggedIn()) return
+        if (invitePollingJob != null) return
+
+        invitePollingJob = lifecycleScope.launch {
+            while (true) {
+                try {
+                    val token = AuthManager.getToken()
+                    if (token != null) {
+                        val authHeader = "Bearer $token"
+                        val response = RetrofitClient.api.getInvites(authHeader)
+                        if (response.success && response.invites.isNotEmpty()) {
+                            for (invite in response.invites) {
+                                showInviteNotification(invite)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Fail silently for background polling
+                }
+                delay(3000) // Poll every 3 seconds
+            }
+        }
+    }
+
+    private fun stopInvitePolling() {
+        invitePollingJob?.cancel()
+        invitePollingJob = null
+    }
+
+    private fun showInviteNotification(invite: GameInvite) {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+            .setTitle("Convite de Jogo")
+            .setMessage("${invite.inviterName} convidou-te para um jogo na posição ${invite.position}!")
+            .setPositiveButton("Aceitar") { _, _ ->
+                acceptInvite(invite)
+            }
+            .setNegativeButton("Recusar") { _, _ ->
+                declineInvite(invite)
+            }
+            .show()
+    }
+
+    private fun acceptInvite(invite: GameInvite) {
+        val name = AuthManager.getUsername() ?: randomName()
+        lifecycleScope.launch {
+            try {
+                val authHeader = AuthManager.getAuthHeader()
+                val response = GatewayClient.joinGame(
+                    JoinGameRequest(
+                        name = name,
+                        gameId = invite.gameId,
+                        position = com.example.MVP.models.Position.valueOf(invite.position.uppercase())
+                    ),
+                    authHeader = authHeader
+                )
+
+                if (response.success) {
+                    goToRoom(invite.gameId, name, response.playerId ?: "")
+                } else {
+                    Toast.makeText(this@OnlineMenuActivity, "Erro ao aceitar convite: ${response.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@OnlineMenuActivity, "Erro de rede ao aceitar convite.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun declineInvite(invite: GameInvite) {
+        lifecycleScope.launch {
+            try {
+                GatewayClient.declineInvite(invite.gameId, invite.position)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun randomName(): String {

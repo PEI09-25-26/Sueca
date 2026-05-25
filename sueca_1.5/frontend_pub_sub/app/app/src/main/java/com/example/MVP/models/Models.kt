@@ -122,7 +122,8 @@ data class DeclineFriendRequestRequest(
 
 data class FriendRequestResponse(
     val success: Boolean,
-    val message: String,
+    val message: String? = null,
+    val requested: Boolean? = null,
     val request: FriendRequest? = null
 )
 
@@ -548,7 +549,7 @@ data class HybridDealRecognizeResponse(
     val success: Boolean,
     val recognized: Boolean,
     val confirmed: Boolean,
-    val message: String,
+    val message: String? = null,
     @SerializedName("target_player_id") val targetPlayerId: String? = null,
     val card: HybridCardPayload? = null,
     val state: HybridRuntimeState
@@ -575,7 +576,7 @@ data class HybridConfirmCaptureRequest(
 
 data class HybridConfirmCaptureResponse(
     val success: Boolean,
-    val message: String,
+    val message: String? = null,
     @SerializedName("is_renuncia_warning") val isRenunciaWarning: Boolean? = null,
     @SerializedName("captured_card_id") val capturedCardId: Int? = null,
     @SerializedName("captured_display") val capturedDisplay: String? = null,
@@ -597,7 +598,7 @@ data class HybridConfirmTrumpCaptureRequest(
 
 data class HybridConfirmTrumpCaptureResponse(
     val success: Boolean,
-    val message: String,
+    val message: String? = null,
     @SerializedName("captured_card_id") val capturedCardId: Int? = null,
     @SerializedName("captured_display") val capturedDisplay: String? = null,
     val state: HybridRuntimeState? = null,

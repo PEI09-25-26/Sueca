@@ -172,20 +172,11 @@ class ProfileActivity : AppCompatActivity() {
     private fun performLogout() {
         lifecycleScope.launch {
             AuthManager.logout()
-                .onSuccess {
-                    Toast.makeText(this@ProfileActivity, "Logged out successfully", Toast.LENGTH_SHORT).show()
-                    val intent = Intent(this@ProfileActivity, LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(intent)
-                    finish()
-                }
-                .onFailure { error ->
-                    Toast.makeText(
-                        this@ProfileActivity,
-                        "Logout failed: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+            Toast.makeText(this@ProfileActivity, "Logged out", Toast.LENGTH_SHORT).show()
+            val intent = Intent(this@ProfileActivity, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+            finish()
         }
     }
 

@@ -278,11 +278,13 @@ object AuthManager {
 				clearUserData()
 				Result.success(Unit)
 			} else {
-				Result.failure(Exception(response.message))
+				// If server returns error, we still clear local state to allow new login
+				clearUserData()
+				Result.success(Unit)
 			}
 		} catch (e: Exception) {
 			clearUserData()
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.success(Unit)
 		}
 	}
 

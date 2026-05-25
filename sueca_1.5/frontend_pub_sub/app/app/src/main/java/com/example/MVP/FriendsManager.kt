@@ -23,10 +23,19 @@ object FriendsManager {
             val request = SendFriendRequestRequest(fromUid, targetUid)
             val response = RetrofitClient.api.sendFriendRequest(request, token)
 
-            if (response.success && response.request != null) {
-                Result.success(response.request)
+            if (response.success && response.requested == true) {
+                Result.success(
+                    response.request ?: FriendRequest(
+                        id = "",
+                        fromUid = fromUid,
+                        toUid = targetUid,
+                        status = "pending",
+                        createdAt = "",
+                        updatedAt = ""
+                    )
+                )
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message ?: "Failed to send friend request"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -43,10 +52,19 @@ object FriendsManager {
             val request = SendFriendRequestRequest(fromUid, toUid)
             val response = RetrofitClient.api.sendFriendRequest(request, token)
 
-            if (response.success && response.request != null) {
-                Result.success(response.request)
+            if (response.success) {
+                Result.success(
+                    response.request ?: FriendRequest(
+                        id = "",
+                        fromUid = fromUid,
+                        toUid = toUid,
+                        status = "pending",
+                        createdAt = "",
+                        updatedAt = ""
+                    )
+                )
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message ?: "Failed to send friend request"))
             }
         } catch (e: Exception) {
             Result.failure(e)

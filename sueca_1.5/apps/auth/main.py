@@ -407,15 +407,6 @@ def login(req: LoginRequest):
     }
 
 
-@app.get("/user/{uid}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
-def get_user_endpoint(uid: str, authenticated_uid: str = Depends(get_authenticated_uid)):
-    _ensure_same_user(uid, authenticated_uid)
-    user = get_user(uid)
-    if not user:
-        raise HTTPException(status_code=404, detail="user not found")
-    return {"success": True, "user": _build_user_response(uid, user)}
-
-
 @app.get("/user/by-friend-code/{friend_code}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
 def get_user_by_friend_code(friend_code: str, _: str = Depends(get_authenticated_uid)) -> FriendCodeLookupResponse:
     user_with_uid = find_user_by_friend_code(friend_code)
@@ -426,6 +417,15 @@ def get_user_by_friend_code(friend_code: str, _: str = Depends(get_authenticated
     if not uid or not user:
         raise HTTPException(status_code=404, detail="user not found")
     return FriendCodeLookupResponse(success=True, user=_build_public_user_response(uid, user))
+
+
+@app.get("/user/{uid}", dependencies=[Depends(rate_limit_dependency(limit=60, window_seconds=60))])
+def get_user_endpoint(uid: str, authenticated_uid: str = Depends(get_authenticated_uid)):
+    _ensure_same_user(uid, authenticated_uid)
+    user = get_user(uid)
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+    return {"success": True, "user": _build_user_response(uid, user)}
 
 
 @app.put("/user/{uid}", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
