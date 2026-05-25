@@ -7,6 +7,7 @@ from ..positions import Positions
 from ..card_mapper import CardMapper
 from ..agents.random_agent.random_agent import RandomAgent
 from ..agents.weak_agent.weak_agent import WeakAgent
+from ..agents.average_agent.average_agent import AverageAgent
 from ..agents.smart_agent.smart_agent import SmartAgent
 import logging
 import requests
@@ -1126,7 +1127,7 @@ def create_weak_bot(bot_name, position=None, game_id=None):
     return agent
 
 def create_average_bot(bot_name, position=None, game_id=None):
-    agent = WeakAgent()
+    agent = AverageAgent()
     agent.agent_name = bot_name
     agent.position = position
     agent.game_id = game_id
