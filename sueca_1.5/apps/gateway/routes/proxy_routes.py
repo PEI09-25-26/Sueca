@@ -3,6 +3,7 @@ from typing import Annotated, Optional
 import logging
 import requests
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import JSONResponse
 
 from .. import state
 from ..dto import CommandRequestDTO
@@ -26,6 +27,31 @@ def _decode_backend_response(response: requests.Response):
             "message": text_body or response.reason or "Backend returned non-JSON payload",
             "raw": text_body,
         }
+
+
+def _extract_forward_headers(request: Request) -> dict[str, str]:
+    """Forward only the headers needed by downstream auth-protected services."""
+    authorization = request.headers.get("Authorization")
+    if authorization:
+        return {"Authorization": authorization}
+    return {}
+
+
+def _build_proxy_response(response: requests.Response, data: dict, mode: str, target: str) -> JSONResponse:
+    """Preserve backend HTTP status while keeping the legacy response shape."""
+    if mode in ("auth", "friends"):
+        return JSONResponse(status_code=response.status_code, content=data)
+
+    return JSONResponse(
+        status_code=response.status_code,
+        content={
+            "success": response.ok,
+            "http_status": response.status_code,
+            "mode": mode,
+            "target": target,
+            "response": data,
+        },
+    )
 
 
 @router.post("/game/command/{command:path}")
@@ -60,21 +86,27 @@ def route_command(command: str, request_data: CommandRequestDTO):
             if resolved_game_id:
                 state.room_modes[resolved_game_id] = mode
 
-        return {
-            "success": backend_success,
-            "http_success": response.ok,
-            "http_status": response.status_code,
-            "mode": mode,
-            "target": target_url,
-            "response": data,
-        }
+        return JSONResponse(
+            status_code=response.status_code,
+            content={
+                "success": backend_success,
+                "http_success": response.ok,
+                "http_status": response.status_code,
+                "mode": mode,
+                "target": target_url,
+                "response": data,
+            },
+        )
     except requests.RequestException as error:
-        return {
-            "success": False,
-            "mode": mode,
-            "target": target_url,
-            "message": str(error),
-        }
+        return JSONResponse(
+            status_code=502,
+            content={
+                "success": False,
+                "mode": mode,
+                "target": target_url,
+                "message": str(error),
+            },
+        )
 
 
 @router.get("/game/query/{query_path:path}")
@@ -102,27 +134,33 @@ def route_query(
         if isinstance(data, dict) and "success" in data:
             backend_success = bool(data.get("success"))
 
-        return {
-            "success": backend_success,
-            "http_success": response.ok,
-            "http_status": response.status_code,
-            "mode": resolved_mode,
-            "target": target_url,
-            "response": data,
-        }
+        return JSONResponse(
+            status_code=response.status_code,
+            content={
+                "success": backend_success,
+                "http_success": response.ok,
+                "http_status": response.status_code,
+                "mode": resolved_mode,
+                "target": target_url,
+                "response": data,
+            },
+        )
     except requests.RequestException as error:
-        return {
-            "success": False,
-            "mode": resolved_mode,
-            "target": target_url,
-            "message": str(error),
-        }
+        return JSONResponse(
+            status_code=502,
+            content={
+                "success": False,
+                "mode": resolved_mode,
+                "target": target_url,
+                "message": str(error),
+            },
+        )
 
 
 
 # Backwards-compatible proxy: forward legacy /api/* requests to the right engine.
 @router.post("/api/{api_path:path}")
-def proxy_api_post(api_path: str, request_data: dict = None):
+def proxy_api_post(api_path: str, request: Request, request_data: dict = None):
     """Simple POST proxy for legacy clients calling /api/* on the public host."""
     if api_path.startswith("auth/"):
         target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
@@ -134,25 +172,23 @@ def proxy_api_post(api_path: str, request_data: dict = None):
         mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
         target = f"{target_base_for_mode(mode)}/api/{api_path}"
     try:
-        response = state.INTERNAL_HTTP.post(target, json=request_data or {}, timeout=5)
+        response = state.INTERNAL_HTTP.post(
+            target,
+            json=request_data or {},
+            headers=_extract_forward_headers(request),
+            timeout=5,
+        )
         try:
             data = response.json()
         except ValueError:
             data = {"success": response.ok, "raw": response.text}
 
-        # For auth/friends endpoints preserve original backend response shape
-        if mode in ("auth", "friends"):
-            return data
-
-        return {
-            "success": response.ok,
-            "http_status": response.status_code,
-            "mode": mode,
-            "target": target,
-            "response": data,
-        }
+        return _build_proxy_response(response, data, mode, target)
     except requests.RequestException as error:
-        return {"success": False, "target": target, "message": str(error)}
+        return JSONResponse(
+            status_code=502,
+            content={"success": False, "target": target, "message": str(error)},
+        )
 
 
 @router.get("/api/{api_path:path}")
@@ -168,25 +204,87 @@ def proxy_api_get(api_path: str, request: Request):
         mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
         target = f"{target_base_for_mode(mode)}/api/{api_path}"
     try:
-        response = state.INTERNAL_HTTP.get(target, params=dict(request.query_params), timeout=5)
+        response = state.INTERNAL_HTTP.get(
+            target,
+            params=dict(request.query_params),
+            headers=_extract_forward_headers(request),
+            timeout=5,
+        )
         try:
             data = response.json()
         except ValueError:
             data = {"success": response.ok, "raw": response.text}
 
-        # For auth/friends endpoints preserve original backend response shape
-        if mode in ("auth", "friends"):
-            return data
-
-        return {
-            "success": response.ok,
-            "http_status": response.status_code,
-            "mode": mode,
-            "target": target,
-            "response": data,
-        }
+        return _build_proxy_response(response, data, mode, target)
     except requests.RequestException as error:
-        return {"success": False, "target": target, "message": str(error)}
+        return JSONResponse(
+            status_code=502,
+            content={"success": False, "target": target, "message": str(error)},
+        )
+
+
+@router.put("/api/{api_path:path}")
+def proxy_api_put(api_path: str, request: Request, request_data: dict = None):
+    """Simple PUT proxy for legacy clients calling /api/* on the public host."""
+    if api_path.startswith("auth/"):
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        mode = "auth"
+    elif api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+        mode = "friends"
+    else:
+        mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
+        target = f"{target_base_for_mode(mode)}/api/{api_path}"
+    try:
+        response = state.INTERNAL_HTTP.put(
+            target,
+            json=request_data or {},
+            headers=_extract_forward_headers(request),
+            timeout=5,
+        )
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"success": response.ok, "raw": response.text}
+
+        return _build_proxy_response(response, data, mode, target)
+    except requests.RequestException as error:
+        return JSONResponse(
+            status_code=502,
+            content={"success": False, "target": target, "message": str(error)},
+        )
+
+
+@router.delete("/api/{api_path:path}")
+def proxy_api_delete(api_path: str, request: Request, request_data: dict = None):
+    """Simple DELETE proxy for legacy clients calling /api/* on the public host."""
+    if api_path.startswith("auth/"):
+        target = f"{state.AUTH_SERVICE_URL}/{api_path.removeprefix('auth/')}"
+        mode = "auth"
+    elif api_path.startswith("friends/"):
+        target = f"{state.FRIENDS_SERVICE_URL}/{api_path.removeprefix('friends/')}"
+        mode = "friends"
+    else:
+        mode = "hybrid" if api_path.startswith("hybrid/") else "virtual"
+        target = f"{target_base_for_mode(mode)}/api/{api_path}"
+    try:
+        response = state.INTERNAL_HTTP.delete(
+            target,
+            json=request_data or {},
+            headers=_extract_forward_headers(request),
+            timeout=5,
+        )
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"success": response.ok, "raw": response.text}
+
+        return _build_proxy_response(response, data, mode, target)
+    except requests.RequestException as error:
+        return JSONResponse(
+            status_code=502,
+            content={"success": False, "target": target, "message": str(error)},
+        )
 
 
 @router.get("/system/services")
