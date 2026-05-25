@@ -43,7 +43,7 @@ def _build_proxy_response(response: requests.Response, data: dict, mode: str, ta
 
 
 @router.post("/game/command/{command:path}")
-def route_command(command: str, request_data: CommandRequestDTO):
+def route_command(command: str, request: Request, request_data: CommandRequestDTO):
     game_id = request_data.game_id
     mode = request_data.mode or state.room_modes.get(game_id, "virtual")
     mode = normalize_mode(mode)
@@ -60,7 +60,12 @@ def route_command(command: str, request_data: CommandRequestDTO):
         target_url = f"{target}/{command}"
 
     try:
-        response = state.INTERNAL_HTTP.post(target_url, json=payload, timeout=5)
+        response = state.INTERNAL_HTTP.post(
+            target_url,
+            json=payload,
+            headers=_extract_forward_headers(request),
+            timeout=5,
+        )
         data = _decode_backend_response(response)
         backend_success = response.ok
         if isinstance(data, dict) and "success" in data:
@@ -164,6 +169,7 @@ def proxy_api_post(api_path: str, request: Request, request_data: dict = None):
         response = state.INTERNAL_HTTP.post(
             target,
             json=request_data or {},
+            params=dict(request.query_params),
             headers=_extract_forward_headers(request),
             timeout=5,
         )
@@ -230,6 +236,7 @@ def proxy_api_put(api_path: str, request: Request, request_data: dict = None):
         response = state.INTERNAL_HTTP.put(
             target,
             json=request_data or {},
+            params=dict(request.query_params),
             headers=_extract_forward_headers(request),
             timeout=5,
         )
@@ -263,6 +270,7 @@ def proxy_api_delete(api_path: str, request: Request, request_data: dict = None)
         response = state.INTERNAL_HTTP.delete(
             target,
             json=request_data or {},
+            params=dict(request.query_params),
             headers=_extract_forward_headers(request),
             timeout=5,
         )

@@ -225,6 +225,7 @@ object GatewayClient {
 
     suspend fun cutDeck(request: CutDeckRequest): GenericResponse {
         val payload = mapOf(
+            "player_id" to request.playerId,
             "index" to request.index,
             "game_id" to request.gameId
         )
@@ -240,6 +241,7 @@ object GatewayClient {
 
     suspend fun selectTrump(request: SelectTrumpRequest): GenericResponse {
         val payload = mapOf(
+            "player_id" to request.playerId,
             "choice" to request.choice,
             "game_id" to request.gameId
         )
@@ -255,6 +257,7 @@ object GatewayClient {
 
     suspend fun playCard(request: PlayRequest): GenericResponse {
         val payload = mapOf(
+            "player_id" to request.playerId,
             "card" to request.card,
             "game_id" to request.gameId
         )

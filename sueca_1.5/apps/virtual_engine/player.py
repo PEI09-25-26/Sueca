@@ -10,9 +10,10 @@ class Player:
     Represents a player in the Sueca game
     """
     
-    def __init__(self, player_name, player_id=None):
+    def __init__(self, player_name, player_id=None, is_bot=False):
         self.player_name = player_name
         self.player_id = player_id or uuid.uuid4().hex[:8]
+        self.is_bot = is_bot
         self.hand = []
         self.position = None
         self.trump_suit = None

@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Body
+from typing import Optional
+from fastapi import APIRouter, Body, Header, Query
+import logging
 
 from .common import error, get_game_from_request
-from fastapi import Header
 from ..auth import authorize_request, check_player_turn
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 try:
     from ..event_publisher import (
@@ -31,8 +33,11 @@ except ImportError:
 
 
 @router.post("/api/start")
-def start_game_endpoint(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def start_game_endpoint(
+    data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None)
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
     success, message = game.start_game()
@@ -40,8 +45,11 @@ def start_game_endpoint(data: dict = Body(default_factory=dict)):
 
 
 @router.post("/api/cut_deck")
-def cut_deck(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def cut_deck(
+    data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None)
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
@@ -51,6 +59,9 @@ def cut_deck(data: dict = Body(default_factory=dict)):
         return error("Player and index required", 400)
 
     success, message = game.cut_deck(player_id, cut_index)
+    if not success:
+        return {"success": False, "message": message}
+
     if success:
         cutter = game.get_player(player_id)
         publish_deck_cut(game_id, cutter.player_name, cut_index, str(game.trump_card))
@@ -58,8 +69,11 @@ def cut_deck(data: dict = Body(default_factory=dict)):
 
 
 @router.post("/api/select_trump")
-def select_trump(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def select_trump(
+    data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None)
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
@@ -69,6 +83,9 @@ def select_trump(data: dict = Body(default_factory=dict)):
         return error("Player and choice required", 400)
 
     success, message = game.select_trump(player_id, choice)
+    if not success:
+        return {"success": False, "message": message}
+
     if success:
         selector = game.get_player(player_id)
         publish_trump_selected(game_id, selector.player_name, choice, str(game.trump_card))
@@ -79,9 +96,10 @@ def select_trump(data: dict = Body(default_factory=dict)):
 @router.post("/api/play")
 def play_card(
     data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None),
     authorization: str = Header(default=None),
 ):
-    game, game_id = get_game_from_request(data)
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
@@ -104,6 +122,8 @@ def play_card(
         return error("Player required", 400)
 
     success, message = game.play_card(player_id, card)
+    if not success:
+        return {"success": False, "message": message}
 
     if success:
         # Route-level state push acts as a safety net if deeper game-core push is bypassed.
@@ -116,8 +136,11 @@ def play_card(
 
 
 @router.post("/api/reset")
-def reset_game(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def reset_game(
+    data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None)
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
     game.reset()

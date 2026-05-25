@@ -104,7 +104,7 @@ class GameClient:
 
     def join_game(self, name, game_id, position):
         self.game_id = game_id
-        data = self._post('/api/join', {'name': name, 'game_id': game_id, 'position': position})
+        data = self._post('/api/join', {'name': name, 'game_id': game_id, 'position': position, 'is_bot': True})
         self.token = data.get('token')
         if data.get('success'):
             self.player_id = data.get('player_id')

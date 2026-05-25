@@ -6,7 +6,8 @@ from ..player import Player
 from ..positions import Positions
 from ..card_mapper import CardMapper
 from ..agents.random_agent.random_agent import RandomAgent
-from ..agents.weak_agent import WeakAgent
+from ..agents.weak_agent.weak_agent import WeakAgent
+from ..agents.smart_agent.smart_agent import SmartAgent
 import logging
 import requests
 import threading
@@ -235,7 +236,7 @@ class GameState:
 
         return None
 
-    def add_player(self, name, position_choice, player_id=None):
+    def add_player(self, name, position_choice, player_id=None, is_bot=False):
         if len(self.players) >= self.max_players:
             return False, 'Game is full', None
 
@@ -269,7 +270,7 @@ class GameState:
                 else:
                     return False, f'Position {position.name} is already taken', None
 
-        player = Player(name, player_id)
+        player = Player(name, player_id, is_bot=is_bot)
         player.position = position
         self.players.append(player)
         self.scores[player.player_id] = 0
@@ -706,11 +707,10 @@ class GameState:
         if len(self.players) < self.max_players:
             return False, f'Need {self.max_players} players'
 
-        if self.phase == 'deck_cutting':
-            return False, f'Waiting for {self._current_cutter_position().name} player to cut deck'
-
-        if self.phase == 'trump_selection':
-            return False, f"Waiting for {self._current_dealer_position().name} player to select trump (top/bottom)"
+        # If we are in deck_cutting or trump_selection, the game is already "starting" 
+        # (e.g. seated players triggered the phase).
+        if self.phase in ('deck_cutting', 'trump_selection', 'playing'):
+            return True, 'Game is starting'
 
         return False, 'Game cannot be started in current phase'
 
@@ -1030,6 +1030,7 @@ class GameState:
                     'name': p.player_name,
                     'position': str(p.position),
                     'cards_left': len(p.hand),
+                    'is_bot': getattr(p, 'is_bot', False),
                 }
                 for p in self.players
             ],
@@ -1131,6 +1132,15 @@ def create_average_bot(bot_name, position=None, game_id=None):
     agent.game_id = game_id
     return agent
 
+
+def create_smart_bot(bot_name, position=None, game_id=None):
+    agent = SmartAgent()
+    agent.agent_name = bot_name
+    agent.position = position
+    agent.game_id = game_id
+    return agent
+
+
 class BotFactory:
     """Factory for creating different types of bots."""
     
@@ -1139,7 +1149,10 @@ class BotFactory:
         'weak': create_weak_bot,
         'weak_agent': create_weak_bot,
         'average': create_average_bot,
-        'average_agent': create_average_bot
+        'average_agent': create_average_bot,
+        'smart': create_smart_bot,
+        'smart_agent': create_smart_bot,
+        'level4': create_smart_bot
     }
     
     @classmethod

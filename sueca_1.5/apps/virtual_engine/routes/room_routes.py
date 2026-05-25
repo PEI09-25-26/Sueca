@@ -350,6 +350,15 @@ def leave_game(
     except HTTPException:
         pass
 
+    # Delete room if only bots remain (and it's not the default room)
+    human_players = [p for p in game.players if not getattr(p, 'is_bot', False)]
+    if len(human_players) == 0 and resolved_game_id != manager.default_game_id:
+        manager.delete_room(resolved_game_id)
+        return {
+            "success": True,
+            "message": message + ". Room had only bots and has been removed.",
+        }
+
     if len(game.players) == 0 and resolved_game_id != manager.default_game_id:
         manager.delete_room(resolved_game_id)
         return {
@@ -457,6 +466,7 @@ def join_game(data: Annotated[dict | None, Body()] = None):
     name = data.get("name", "").strip()
     position = data.get("position")
     game_id = data.get("game_id") or manager.default_game_id
+    is_bot = data.get("is_bot", False)
     if not name:
         return error("Name required", 400)
 
@@ -464,7 +474,7 @@ def join_game(data: Annotated[dict | None, Body()] = None):
     if not game:
         return error(f"Game {game_id} not found", 404)
 
-    success, message, player_id = game.add_player(name, position)
+    success, message, player_id = game.add_player(name, position, is_bot=is_bot)
     if success:
         # Rooms created with create_room start empty; first joiner becomes host.
         if game.creator_id is None:

@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Body, Query
 
 from ..core import BotFactory, launch_bot_thread
@@ -9,8 +10,11 @@ router = APIRouter()
 
 
 @router.post("/api/change_position")
-def change_position(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def change_position(
+    data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None)
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
@@ -62,8 +66,11 @@ def change_position(data: dict = Body(default_factory=dict)):
 
 
 @router.post("/api/add_bot")
-def add_bot(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def add_bot(
+    data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None)
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 
@@ -127,8 +134,11 @@ def get_hand(player_id: str, game_id: str | None = Query(default=None)):
 
 @router.post("/api/remove_player")
 @router.post("/api/the_council_has_decided_your_fate")
-def remove_player_endpoint(data: dict = Body(default_factory=dict)):
-    game, game_id = get_game_from_request(data)
+def remove_player_endpoint(
+    data: dict = Body(default_factory=dict),
+    game_id: Optional[str] = Query(default=None)
+):
+    game, game_id = get_game_from_request(data, game_id_query=game_id)
     if not game:
         return error(f"Game {game_id} not found", 404)
 

@@ -9,6 +9,13 @@ from .card_analyzer import CardAnalyzer
 
 class GameStateTracker:
     """Tracks all relevant game state for intelligent card play"""
+
+    _POSITION_ORDER = (
+        Positions.NORTH,
+        Positions.WEST,
+        Positions.SOUTH,
+        Positions.EAST,
+    )
     
     def __init__(self):
         # Player identity
@@ -18,6 +25,7 @@ class GameStateTracker:
         self.partner_id = None  # partner's name
         self.partner_position = None
         self.opponents = []  # list of opponent names
+        self.player_positions = {}  # player name -> Positions enum
         
         # Trump
         self.trump_suit = None
@@ -55,12 +63,19 @@ class GameStateTracker:
         Update tracker from server's game state dictionary.
         """
         self.player_name = player_name        
+        self.player_positions = {}
         for player in state.get("players", []):
+            parsed_position = None
+            raw_position = str(player.get("position", ""))
+            normalized_position = raw_position.split(".")[-1].upper()
+            if normalized_position in Positions.__members__:
+                parsed_position = Positions[normalized_position]
+
+            if player.get("name") and parsed_position is not None:
+                self.player_positions[player["name"]] = parsed_position
+
             if player["name"] == player_name:
-                raw_position = str(player.get("position", ""))
-                normalized_position = raw_position.split(".")[-1].upper()
-                if normalized_position in Positions.__members__:
-                    self.position = Positions[normalized_position]
+                self.position = parsed_position
 
         self._determine_team_info(state)
         if state.get("trump_suit"):
@@ -133,10 +148,7 @@ class GameStateTracker:
         # Find partner's position
         for player in state.get("players", []):
             if self.partner_id and player.get("name") == self.partner_id:
-                raw_position = str(player.get("position", ""))
-                normalized_position = raw_position.split(".")[-1].upper()
-                if normalized_position in Positions.__members__:
-                    self.partner_position = Positions[normalized_position]
+                self.partner_position = self.player_positions.get(self.partner_id)
                 break
 
     
@@ -164,6 +176,49 @@ class GameStateTracker:
         Get my hand cards of a specific suit.
         """
         return [card for card in self.my_hand if CardMapper.get_card_suit(card) == suit]
+
+    def is_player_void(self, player, suit):
+        """
+        Return whether we know a player is out of a suit.
+        """
+        if not player or not suit:
+            return False
+        return suit in self.void_suits_by_player.get(player, set())
+
+    def is_ace_gone(self, suit):
+        """
+        Return whether the ace of a suit has already been played.
+        """
+        ace_card_id = None
+        for card_id in range(40):
+            if CardMapper.get_card_suit(card_id) == suit and CardMapper.get_card_rank(card_id) == "A":
+                ace_card_id = card_id
+                break
+
+        if ace_card_id is None:
+            return False
+        return ace_card_id not in self.remaining_cards
+
+    def get_players_after_self(self):
+        """
+        Return player names that act after this player in trick order.
+        """
+        if self.position not in self._POSITION_ORDER:
+            return []
+
+        my_index = self._POSITION_ORDER.index(self.position)
+        ordered_positions = [
+            self._POSITION_ORDER[(my_index + offset) % len(self._POSITION_ORDER)]
+            for offset in range(1, len(self._POSITION_ORDER))
+        ]
+
+        players_after_self = []
+        for position in ordered_positions:
+            for player_name, player_position in self.player_positions.items():
+                if player_position == position:
+                    players_after_self.append(player_name)
+                    break
+        return players_after_self
     
     def is_partner_winning(self):
         """
