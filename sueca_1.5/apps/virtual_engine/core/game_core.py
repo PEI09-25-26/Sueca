@@ -102,6 +102,8 @@ def launch_bot_thread(agent, game_id: str, bot_name: str) -> bool:
 class GameState:
     """Game state manager for a single room."""
 
+    RESERVED_SEAT_SECONDS = 150
+
     def __init__(self, game_id):
         self.game_id = game_id
         self._play_lock = threading.Lock()
@@ -112,6 +114,7 @@ class GameState:
         self.players = []
         self.max_players = 4
         self.creator_id = None  # Track who created/owns the room
+        self.is_public = True
         self.trump_card = None
         self.trump_suit = None
         self.teams = [[], []]
@@ -122,6 +125,7 @@ class GameState:
             'team1': [Positions.NORTH, Positions.SOUTH],
             'team2': [Positions.EAST, Positions.WEST],
         }
+        self.reservations = {}  # position -> {uid, expires}
         self.game_started = False
         self.phase = 'waiting'  # waiting, deck_cutting, trump_selection, playing, finished
         self.current_round = 1
@@ -295,6 +299,60 @@ class GameState:
         self._push_state('player_joined')
         return True, f'Joined as {player.position}' if position else 'Joined room', player.player_id
 
+    def reserve_seat(self, uid, position_choice):
+        position = self._normalize_position(position_choice)
+        if not position:
+            return False, 'Invalid position'
+
+        team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+        if position not in self.available_team_positions[team_key]:
+            return False, 'Position already taken or reserved'
+
+        self.available_team_positions[team_key].remove(position)
+        self.reservations[position.name] = {
+            'uid': str(uid),
+            'expires': datetime.now(timezone.utc).timestamp() + self.RESERVED_SEAT_SECONDS,
+        }
+        self._push_state('seat_reserved')
+        return True, 'Seat reserved'
+
+    def release_reserved_seat(self, uid, position_choice):
+        position = self._normalize_position(position_choice)
+        if not position:
+            return False, 'Invalid position'
+
+        reservation = self.reservations.get(position.name)
+        if reservation and str(reservation.get('uid')) not in {str(uid), 'None'}:
+            return False, 'Seat reserved by another player'
+
+        if reservation:
+            del self.reservations[position.name]
+
+        occupied_player = self._get_player_by_position(position)
+        if occupied_player is None:
+            team_key = 'team1' if position in self._TEAM1_POSITIONS else 'team2'
+            if position not in self.available_team_positions[team_key]:
+                self.available_team_positions[team_key].append(position)
+
+        self._push_state('seat_released')
+        return True, 'Seat released'
+
+    def _restore_reservation_position(self, pos_name: str):
+        reservation = self.reservations.pop(pos_name, None)
+        if reservation is None:
+            return
+
+        pos = self._POSITION_MAP.get(pos_name.lower())
+        if not pos:
+            return
+
+        if self._get_player_by_position(pos) is not None:
+            return
+
+        team_key = 'team1' if pos in self._TEAM1_POSITIONS else 'team2'
+        if pos not in self.available_team_positions[team_key]:
+            self.available_team_positions[team_key].append(pos)
+
     def remove_player(self, actor_id, target_id):
         actor = self.get_player(actor_id)
         if not actor:
@@ -335,6 +393,46 @@ class GameState:
             if getattr(player, 'player_id', None) == player_id:
                 return player
         return None
+
+    def leave(self, player_id):
+        player = self.get_player(player_id)
+        if not player:
+            return False, 'Player not found'
+
+        # Preserve current gameplay constraints from previous versions.
+        if self.game_started and self.phase != 'finished':
+            return False, 'Cannot leave after game has started'
+
+        if player.position:
+            team_key = 'team1' if player.position in self._TEAM1_POSITIONS else 'team2'
+            if player.position not in self.available_team_positions[team_key]:
+                self.available_team_positions[team_key].append(player.position)
+
+        # Release any pending seat reservations owned by this player.
+        now = datetime.now(timezone.utc).timestamp()
+        to_remove = []
+        for pos_name, reservation in self.reservations.items():
+            if str(reservation.get('uid')) == str(player_id) or now > reservation.get('expires', 0):
+                to_remove.append(pos_name)
+        for pos_name in to_remove:
+            self._restore_reservation_position(pos_name)
+
+        self.players.remove(player)
+        if player in self.teams[0]:
+            self.teams[0].remove(player)
+        if player in self.teams[1]:
+            self.teams[1].remove(player)
+        self.scores.pop(player.player_id, None)
+
+        if self.creator_id == player.player_id:
+            self.creator_id = self.players[0].player_id if self.players else None
+
+        if len(self.players) < self.max_players:
+            self.game_started = False
+            self.phase = 'waiting'
+
+        self._push_state('player_left')
+        return True, f'Player {player.player_name} left the room'
 
     def cut_deck(self, player_id, cut_index):
         player = self.get_player(player_id)
@@ -904,6 +1002,16 @@ class GameState:
         return True, f'Rematch #{self.current_match_number} ready'
 
     def get_state(self):
+        # Release expired seat reservations.
+        now = datetime.now(timezone.utc).timestamp()
+        to_remove = []
+        for pos_name, reservation in self.reservations.items():
+            if now > reservation.get('expires', 0):
+                to_remove.append(pos_name)
+
+        for pos_name in to_remove:
+            self._restore_reservation_position(pos_name)
+
         cutter_position = self._current_cutter_position()
         selector_position = self._current_dealer_position()
         cutter_player = self._get_player_by_position(cutter_position)
@@ -928,6 +1036,8 @@ class GameState:
             'player_count': len(self.players),
             'game_started': self.game_started,
             'phase': self.phase,
+            'creator_id': self.creator_id,
+            'is_public': getattr(self, 'is_public', True),
             # Backward-compatible keys consumed by existing clients.
             'north_player': cutter_player_name,
             'north_player_id': cutter_player_id,
@@ -1076,6 +1186,15 @@ class GameManager:
             game_id = self._generate_game_id()
             self.games[game_id] = GameState(game_id)
             return game_id
+
+    def delete_room(self, game_id):
+        if game_id == self.default_game_id:
+            return False
+        with self._lock:
+            if game_id in self.games:
+                del self.games[game_id]
+                return True
+        return False
 
     def create_game(self, creator_name, position_choice):
         with self._lock:
