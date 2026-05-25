@@ -4,6 +4,7 @@ from shared.auth import get_authenticated_uid
 from shared.firebase_client import (
     get_user,
     get_friends,
+    get_player_stats,
     remove_friend,
     add_friend_request,
     get_incoming_friend_requests,
@@ -110,6 +111,17 @@ def get_friends_route(
         if online_only and status == "offline":
             continue
 
+        friend_code = friend_doc.get("friendCode") or ""
+        player_stats = get_player_stats(friend_code) if friend_code else None
+
+        stats_payload = {
+            "player_id": friend_code,
+            "games_played": int((player_stats or {}).get("games_played", 0) or 0),
+            "wins": int((player_stats or {}).get("wins", 0) or 0),
+            "losses": int((player_stats or {}).get("losses", 0) or 0),
+            "draws": int((player_stats or {}).get("draws", 0) or 0),
+        }
+
         friends_payload.append({
             "uid": friend_id,
             "username": friend_doc.get("username", ""),
@@ -124,7 +136,8 @@ def get_friends_route(
             "privacy": friend_doc.get("privacy", "public"),
             "friendsCount": len(get_friends(friend_id)),
             "status": status,
-            "friendCode": friend_doc.get("friendCode"),
+            "friendCode": friend_code,
+            "stats": stats_payload,
         })
 
     return {"success": True, "friends": friends_payload, "count": len(friends_payload)}

@@ -121,6 +121,30 @@ def find_user_by_friend_code(friend_code: str) -> Optional[dict]:
     return data
 
 
+def get_player_stats(player_id: str) -> Optional[dict]:
+    """Fetch player stats by friend code (player_id), supporting both doc-id and field lookup."""
+    _ensure_app()
+    normalized_id = (player_id or "").strip()
+    if not normalized_id:
+        return None
+
+    # Preferred lookup: document id equals player_id/friendCode.
+    doc = _DB.collection("player_stats").document(normalized_id).get()
+    if doc.exists:
+        data = doc.to_dict() or {}
+        data.setdefault("player_id", normalized_id)
+        return data
+
+    # Fallback lookup: player_id stored as a field in an arbitrary document id.
+    docs = list(_DB.collection("player_stats").where("player_id", "==", normalized_id).limit(1).stream())
+    if not docs:
+        return None
+
+    data = docs[0].to_dict() or {}
+    data.setdefault("player_id", normalized_id)
+    return data
+
+
 def generate_unique_friend_code() -> str:
     _ensure_app()
     for _ in range(20):

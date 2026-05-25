@@ -89,7 +89,16 @@ data class UserData(
     val privacy: String,
     @SerializedName("friendsCount") val friendsCount: Int,
     val status: String,
-    @SerializedName("friendCode") val friendCode: String? = null
+    @SerializedName("friendCode") val friendCode: String? = null,
+    val stats: PlayerStatsData? = null
+)
+
+data class PlayerStatsData(
+    @SerializedName("player_id") val playerId: String = "",
+    @SerializedName("games_played") val gamesPlayed: Int = 0,
+    val wins: Int = 0,
+    val losses: Int = 0,
+    val draws: Int = 0
 )
 
 // ============ Friend Models ============

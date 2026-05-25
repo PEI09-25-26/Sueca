@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.example.MVP.models.IncomingFriendRequestData
+import com.example.MVP.models.PlayerStatsData
 import com.example.MVP.models.UserData
 import kotlinx.coroutines.launch
 
@@ -258,10 +259,7 @@ class FriendsActivity : AppCompatActivity() {
 
         usernameView.text = friend.username
         descriptionView.text = friend.description.ifBlank { "Sem descricao disponivel." }
-        winsView.text = "Vitorias: x"
-        winrateView.text = "Win Rate: x%"
-        gamesView.text = "Jogos Totais: x"
-        streakView.text = "Streak de Vitorias: x"
+        applyFriendStats(friend.stats, winsView, winrateView, gamesView, streakView)
         friendsCountView.text = "Amigos: ${friend.friendsCount}"
 
         if (showActions && request != null) {
@@ -294,6 +292,25 @@ class FriendsActivity : AppCompatActivity() {
         }
 
         dialog.show()
+    }
+
+    private fun applyFriendStats(
+        stats: PlayerStatsData?,
+        winsView: TextView,
+        winrateView: TextView,
+        gamesView: TextView,
+        streakView: TextView
+    ) {
+        val wins = stats?.wins ?: 0
+        val losses = stats?.losses ?: 0
+        val draws = stats?.draws ?: 0
+        val gamesPlayed = stats?.gamesPlayed ?: (wins + losses + draws)
+        val winrate = if (gamesPlayed > 0) ((wins * 100.0) / gamesPlayed).toInt() else 0
+
+        winsView.text = "Vitorias: $wins"
+        winrateView.text = "Win Rate: $winrate%"
+        gamesView.text = "Jogos Totais: $gamesPlayed"
+        streakView.text = "Empates: $draws"
     }
 
     private fun applyBannerPreview(imageView: ImageView, bannerKey: String?) {

@@ -21,6 +21,7 @@ from shared.firebase_client import (
     find_user_by_friend_code,
     find_users_by_username,
     generate_unique_friend_code,
+    get_player_stats,
     get_user,
     revoke_token,
     set_verification,
@@ -160,6 +161,17 @@ def _issue_service_token(service_name: str, scope: str) -> str:
 def _build_user_response(uid: str, user: dict, *, last_login_at: str | None = None) -> dict:
     created_at = user.get("createdAt") or _now_iso()
     updated_at = user.get("updatedAt") or created_at
+    friend_code = user.get("friendCode", "")
+    player_stats = get_player_stats(friend_code) if friend_code else None
+
+    stats_payload = {
+        "player_id": friend_code,
+        "games_played": int((player_stats or {}).get("games_played", 0) or 0),
+        "wins": int((player_stats or {}).get("wins", 0) or 0),
+        "losses": int((player_stats or {}).get("losses", 0) or 0),
+        "draws": int((player_stats or {}).get("draws", 0) or 0),
+    }
+
     return {
         "uid": uid,
         "username": user.get("username", ""),
@@ -174,11 +186,23 @@ def _build_user_response(uid: str, user: dict, *, last_login_at: str | None = No
         "privacy": user.get("privacy", "public"),
         "friendsCount": int(user.get("friendsCount", 0)),
         "status": user.get("status", "offline"),
-        "friendCode": user.get("friendCode", ""),
+        "friendCode": friend_code,
+        "stats": stats_payload,
     }
 
 
 def _build_public_user_response(uid: str, user: dict) -> dict:
+    friend_code = user.get("friendCode", "")
+    player_stats = get_player_stats(friend_code) if friend_code else None
+
+    stats_payload = {
+        "player_id": friend_code,
+        "games_played": int((player_stats or {}).get("games_played", 0) or 0),
+        "wins": int((player_stats or {}).get("wins", 0) or 0),
+        "losses": int((player_stats or {}).get("losses", 0) or 0),
+        "draws": int((player_stats or {}).get("draws", 0) or 0),
+    }
+
     return {
         "uid": uid,
         "username": user.get("username", ""),
@@ -193,7 +217,8 @@ def _build_public_user_response(uid: str, user: dict) -> dict:
         "privacy": user.get("privacy", "public"),
         "friendsCount": int(user.get("friendsCount", 0)),
         "status": user.get("status", "offline"),
-        "friendCode": user.get("friendCode", ""),
+        "friendCode": friend_code,
+        "stats": stats_payload,
     }
 
 

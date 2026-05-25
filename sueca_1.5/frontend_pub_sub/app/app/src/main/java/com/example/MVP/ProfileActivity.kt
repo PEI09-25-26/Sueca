@@ -2,7 +2,6 @@ package com.example.MVP
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
@@ -11,15 +10,13 @@ import androidx.appcompat.app.AlertDialog
 import com.google.android.material.button.MaterialButton
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.google.firebase.FirebaseApp
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.MVP.models.PlayerStatsData
 import kotlinx.coroutines.launch
 
 class ProfileActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PROFILE_UID = "extra_profile_uid"
-        private const val TAG = "ProfileActivity"
     }
 
     private lateinit var bannerImageView: ImageView
@@ -113,10 +110,7 @@ class ProfileActivity : AppCompatActivity() {
                     applyPhotoPreview(user.photoURL)
 
                     updateStatusIndicator(user.status)
-
-                    val friendCode = user.friendCode
-                        ?: if (isViewingOwnProfile) AuthManager.getSavedFriendCode() else null
-                    loadPlayerStats(friendCode)
+                    applyPlayerStats(user.stats)
                 }
                 .onFailure { error ->
                     Toast.makeText(
@@ -136,61 +130,16 @@ class ProfileActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPlayerStats(friendCode: String?) {
-        if (friendCode.isNullOrBlank()) {
-            applyPlayerStats(null)
-            return
-        }
-
-        if (!ensureFirebaseInitialized()) {
-            applyPlayerStats(null)
-            return
-        }
-
-        FirebaseFirestore.getInstance()
-            .collection("player_stats")
-            .document(friendCode)
-            .get()
-            .addOnSuccessListener { doc ->
-                if (!doc.exists()) {
-                    applyPlayerStats(null)
-                    return@addOnSuccessListener
-                }
-                val wins = doc.getLong("wins")?.toInt() ?: 0
-                val losses = doc.getLong("losses")?.toInt() ?: 0
-                val draws = doc.getLong("draws")?.toInt() ?: 0
-                val gamesPlayed = doc.getLong("games_played")?.toInt()
-                    ?: (wins + losses + draws)
-                applyPlayerStats(PlayerStats(wins, losses, draws, gamesPlayed))
-            }
-            .addOnFailureListener { error ->
-                Log.w(TAG, "Failed to load player stats", error)
-                applyPlayerStats(null)
-            }
-    }
-
-    private fun applyPlayerStats(stats: PlayerStats?) {
+    private fun applyPlayerStats(stats: PlayerStatsData?) {
         val wins = stats?.wins ?: 0
         val losses = stats?.losses ?: 0
         val draws = stats?.draws ?: 0
-        val gamesPlayed = stats?.gamesPlayed ?: 0
+        val gamesPlayed = stats?.gamesPlayed ?: (wins + losses + draws)
 
         winsTextView.text = "Vitorias: $wins"
         lossesTextView.text = "Derrotas: $losses"
         drawsTextView.text = "Empates: $draws"
         totalGamesTextView.text = "Jogos Totais: $gamesPlayed"
-    }
-
-    private fun ensureFirebaseInitialized(): Boolean {
-        return try {
-            if (FirebaseApp.getApps(this).isEmpty()) {
-                FirebaseApp.initializeApp(this)
-            }
-            true
-        } catch (e: Exception) {
-            Log.w(TAG, "Firebase not initialized", e)
-            false
-        }
     }
 
     private fun applyBannerPreview(bannerKey: String?) {
@@ -262,12 +211,5 @@ class ProfileActivity : AppCompatActivity() {
             .setCancelable(false)
             .show()
     }
-
-    private data class PlayerStats(
-        val wins: Int,
-        val losses: Int,
-        val draws: Int,
-        val gamesPlayed: Int
-    )
 
 }
