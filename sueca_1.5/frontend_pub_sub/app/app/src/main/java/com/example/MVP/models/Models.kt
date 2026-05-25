@@ -532,6 +532,11 @@ data class HybridDealResetRequest(
     @SerializedName("cards_per_virtual") val cardsPerVirtual: Int = 10
 )
 
+data class HybridDealFinalizeRequest(
+    @SerializedName("game_id") val gameId: String,
+    @SerializedName("player_id") val playerId: String
+)
+
 data class HybridDealRecognizeRequest(
     @SerializedName("game_id") val gameId: String,
     @SerializedName("player_id") val playerId: String,

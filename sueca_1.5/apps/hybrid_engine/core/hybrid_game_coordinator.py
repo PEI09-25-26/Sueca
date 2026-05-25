@@ -28,6 +28,11 @@ class HybridRoomState:
     virtual_order: List[str] = field(default_factory=list)
     virtual_hands: Dict[str, List[int]] = field(default_factory=dict)
     pending_virtual_play: Optional[PendingVirtualPlay] = None
+    # When the initial virtual dealing completes, this flag remains True
+    # until `reset_deal` is called. This prevents the system from reverting
+    # back to a distribution phase when virtual players later have fewer
+    # cards because they played them.
+    deal_finalized: bool = False
 
 
 class HybridGameCoordinator:
@@ -66,6 +71,7 @@ class HybridGameCoordinator:
             room.virtual_order = list(dict.fromkeys(virtual_player_ids))
             room.virtual_hands = {pid: [] for pid in room.virtual_order}
             room.pending_virtual_play = None
+            room.deal_finalized = False
 
             for pid in room.virtual_order:
                 room.player_roles[pid] = "virtual"
@@ -97,6 +103,11 @@ class HybridGameCoordinator:
                 return False, "Card already assigned to another virtual player", room
 
             hand.append(int(card_id))
+            # If after assigning this card all virtual players have enough cards,
+            # mark the deal as finalized so it doesn't revert when cards are later
+            # consumed during play.
+            if all(len(room.virtual_hands.get(pid, [])) >= room.cards_per_virtual for pid in room.virtual_order):
+                room.deal_finalized = True
             return True, "Card assigned", room
 
     def get_player_hand(self, game_id: str, player_id: str) -> List[int]:
@@ -194,6 +205,9 @@ class HybridGameCoordinator:
                 "card_id": room.pending_virtual_play.card_id,
             }
 
+        # Use the persistent `deal_finalized` flag to report whether the initial
+        # dealing phase finished. This avoids flipping back to "not done" when
+        # virtual players subsequently consume cards during normal play.
         return {
             "game_id": room.game_id,
             "host_player_id": room.host_player_id,
@@ -202,5 +216,16 @@ class HybridGameCoordinator:
             "player_roles": payload_roles,
             "virtual_players": virtual_players,
             "pending_virtual_play": pending,
-            "deal_done": all(vp["cards_count"] >= room.cards_per_virtual for vp in virtual_players) if virtual_players else True,
+            "deal_done": room.deal_finalized if virtual_players else True,
         }
+
+    def finalize_deal(self, game_id: str) -> HybridRoomState:
+        """Force the room to consider the initial deal finalized.
+
+        This sets a persistent flag so the system doesn't return to a
+        distribution phase when virtual players later consume cards.
+        """
+        with self._lock:
+            room = self._get_room(game_id)
+            room.deal_finalized = True
+            return room

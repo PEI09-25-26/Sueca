@@ -354,6 +354,16 @@ object GatewayClient {
         return requireParsed(envelope, HybridStateResponse::class.java)
     }
 
+    suspend fun hybridDealFinalize(request: com.example.MVP.models.HybridDealFinalizeRequest): HybridStateResponse {
+        val payload = mapOf(
+            "game_id" to request.gameId,
+            "player_id" to request.playerId
+        )
+
+        val envelope = command("hybrid/deal/finalize", gameId = request.gameId, mode = "hybrid", payload = payload)
+        return requireParsed(envelope, HybridStateResponse::class.java)
+    }
+
     suspend fun hybridDealRecognize(request: HybridDealRecognizeRequest): HybridDealRecognizeResponse {
         val payload = mapOf(
             "game_id" to request.gameId,

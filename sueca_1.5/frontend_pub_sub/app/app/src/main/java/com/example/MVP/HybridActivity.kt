@@ -47,10 +47,12 @@ import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.utils.CardMapper
 import java.io.ByteArrayOutputStream
+import java.text.Normalizer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -91,6 +93,7 @@ class HybridActivity : AppCompatActivity() {
     private var isRunning = false
     private var mqttSubscriber: GameMqttSubscriber? = null
     private var flashJob: Job? = null
+    private var statePollJob: Job? = null
 
     private var inFlightRecognition = false
     private var lastFrameSentAt = 0L
@@ -161,6 +164,7 @@ class HybridActivity : AppCompatActivity() {
             ensureCameraPermissionsAndStart()
         } else {
             previewView.visibility = View.GONE
+            hostCameraPreview.visibility = View.GONE
             // Permitimos que o jogador virtual alterne entre mesa e câmara do host
             modeSwitch.isEnabled = true 
             modeSwitch.isChecked = true // Começa na mesa (virtual) como solicitado
@@ -169,6 +173,7 @@ class HybridActivity : AppCompatActivity() {
         lifecycleScope.launch {
             hybridRoleRegistered = registerHybridRole()
             startMqttUpdates()
+            startStatePolling()
         }
     }
 
@@ -193,29 +198,44 @@ class HybridActivity : AppCompatActivity() {
 
     private fun setupSwitch() {
         modeSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                modeSwitch.text = "Mesa ativa"
-                modeText.text = "Modo atual: mesa"
-                previewView.visibility = View.GONE
-                recognitionOverlay.visibility = View.GONE
-                mesaContainer.visibility = View.VISIBLE
-            } else {
-                modeSwitch.text = "Camera ativa"
-                modeText.text = "Modo atual: camera"
-                mesaContainer.visibility = View.GONE
-                
-                if (isHost) {
-                    previewView.visibility = View.VISIBLE
-                    hostCameraPreview.visibility = View.GONE
-                } else {
-                    previewView.visibility = View.GONE
-                    hostCameraPreview.visibility = View.VISIBLE
-                }
-                
-                // Only host should see the recognition overlay
-                recognitionOverlay.visibility = if (isRunning && isHost) View.VISIBLE else View.GONE
-            }
+            applyModeVisibility(isChecked)
         }
+
+        // Ensure a clean initial state so camera and table never overlap.
+        applyModeVisibility(modeSwitch.isChecked)
+    }
+
+    private fun applyModeVisibility(isTableMode: Boolean) {
+        if (isTableMode) {
+            modeSwitch.text = "Mesa ativa"
+            modeText.text = "Modo atual: mesa"
+            previewView.visibility = View.GONE
+            hostCameraPreview.visibility = View.GONE
+            recognitionOverlay.visibility = View.GONE
+            mesaContainer.visibility = View.VISIBLE
+            mesaContainer.bringToFront()
+            mesaContainer.invalidate()
+            return
+        }
+
+        modeSwitch.text = "Camera ativa"
+        modeText.text = "Modo atual: camera"
+        mesaContainer.visibility = View.GONE
+
+        if (isHost) {
+            previewView.visibility = View.VISIBLE
+            hostCameraPreview.visibility = View.GONE
+            previewView.bringToFront()
+            previewView.invalidate()
+        } else {
+            previewView.visibility = View.GONE
+            hostCameraPreview.visibility = View.VISIBLE
+            hostCameraPreview.bringToFront()
+            hostCameraPreview.invalidate()
+        }
+
+        recognitionOverlay.visibility = if (isRunning && isHost) View.VISIBLE else View.GONE
+        recognitionOverlay.bringToFront()
     }
 
     /**
@@ -303,7 +323,7 @@ class HybridActivity : AppCompatActivity() {
                         hybridState = hybrid
                         updateUiFromHybridState(hybrid)
                     }
-                    
+
                     envelope.cameraFrame?.let { frame ->
                         if (!isHost) {
                             displayHostFrame(frame)
@@ -320,6 +340,32 @@ class HybridActivity : AppCompatActivity() {
         mqttSubscriber = subscriber
     }
 
+    private fun startStatePolling() {
+        if (statePollJob?.isActive == true) return
+
+        statePollJob = lifecycleScope.launch {
+            while (isActive && !isFinishing && !isDestroyed) {
+                try {
+                    val status = GatewayClient.getStatus(roomId, mode = "hybrid")
+                    if (status != null) {
+                        gameState = status
+                        updateUiFromGameState(status)
+                    }
+
+                    val hybridResponse = GatewayClient.hybridState(roomId)
+                    if (hybridResponse.success) {
+                        hybridState = hybridResponse.state
+                        updateUiFromHybridState(hybridResponse.state)
+                    }
+                } catch (e: Exception) {
+                    Log.w("HybridActivity", "startStatePolling failed: ${e.message}")
+                }
+
+                delay(1200)
+            }
+        }
+    }
+
     /**
      * Decide se a UI deve mostrar a fase de Distribuição ou a fase de Jogo.
      */
@@ -329,13 +375,15 @@ class HybridActivity : AppCompatActivity() {
             return
         }
 
-        if (isHost && state.dealDone && !lastDealDone && !dealPauseShown) {
+        val isReallyDone = isDistributionReallyDone(state)
+        
+        if (isHost && isReallyDone && !lastDealDone && !dealPauseShown) {
             dealPauseShown = true
             showCvPauseDialog(CvPauseReason.AFTER_DEAL)
         }
-        lastDealDone = state.dealDone
+        lastDealDone = isReallyDone
 
-        if (!state.dealDone) {
+        if (!isReallyDone) {
             showDealPhase(state)
             return
         }
@@ -354,7 +402,11 @@ class HybridActivity : AppCompatActivity() {
             }
 
             cvPauseDialog?.dismiss()
-            cvRecognitionPaused = true
+            // The prompt is informational; do not block the host pipeline.
+            // Blocking here could prevent the next hybrid phase from advancing for
+            // virtual players because camera recognition would stop until the dialog
+            // is dismissed.
+            cvRecognitionPaused = false
 
             val titleRes = when (reason) {
                 CvPauseReason.AFTER_TRUMP -> R.string.hybrid_cv_pause_trump_title
@@ -370,9 +422,33 @@ class HybridActivity : AppCompatActivity() {
                 .setMessage(messageRes)
                 .setCancelable(false)
                 .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
-                    cvRecognitionPaused = false
-                    dialog.dismiss()
-                    cvPauseDialog = null
+                    // If this is the AFTER_DEAL dialog, give the host a chance to
+                    // finalize the deal on the server so the system won't return
+                    // to distribution when virtual players later consume cards.
+                    if (reason == CvPauseReason.AFTER_DEAL) {
+                        lifecycleScope.launch {
+                            try {
+                                val resp = GatewayClient.hybridDealFinalize(
+                                    com.example.MVP.models.HybridDealFinalizeRequest(
+                                        gameId = roomId,
+                                        playerId = playerId
+                                    )
+                                )
+                                resp.state?.let {
+                                    hybridState = it
+                                    runOnUiThread { updateUiFromHybridState(it) }
+                                }
+                            } catch (e: Exception) {
+                                Log.w("HybridActivity", "Failed to finalize deal: ${e.message}")
+                            } finally {
+                                dialog.dismiss()
+                                cvPauseDialog = null
+                            }
+                        }
+                    } else {
+                        dialog.dismiss()
+                        cvPauseDialog = null
+                    }
                 }
                 .create()
 
@@ -482,7 +558,7 @@ class HybridActivity : AppCompatActivity() {
         }
 
         if (isVirtualPlayer) {
-            val me = state.virtualPlayers.firstOrNull { it.playerId == playerId }
+            val me = resolveVirtualPlayer(state)
             if (me != null) {
                 val cards = me.cards.map { id -> cardIdToCard(id) }
                 handAdapter.updateCards(cards)
@@ -525,9 +601,9 @@ class HybridActivity : AppCompatActivity() {
         }
 
         if (isVirtualPlayer) {
-            val me = state.virtualPlayers.firstOrNull { it.playerId == playerId }
+            val me = resolveVirtualPlayer(state)
             val cards = me?.cards?.map { id ->
-                if (pending != null && pending.playerId == playerId) {
+                if (pending != null && pending.playerId == (playerId.ifBlank { me?.playerId.orEmpty() })) {
                     if (pending.cardId == id) cardIdToCard(id) else Card(id.toString(), "hidden", "hidden")
                 } else {
                     cardIdToCard(id)
@@ -535,7 +611,8 @@ class HybridActivity : AppCompatActivity() {
             }.orEmpty()
             handAdapter.updateCards(cards)
 
-            val isMyTurn = gameState?.currentPlayerId == playerId && pending == null
+            val resolvedCurrentPlayerId = resolveCurrentPlayerId(gameState)
+            val isMyTurn = resolvedCurrentPlayerId == (playerId.ifBlank { me?.playerId.orEmpty() }) && pending == null
             handAdapter.isEnabled = isMyTurn
 
             recognitionProgressText.text = if (isMyTurn) {
@@ -645,9 +722,9 @@ class HybridActivity : AppCompatActivity() {
         handAdapter.isEnabled = false
         handAdapter.updateCards(emptyList())
 
-        val selectorId = state.trumpSelectorPlayerId ?: state.westPlayerId
+        val selectorId = state.trumpSelectorPlayerId ?: state.westPlayerId ?: resolveCurrentPlayerId(state)
         val selectorName = state.trumpSelectorPlayer ?: state.westPlayer ?: "jogador do trunfo"
-        val isSelector = !selectorId.isNullOrBlank() && selectorId == playerId
+        val isSelector = matchesCurrentPlayer(selectorId, selectorName, state)
 
         btnTrumpTop.isEnabled = isSelector
         btnTrumpBottom.isEnabled = isSelector
@@ -787,7 +864,10 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private fun submitTrumpChoice(choice: String) {
-        if (playerId.isBlank()) {
+        val resolvedPlayerId = gameState?.trumpSelectorPlayerId
+            ?: gameState?.westPlayerId
+            ?: resolveCurrentPlayerId(gameState)
+        if (resolvedPlayerId.isNullOrBlank()) {
             recognitionProgressText.text = "Nao foi possivel identificar o teu jogador"
             return
         }
@@ -801,7 +881,7 @@ class HybridActivity : AppCompatActivity() {
 
                 val response = GatewayClient.selectTrump(
                     SelectTrumpRequest(
-                        playerId = playerId,
+                        playerId = resolvedPlayerId,
                         choice = choiceEnum,
                         gameId = roomId
                     )
@@ -841,7 +921,8 @@ class HybridActivity : AppCompatActivity() {
         }
 
         val state = hybridState ?: return
-        val isMyTurn = gameState?.currentPlayerId == playerId && state.pendingVirtualPlay == null
+        val resolvedMyId = resolveVirtualPlayer(state)?.playerId ?: playerId
+        val isMyTurn = gameState?.currentPlayerId == resolvedMyId && state.pendingVirtualPlay == null
         if (!isMyTurn) {
             return
         }
@@ -853,7 +934,7 @@ class HybridActivity : AppCompatActivity() {
                 val response = GatewayClient.hybridSelectCard(
                     HybridSelectCardRequest(
                         gameId = roomId,
-                        playerId = playerId,
+                        playerId = resolvedMyId,
                         card = cardId
                     )
                 )
@@ -888,6 +969,54 @@ class HybridActivity : AppCompatActivity() {
         val realCurrent = gameState?.players?.firstOrNull { it.id == currentPlayerId }
         val backCount = realCurrent?.cardsLeft?.coerceAtLeast(0) ?: 0
         return List(backCount) { idx -> Card(idx.toString(), "hidden", "hidden") }
+    }
+
+    private fun resolveVirtualPlayer(state: HybridRuntimeState): com.example.MVP.models.HybridPlayerRuntime? {
+        if (playerId.isNotBlank()) {
+            state.virtualPlayers.firstOrNull { it.playerId == playerId }?.let { return it }
+        }
+
+        val authUsername = AuthManager.getUsername()
+        state.virtualPlayers.firstOrNull { samePersonName(it.playerName, playerName) }?.let { return it }
+        state.virtualPlayers.firstOrNull { samePersonName(it.playerName, authUsername) }?.let { return it }
+
+        val normalizedName = playerName.trim().lowercase()
+        return state.virtualPlayers.firstOrNull {
+            it.playerName.trim().lowercase() == normalizedName
+        } ?: state.virtualPlayers.firstOrNull()
+    }
+
+    private fun resolveCurrentPlayerId(state: GameStatusResponse?): String? {
+        if (state == null) return playerId.ifBlank { null }
+
+        if (playerId.isNotBlank()) return playerId
+
+        return state.players.firstOrNull { samePersonName(it.name, playerName) }?.id
+            ?: state.players.firstOrNull { samePersonName(it.name, AuthManager.getUsername()) }?.id
+            ?: state.westPlayerId
+            ?: state.players.firstOrNull { samePersonName(it.name, state.westPlayer) }?.id
+            ?: state.currentPlayerId
+    }
+
+    private fun matchesCurrentPlayer(selectorId: String?, selectorName: String?, state: GameStatusResponse): Boolean {
+        val currentId = resolveCurrentPlayerId(state)
+        if (!selectorId.isNullOrBlank() && selectorId == currentId) return true
+
+        return samePersonName(selectorName, playerName) || samePersonName(selectorName, AuthManager.getUsername())
+    }
+    
+    private fun samePersonName(a: String?, b: String?): Boolean {
+        if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+
+        fun normalizeName(value: String): String {
+            val normalized = Normalizer.normalize(value, Normalizer.Form.NFD)
+            return normalized
+                .replace("\\p{Mn}+".toRegex(), "")
+                .trim()
+                .lowercase()
+        }
+
+        return normalizeName(a) == normalizeName(b)
     }
 
     private suspend fun syncPlayerIdFromStatus() {
@@ -953,6 +1082,21 @@ class HybridActivity : AppCompatActivity() {
     }
 
     /**
+     * Verifica se a distribuição de cartas realmente terminou.
+     * Retorna true se:
+     * - O servidor marca dealDone = true, OU
+     * - Todos os virtual players têm >= cardsPerVirtual cartas
+     */
+    private fun isDistributionReallyDone(hybrid: HybridRuntimeState?): Boolean {
+        if (hybrid == null) return true
+        
+        if (hybrid.dealDone) return true
+        
+        // Double-check: if all virtual players have enough cards, distribution is done
+        return hybrid.virtualPlayers.all { it.cardsCount >= hybrid.cardsPerVirtual }
+    }
+
+    /**
      * A função mais importante para o Host:
      * 1. Captura o frame da câmara.
      * 2. Converte-o para Base64.
@@ -972,7 +1116,7 @@ class HybridActivity : AppCompatActivity() {
 
             // Se for a vez de um virtual e ele ainda não escolheu, paramos de enviar frames (mas mantemos o preview)
             // IMPORTANTE: Só impedimos se a distribuição já estiver concluída.
-            if (localHybrid?.dealDone == true && currentRole == "virtual" && pending == null) {
+            if (isDistributionReallyDone(localHybrid) && currentRole == "virtual" && pending == null) {
                 return
             }
 
@@ -1013,7 +1157,7 @@ class HybridActivity : AppCompatActivity() {
                                 runOnUiThread { showCvPauseDialog(CvPauseReason.AFTER_TRUMP) }
                             }
                         }
-                    } else if (localHybrid != null && !localHybrid.dealDone && localGame?.phase == "playing") {
+                    } else if (localHybrid != null && !isDistributionReallyDone(localHybrid) && localGame?.phase == "playing") {
                         val response = GatewayClient.hybridDealRecognize(
                             HybridDealRecognizeRequest(
                                 gameId = roomId,
@@ -1217,6 +1361,7 @@ class HybridActivity : AppCompatActivity() {
         isRunning = false
         cvPauseDialog?.dismiss()
         cvPauseDialog = null
+        statePollJob?.cancel()
         mqttSubscriber?.disconnect()
         flashJob?.cancel()
         frameExecutor?.shutdown()
