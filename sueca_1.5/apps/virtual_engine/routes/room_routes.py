@@ -114,6 +114,11 @@ def list_rooms():
         if game_id == manager.default_game_id:
             continue
 
+        # Only list public rooms
+        is_public = getattr(game, "is_public", True)
+        if not is_public:
+            continue
+
         state = game.get_state()
         players = state.get("players", [])
         rooms_payload.append(
@@ -123,7 +128,7 @@ def list_rooms():
                 "max_players": int(getattr(game, "max_players", 4) or 4),
                 "players": [str(p.get("name", "")) for p in players if p.get("name")],
                 "phase": state.get("phase"),
-                "is_public": True,
+                "is_public": is_public,
                 "game_started": bool(state.get("game_started", False)),
             }
         )
