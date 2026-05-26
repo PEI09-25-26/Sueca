@@ -36,6 +36,9 @@ FORWARD_TO_FRONTEND = SERVICES.frontend_url.rstrip("/") != SERVICES.gateway_url.
 
 active_connections: dict[str, Any] = {}
 cv_connections: dict[str, websockets.WebSocketClientProtocol] = {}
+hybrid_stream_connections: dict[str, list[websockets.WebSocketServerProtocol]] = {}
+import asyncio
+main_loop: asyncio.AbstractEventLoop | None = None
 
 SUIT_SYMBOLS = {
     "Clubs": "♣",
@@ -72,6 +75,7 @@ __all__ = [
     "FORWARD_TO_FRONTEND",
     "active_connections",
     "cv_connections",
+    "hybrid_stream_connections",
     "SUIT_SYMBOLS",
     "CardDetection",
     "INTERNAL_HTTP",

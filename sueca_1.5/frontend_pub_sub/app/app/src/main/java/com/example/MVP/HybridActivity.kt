@@ -2,6 +2,7 @@ package com.example.MVP
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
@@ -43,9 +44,11 @@ import com.example.MVP.models.HybridRuntimeState
 import com.example.MVP.models.HybridSelectCardRequest
 import com.example.MVP.models.SelectTrumpRequest
 import com.example.MVP.models.Choice
-import com.example.MVP.network.GameMqttSubscriber
+import com.example.MVP.network.HybridWebSocketClient
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.utils.CardMapper
+import com.google.gson.Gson
+import com.google.gson.JsonObject
 import java.io.ByteArrayOutputStream
 import java.text.Normalizer
 import java.util.concurrent.ExecutorService
@@ -92,12 +95,13 @@ class HybridActivity : AppCompatActivity() {
     private var hybridState: HybridRuntimeState? = null
 
     private var isRunning = false
-    private var mqttSubscriber: GameMqttSubscriber? = null
+    private var hybridWsClient: HybridWebSocketClient? = null
     private var flashJob: Job? = null
-    private var statePollJob: Job? = null
+    private val gson = Gson()
 
     private var inFlightRecognition = false
     private var lastFrameSentAt = 0L
+    private var lastStreamFrameSentAt = 0L
     private var dealResetRequested = false
     private var hybridRoleRegistered = false
     private var cvRecognitionPaused = false
@@ -112,6 +116,7 @@ class HybridActivity : AppCompatActivity() {
 
     private val cardsPerVirtual = 10
     private val minFrameIntervalMs = 700L
+    private val streamIntervalMs = 200L
     private val cameraPermissionRequestCode = 11
 
     private enum class CvPauseReason {
@@ -175,9 +180,8 @@ class HybridActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
+            connectHybridWebSocket()
             hybridRoleRegistered = registerHybridRole()
-            startMqttUpdates()
-            startStatePolling()
         }
     }
 
@@ -260,6 +264,10 @@ class HybridActivity : AppCompatActivity() {
             hostCameraPreview.invalidate()
             recognitionOverlay.visibility = View.GONE
         }
+            // Always show the player's hand under the camera so virtual players
+            // can see and interact with their cards while viewing the host feed.
+            handLabel.visibility = View.VISIBLE
+            handRecyclerView.visibility = View.VISIBLE
     }
 
     /**
@@ -276,20 +284,19 @@ class HybridActivity : AppCompatActivity() {
             return false
         }
 
-        try {
-            GatewayClient.hybridRegisterPlayer(
-                HybridRegisterPlayerRequest(
-                    gameId = roomId,
-                    playerId = playerId,
-                    role = if (isVirtualPlayer) "virtual" else "real",
-                    isHost = isHost
-                )
+        hybridWsClient?.sendAction(
+            "register_player",
+            HybridRegisterPlayerRequest(
+                gameId = roomId,
+                playerId = playerId,
+                role = if (isVirtualPlayer) "virtual" else "real",
+                isHost = isHost
             )
-            return true
-        } catch (e: Exception) {
-            Log.w("HybridActivity", "registerHybridRole failed: ${e.message}")
-            return false
-        }
+        )
+
+        // Ask server for a fresh state snapshot right after registering.
+        hybridWsClient?.sendAction("sync_state", mapOf("game_id" to roomId))
+        return true
     }
 
     /**
@@ -300,92 +307,113 @@ class HybridActivity : AppCompatActivity() {
         if (playerId.isBlank()) {
             return
         }
-        try {
-            val response = GatewayClient.hybridDealReset(
-                HybridDealResetRequest(
-                    gameId = roomId,
-                    playerId = playerId,
-                    cardsPerVirtual = cardsPerVirtual
-                )
+        hybridWsClient?.sendAction(
+            "deal_reset",
+            HybridDealResetRequest(
+                gameId = roomId,
+                playerId = playerId,
+                cardsPerVirtual = cardsPerVirtual
             )
-            hybridState = response.state
-            lastDealDone = response.state?.dealDone == true
-            updateUiFromHybridState(response.state)
-            dealResetRequested = true
-            dealPauseShown = false
-        } catch (e: Exception) {
-            Log.w("HybridActivity", "resetDealForHost failed: ${e.message}")
-            dealResetRequested = false
-        }
+        )
+        dealResetRequested = true
+        dealPauseShown = false
     }
 
-    /**
-     * Conecta-se ao broker MQTT para receber atualizações automáticas do jogo.
-     * O "envelope" recebido contém tanto o estado geral do jogo (pontos, mesa) como o estado específico do modo híbrido (cartas distribuídas).
-     */
-    private fun startMqttUpdates() {
+    private fun connectHybridWebSocket() {
         if (isRunning) return
-        isRunning = true
-        
-        // CORREÇÃO: O overlay de reconhecimento só deve ser visível para o Host quando em modo câmara.
-        // applyModeVisibility já gere isto. Não forçar visibilidade aqui.
 
-        val subscriber = GameMqttSubscriber(
-            brokerHost = "mqtt.suecadaojogo.com",
-            brokerPort = 443,
-            protocol = "wss"
-        )
-
-        subscriber.connectAndSubscribe(
-            gameId = roomId,
-            onEnvelope = { envelope ->
+        hybridWsClient = HybridWebSocketClient(
+            roomId = roomId,
+            onStateUpdate = { hybrid, game ->
                 runOnUiThread {
-                    envelope.state?.let { state ->
-                        gameState = state
-                        updateUiFromGameState(state)
+                    if (game != null) {
+                        gameState = game
+                        updateUiFromGameState(game)
                     }
-                    envelope.hybridState?.let { hybrid ->
+                    if (hybrid != null) {
                         hybridState = hybrid
                         updateUiFromHybridState(hybrid)
                     }
-
-                    envelope.cameraFrame?.let { frame ->
-                        if (!isHost) {
-                            displayHostFrame(frame)
+                }
+            },
+            onFrameReceived = { bytes ->
+                if (!isHost && !modeSwitch.isChecked) {
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        runOnUiThread {
+                            hostCameraPreview.setImageBitmap(bitmap)
                         }
                     }
                 }
             },
-            onConnectionError = { error ->
-                Log.e("HybridActivity", "MQTT Error: $error")
+            onActionResponse = { action, response ->
+                handleWebSocketActionResponse(action, response)
+            },
+            onConnectionLost = { reason ->
+                Log.w("HybridActivity", "Hybrid WS connection lost: $reason")
             }
         )
 
-        mqttSubscriber = subscriber
+        hybridWsClient?.connect()
+        isRunning = true
     }
 
-    private fun startStatePolling() {
-        if (statePollJob?.isActive == true) return
+    private fun handleWebSocketActionResponse(action: String, response: JsonObject) {
+        runOnUiThread {
+            response.getAsJsonObject("state")?.let {
+                val stateObj = gson.fromJson(it, HybridRuntimeState::class.java)
+                hybridState = stateObj
+                updateUiFromHybridState(stateObj)
+            }
 
-        statePollJob = lifecycleScope.launch {
-            while (isActive && !isFinishing && !isDestroyed) {
-                try {
-                    val status = GatewayClient.getStatus(roomId, mode = "hybrid")
-                    if (status != null) {
-                        gameState = status
-                        updateUiFromGameState(status)
-                    }
+            response.getAsJsonObject("game_state")?.let {
+                val gameObj = gson.fromJson(it, GameStatusResponse::class.java)
+                gameState = gameObj
+                updateUiFromGameState(gameObj)
+            }
 
-                    val hybridResponse = GatewayClient.hybridState(roomId)
-                    if (hybridResponse.success) {
-                        hybridState = hybridResponse.state
-                        updateUiFromHybridState(hybridResponse.state)
+            when (action) {
+                "trump_confirm_capture" -> {
+                    if (response.get("success")?.asBoolean == true) {
+                        flashCheck("Trunfo captado")
+                        if (!trumpPauseShown) {
+                            trumpPauseShown = true
+                            showCvPauseDialog(CvPauseReason.AFTER_TRUMP)
+                        }
                     }
-                } catch (e: Exception) {
-                    Log.w("HybridActivity", "startStatePolling failed: ${e.message}")
+                    inFlightRecognition = false
                 }
-
-                delay(1200)
+                "deal_recognize" -> {
+                    if (response.get("confirmed")?.asBoolean == true) {
+                        flashCheck("Carta distribuida")
+                        if (response.getAsJsonObject("state")?.get("deal_done")?.asBoolean == true && !dealPauseShown) {
+                            dealPauseShown = true
+                            showCvPauseDialog(CvPauseReason.AFTER_DEAL)
+                        }
+                    }
+                    inFlightRecognition = false
+                }
+                "play_confirm_capture" -> {
+                    if (response.get("is_renuncia_warning")?.asBoolean == true) {
+                        val capturedCard = response.get("captured_card_id")?.asInt
+                        val capturedDisplay = response.get("captured_display")?.asString
+                        val currentPlayerId = gameState?.currentPlayerId
+                        if (!currentPlayerId.isNullOrBlank()) {
+                            showRenunciaDialog(currentPlayerId, capturedCard, capturedDisplay)
+                        }
+                    } else if (response.get("success")?.asBoolean == true) {
+                        flashCheck("Carta captada")
+                    }
+                    inFlightRecognition = false
+                }
+                "select_trump" -> {
+                    if (response.get("success")?.asBoolean == false) {
+                        recognitionProgressText.text = response.get("message")?.asString ?: "Falha ao selecionar trunfo"
+                    }
+                }
+                "play_undo", "virtual_select_card", "register_player", "deal_reset", "sync_state", "deal_finalize", "play_force_renuncia" -> {
+                    // State is handled above when present.
+                }
             }
         }
     }
@@ -445,18 +473,15 @@ class HybridActivity : AppCompatActivity() {
                     if (reason == CvPauseReason.AFTER_DEAL) {
                         lifecycleScope.launch {
                             try {
-                                val resp = GatewayClient.hybridDealFinalize(
+                                hybridWsClient?.sendAction(
+                                    "deal_finalize",
                                     com.example.MVP.models.HybridDealFinalizeRequest(
                                         gameId = roomId,
                                         playerId = playerId
                                     )
                                 )
-                                resp.state?.let {
-                                    hybridState = it
-                                    runOnUiThread { updateUiFromHybridState(it) }
-                                }
-                            } catch (e: Exception) {
-                                Log.w("HybridActivity", "Failed to finalize deal: ${e.message}")
+                            } catch (_: Exception) {
+                                // Keep UI stable; websocket updates will refresh state.
                             } finally {
                                 dialog.dismiss()
                                 cvPauseDialog = null
@@ -507,48 +532,15 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private fun applyForceRenuncia(playerId: String, cardId: Int) {
-        lifecycleScope.launch {
-            try {
-                val response = GatewayClient.hybridForceRenuncia(
-                    com.example.MVP.models.HybridForceRenunciaRequest(
-                        gameId = roomId,
-                        playerId = playerId,
-                        cardId = cardId
-                    )
-                )
-                if (response.success) {
-                    flashCheck("Renúncia aplicada!")
-                    response.gameState?.let {
-                        gameState = it
-                        updateUiFromGameState(it)
-                    }
-                    response.state?.let {
-                        hybridState = it
-                        updateUiFromHybridState(it)
-                    }
-                    cvRecognitionPaused = false
-                } else {
-                    flashError("Erro ao aplicar renúncia")
-                    cvRecognitionPaused = false
-                }
-            } catch (e: Exception) {
-                Log.w("HybridActivity", "applyForceRenuncia failed: ${e.message}")
-                flashError("Erro na renúncia")
-                cvRecognitionPaused = false
-            }
-        }
-    }
-
-    private fun displayHostFrame(frameBase64: String) {
-        try {
-            val decodedString = android.util.Base64.decode(frameBase64, android.util.Base64.DEFAULT)
-            val decodedByte = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
-            runOnUiThread {
-                hostCameraPreview.setImageBitmap(decodedByte)
-            }
-        } catch (e: Exception) {
-            Log.w("HybridActivity", "Failed to decode host frame", e)
-        }
+        hybridWsClient?.sendAction(
+            "play_force_renuncia",
+            com.example.MVP.models.HybridForceRenunciaRequest(
+                gameId = roomId,
+                playerId = playerId,
+                cardId = cardId
+            )
+        )
+        cvRecognitionPaused = false
     }
 
     /**
@@ -658,32 +650,12 @@ class HybridActivity : AppCompatActivity() {
             return
         }
 
-        lifecycleScope.launch {
-            try {
-                val response = GatewayClient.undoMove(
-                    com.example.MVP.models.UndoMoveRequest(
-                        gameId = roomId
-                    ),
-                    mode = "hybrid"
-                )
-
-                if (response.success) {
-                    response.state?.let {
-                        hybridState = it
-                        updateUiFromHybridState(it)
-                    }
-                    response.gameState?.let {
-                        gameState = it
-                        updateUiFromGameState(it)
-                    }
-                } else {
-                    recognitionProgressText.text = response.message ?: "Nao foi possivel desfazer a jogada"
-                }
-            } catch (e: Exception) {
-                Log.w("HybridActivity", "requestUndoMove failed: ${e.message}")
-                recognitionProgressText.text = "Erro ao desfazer a jogada"
-            }
-        }
+        hybridWsClient?.sendAction(
+            "play_undo",
+            com.example.MVP.models.UndoMoveRequest(
+                gameId = roomId
+            )
+        )
     }
 
     private fun updateUiFromGameState(state: GameStatusResponse) {
@@ -893,29 +865,19 @@ class HybridActivity : AppCompatActivity() {
             return
         }
 
-        lifecycleScope.launch {
-            try {
-                val choiceEnum = when (choice.lowercase()) {
-                    "top" -> Choice.TOP
-                    else -> Choice.BOTTOM
-                }
-
-                val response = GatewayClient.selectTrump(
-                    SelectTrumpRequest(
-                        playerId = resolvedPlayerId,
-                        choice = choiceEnum,
-                        gameId = roomId
-                    )
-                )
-
-                if (!response.success) {
-                    recognitionProgressText.text = response.message ?: "Falha ao selecionar trunfo"
-                }
-            } catch (e: Exception) {
-                recognitionProgressText.text = "Erro ao selecionar trunfo"
-                Log.w("HybridActivity", "submitTrumpChoice failed: ${e.message}")
-            }
+        val choiceEnum = when (choice.lowercase()) {
+            "top" -> Choice.TOP
+            else -> Choice.BOTTOM
         }
+
+        hybridWsClient?.sendAction(
+            "select_trump",
+            SelectTrumpRequest(
+                playerId = resolvedPlayerId,
+                choice = choiceEnum,
+                gameId = roomId
+            )
+        )
     }
 
     private fun maybeHostAutoCapture(state: GameStatusResponse) {
@@ -950,21 +912,14 @@ class HybridActivity : AppCompatActivity() {
 
         val cardId = card.id.toIntOrNull() ?: return
 
-        lifecycleScope.launch {
-            try {
-                val response = GatewayClient.hybridSelectCard(
-                    HybridSelectCardRequest(
-                        gameId = roomId,
-                        playerId = resolvedMyId,
-                        card = cardId
-                    )
-                )
-                hybridState = response.state
-                updateUiFromHybridState(response.state)
-            } catch (_: Exception) {
-                // Keep UI stable; next poll refreshes state.
-            }
-        }
+        hybridWsClient?.sendAction(
+            "virtual_select_card",
+            HybridSelectCardRequest(
+                gameId = roomId,
+                playerId = resolvedMyId,
+                card = cardId
+            )
+        )
     }
 
     private fun buildRealCopyHand(
@@ -1041,14 +996,10 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private suspend fun syncPlayerIdFromStatus() {
-        try {
-            val state = GatewayClient.getStatus(roomId)
-            if (state != null) {
-                val me = state.players.firstOrNull { it.name == playerName }
-                playerId = me?.id ?: playerId
-            }
-        } catch (_: Exception) {
-            // Will retry from next polling cycle.
+        val state = gameState
+        if (state != null) {
+            val me = state.players.firstOrNull { samePersonName(it.name, playerName) }
+            playerId = me?.id ?: playerId
         }
     }
 
@@ -1146,105 +1097,60 @@ class HybridActivity : AppCompatActivity() {
                 return
             }
 
-            val frameBase64 = imageProxyToBase64(imageProxy) ?: return
+            val frameBytes = imageProxyToBytes(imageProxy) ?: return
+            val frameBase64 = Base64.encodeToString(frameBytes, Base64.NO_WRAP)
             lastFrameSentAt = now
             inFlightRecognition = true
 
-            // Share frame with virtual players via MQTT
-            mqttSubscriber?.publishCameraFrame(roomId, frameBase64)
+            if (now - lastStreamFrameSentAt >= streamIntervalMs) {
+                lastStreamFrameSentAt = now
+                hybridWsClient?.sendBinaryFrame(frameBytes)
+            }
 
-            lifecycleScope.launch {
-                try {
-                    if (localGame?.phase == "trump_selection") {
-                        val response = GatewayClient.hybridConfirmTrumpCapture(
-                            HybridConfirmTrumpCaptureRequest(
-                                gameId = roomId,
-                                hostPlayerId = playerId,
-                                frameBase64 = frameBase64
-                            )
+            if (localGame?.phase == "trump_selection") {
+                hybridWsClient?.sendAction(
+                    "trump_confirm_capture",
+                    HybridConfirmTrumpCaptureRequest(
+                        gameId = roomId,
+                        hostPlayerId = playerId,
+                        frameBase64 = frameBase64
+                    )
+                )
+            } else if (localHybrid != null && !isDistributionReallyDone(localHybrid) && localGame?.phase == "playing") {
+                hybridWsClient?.sendAction(
+                    "deal_recognize",
+                    HybridDealRecognizeRequest(
+                        gameId = roomId,
+                        playerId = playerId,
+                        frameBase64 = frameBase64,
+                        targetPlayerId = null
+                    )
+                )
+            } else if (localGame?.phase == "playing") {
+                val pendingPlay = localHybrid?.pendingVirtualPlay
+                val currentPlayerIdNow = localGame.currentPlayerId
+
+                val capturePlayerId = when {
+                    pendingPlay != null && pendingPlay.playerId == currentPlayerIdNow -> pendingPlay.playerId
+                    !currentPlayerIdNow.isNullOrBlank() -> currentPlayerIdNow
+                    else -> null
+                }
+
+                if (!capturePlayerId.isNullOrBlank()) {
+                    hybridWsClient?.sendAction(
+                        "play_confirm_capture",
+                        HybridConfirmCaptureRequest(
+                            gameId = roomId,
+                            playerId = capturePlayerId,
+                            hostPlayerId = playerId,
+                            frameBase64 = frameBase64
                         )
-                        if (response.success) {
-                            Log.i("HybridActivity", "Trump confirmed: ${response.capturedDisplay}")
-                            response.gameState?.let {
-                                gameState = it
-                                runOnUiThread { updateUiFromGameState(it) }
-                            }
-                            response.state?.let {
-                                hybridState = it
-                            }
-                            flashCheck("Trunfo captado")
-                            if (!trumpPauseShown) {
-                                trumpPauseShown = true
-                                runOnUiThread { showCvPauseDialog(CvPauseReason.AFTER_TRUMP) }
-                            }
-                        }
-                    } else if (localHybrid != null && !isDistributionReallyDone(localHybrid) && localGame?.phase == "playing") {
-                        val response = GatewayClient.hybridDealRecognize(
-                            HybridDealRecognizeRequest(
-                                gameId = roomId,
-                                playerId = playerId,
-                                frameBase64 = frameBase64,
-                                targetPlayerId = null
-                            )
-                        )
-                        hybridState = response.state
-                        updateUiFromHybridState(response.state)
-                        if (response.confirmed) {
-                            flashCheck("Carta distribuida")
-                            if (response.state?.dealDone == true && !dealPauseShown) {
-                                dealPauseShown = true
-                                runOnUiThread { showCvPauseDialog(CvPauseReason.AFTER_DEAL) }
-                            }
-                        }
-                    } else if (localGame?.phase == "playing") {
-                        val pendingPlay = localHybrid?.pendingVirtualPlay
-                        val currentPlayerIdNow = localGame.currentPlayerId
-
-                        val capturePlayerId = when {
-                            pendingPlay != null && pendingPlay.playerId == currentPlayerIdNow -> pendingPlay.playerId
-                            !currentPlayerIdNow.isNullOrBlank() -> currentPlayerIdNow
-                            else -> null
-                        }
-
-                        if (!capturePlayerId.isNullOrBlank()) {
-                            val response = GatewayClient.hybridConfirmCapture(
-                                HybridConfirmCaptureRequest(
-                                    gameId = roomId,
-                                    playerId = capturePlayerId,
-                                    hostPlayerId = playerId,
-                                    frameBase64 = frameBase64
-                                )
-                            )
-                            if (!response.success && response.isRenunciaWarning == true) {
-                                runOnUiThread {
-                                    showRenunciaDialog(capturePlayerId, response.capturedCardId, response.capturedDisplay)
-                                }
-                                return@launch
-                            } else if (response.success) {
-                                // Validar se a carta captada corresponde à selecionada pelo virtual (se aplicável)
-                                if (pendingPlay != null && response.capturedCardId != null && response.capturedCardId != pendingPlay.cardId) {
-                                    runOnUiThread {
-                                        flashError("Carta errada! Esperada: ${CardMapper.getCard(pendingPlay.cardId)}")
-                                    }
-                                    return@launch
-                                }
-
-                                response.state?.let {
-                                    hybridState = it
-                                    updateUiFromHybridState(it)
-                                }
-                                response.gameState?.let {
-                                    gameState = it
-                                }
-                                flashCheck("Carta captada")
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w("HybridActivity", "Frame processing failed: ${e.message}")
-                } finally {
+                    )
+                } else {
                     inFlightRecognition = false
                 }
+            } else {
+                inFlightRecognition = false
             }
         } finally {
             imageProxy.close()
@@ -1276,7 +1182,7 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
-    private fun imageProxyToBase64(imageProxy: ImageProxy): String? {
+    private fun imageProxyToBytes(imageProxy: ImageProxy): ByteArray? {
         if (imageProxy.format != ImageFormat.YUV_420_888) {
             return null
         }
@@ -1294,7 +1200,7 @@ class HybridActivity : AppCompatActivity() {
             return null
         }
 
-        return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+        return output.toByteArray()
     }
 
     private fun yuv420ToNv21(image: ImageProxy): ByteArray {
@@ -1384,8 +1290,7 @@ class HybridActivity : AppCompatActivity() {
         isRunning = false
         cvPauseDialog?.dismiss()
         cvPauseDialog = null
-        statePollJob?.cancel()
-        mqttSubscriber?.disconnect()
+        hybridWsClient?.disconnect()
         flashJob?.cancel()
         frameExecutor?.shutdown()
         cameraProvider?.unbindAll()
