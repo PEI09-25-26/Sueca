@@ -28,6 +28,7 @@ class ProfileActivity : AppCompatActivity() {
     private lateinit var statusIndicator: View
     private lateinit var logoutButton: MaterialButton
     private lateinit var editProfileButton: MaterialButton
+    private lateinit var matchHistoryButton: MaterialButton
     private lateinit var winsTextView: TextView
     private lateinit var lossesTextView: TextView
     private lateinit var drawsTextView: TextView
@@ -58,6 +59,7 @@ class ProfileActivity : AppCompatActivity() {
         friendsCountTextView = findViewById(R.id.friendsCountTextView)
         statusIndicator = findViewById(R.id.statusIndicator)
         logoutButton = findViewById(R.id.logoutButton)
+        matchHistoryButton = findViewById(R.id.matchHistoryButton)
         winsTextView = findViewById(R.id.stat_vitorias_profile)
         lossesTextView = findViewById(R.id.stat_winrate_profile)
         drawsTextView = findViewById(R.id.stat_win_streak_profile)
@@ -71,10 +73,13 @@ class ProfileActivity : AppCompatActivity() {
             editProfileButton.visibility = View.GONE
             logoutButton.visibility = View.GONE
             emailTextView.visibility = View.GONE
+            // Match history is own-profile-only (backend guards it); hide for other profiles
+            matchHistoryButton.visibility = View.GONE
         } else {
             editProfileButton.visibility = View.VISIBLE
             logoutButton.visibility = View.VISIBLE
             emailTextView.visibility = View.VISIBLE
+            matchHistoryButton.visibility = View.VISIBLE
         }
 
         backButton.setOnClickListener {
@@ -88,6 +93,13 @@ class ProfileActivity : AppCompatActivity() {
 
         logoutButton.setOnClickListener {
             performLogout()
+        }
+
+        matchHistoryButton.setOnClickListener {
+            val uid = viewedUid ?: return@setOnClickListener
+            val intent = Intent(this, MatchHistoryActivity::class.java)
+            intent.putExtra(MatchHistoryActivity.EXTRA_UID, uid)
+            startActivity(intent)
         }
 
     }

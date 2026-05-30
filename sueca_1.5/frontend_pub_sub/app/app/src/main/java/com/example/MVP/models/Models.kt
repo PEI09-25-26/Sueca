@@ -651,3 +651,27 @@ data class UndoMoveResponse(
     val state: HybridRuntimeState? = null,
     @SerializedName("game_state") val gameState: GameStatusResponse? = null
 )
+
+// ============ Match History Models ============
+data class GameStatsData(
+    @SerializedName("team1_points") val team1Points: Int = 0,
+    @SerializedName("team2_points") val team2Points: Int = 0,
+    val winner: String? = null
+)
+
+data class MatchHistoryEntry(
+    @SerializedName("doc_id") val docId: String? = null,
+    @SerializedName("game_id") val gameId: String? = null,
+    @SerializedName("game_stats") val gameStats: GameStatsData? = null,
+    @SerializedName("player_id") val playerId: String? = null,
+    val position: String? = null,
+    @SerializedName("starting_hand") val startingHand: List<String>? = null,
+    @SerializedName("trump_suit") val trumpSuit: String? = null
+)
+
+data class MatchHistoryResponse(
+    val success: Boolean,
+    val history: List<MatchHistoryEntry>? = null,
+    val count: Int? = null,
+    val message: String? = null
+)
