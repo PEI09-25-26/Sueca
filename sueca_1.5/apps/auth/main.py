@@ -21,6 +21,7 @@ from shared.firebase_client import (
     find_user_by_friend_code,
     find_users_by_username,
     generate_unique_friend_code,
+    get_player_game_history,
     get_player_stats,
     get_user,
     revoke_token,
@@ -426,6 +427,26 @@ def get_user_endpoint(uid: str, authenticated_uid: str = Depends(get_authenticat
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
     return {"success": True, "user": _build_user_response(uid, user)}
+
+
+@app.get("/history/{uid}", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])
+def get_match_history_endpoint(uid: str, authenticated_uid: str = Depends(get_authenticated_uid)):
+    """Return the match history for a user from the player_game_history collection.
+
+    The caller must be the same user (same-user guard). The friendCode is used
+    as the lookup key since documents are named {friendCode}_{game_id}_{match_number}.
+    """
+    _ensure_same_user(uid, authenticated_uid)
+    user = get_user(uid)
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    friend_code = (user.get("friendCode") or "").strip()
+    if not friend_code:
+        return {"success": True, "history": [], "count": 0}
+
+    history = get_player_game_history(friend_code)
+    return {"success": True, "history": history, "count": len(history)}
 
 
 @app.put("/user/{uid}", dependencies=[Depends(rate_limit_dependency(limit=30, window_seconds=60))])

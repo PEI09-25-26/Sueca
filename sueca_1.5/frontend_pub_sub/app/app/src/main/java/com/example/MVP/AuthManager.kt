@@ -303,6 +303,21 @@ object AuthManager {
 		}
 	}
 
+	suspend fun getMatchHistory(uid: String): Result<List<com.example.MVP.models.MatchHistoryEntry>> {
+		return try {
+			val token = getAuthHeader() ?: return Result.failure(Exception("No auth token"))
+			val response = RetrofitClient.api.getMatchHistory(uid, token)
+
+			if (response.success) {
+				Result.success(response.history ?: emptyList())
+			} else {
+				Result.failure(Exception(response.message ?: "Failed to get match history"))
+			}
+		} catch (e: Exception) {
+			Result.failure(Exception(extractApiErrorMessage(e)))
+		}
+	}
+
 	suspend fun updateUser(uid: String, updateRequest: UpdateUserRequest): Result<UserData> {
 		return try {
 			val token = getAuthHeader() ?: return Result.failure(Exception("No auth token"))

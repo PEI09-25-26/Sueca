@@ -28,6 +28,12 @@ interface ApiService {
         @Header("Authorization") token: String
     ): UserResponse
 
+    @GET("/api/auth/history/{uid}")
+    suspend fun getMatchHistory(
+        @Path("uid") uid: String,
+        @Header("Authorization") token: String
+    ): MatchHistoryResponse
+
     @GET("/api/auth/user/by-friend-code/{friendCode}")
     suspend fun getUserByFriendCode(
         @Path("friendCode") friendCode: String,

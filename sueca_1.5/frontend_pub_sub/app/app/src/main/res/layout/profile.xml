@@ -173,6 +173,22 @@
                     android:text="@string/friends_count"
                     android:textColor="@android:color/white"
                     android:textSize="17sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/matchHistoryButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="14dp"
+                    android:text="Ver Histórico de Partidas"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="15sp"
+                    app:backgroundTint="@color/teal_700"
+                    app:cornerRadius="10dp"
+                    app:icon="@android:drawable/ic_menu_recent_history"
+                    app:iconGravity="textStart"
+                    app:iconPadding="6dp" />
+
             </LinearLayout>
 
             <View
