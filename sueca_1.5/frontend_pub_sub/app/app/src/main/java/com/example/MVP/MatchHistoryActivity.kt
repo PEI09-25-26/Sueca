@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.MatchHistoryEntry
 import kotlinx.coroutines.launch
+import com.example.MVP.utils.CardMapper
 
 class MatchHistoryActivity : AppCompatActivity() {
 
@@ -85,7 +86,8 @@ class MatchHistoryActivity : AppCompatActivity() {
         val shortGameId = if (gameId.length > 18) gameId.take(15) + "…" else gameId
         gameIdText.text = "Jogo: $shortGameId"
 
-        positionText.text = "Posição: ${entry.position?.uppercase() ?: "?"}"
+        val positionDisplay = formatPosition(entry.position)
+        positionText.text = "Posição: $positionDisplay"
 
         val trumpDisplay = trumpSuitDisplay(entry.trumpSuit)
         trumpText.text = "Trunfo: $trumpDisplay"
@@ -95,7 +97,6 @@ class MatchHistoryActivity : AppCompatActivity() {
             scoreText.text = "Pontuação: ${stats.team1Points} — ${stats.team2Points}"
             val winnerStr = formatWinner(stats.winner)
             winnerText.text = "Vencedor: $winnerStr"
-            winnerText.setTextColor(winnerColor(stats.winner))
         } else {
             scoreText.text = "Pontuação: —"
             winnerText.text = "Vencedor: —"
@@ -103,38 +104,48 @@ class MatchHistoryActivity : AppCompatActivity() {
 
         val hand = entry.startingHand
         handText.text = if (!hand.isNullOrEmpty()) {
-            "Mão inicial: ${hand.joinToString(", ")}"
+            val cardNames = hand.map { cardId ->
+                cardId.toIntOrNull()?.let { getDrawableCardName(it) } ?: "?"
+            }
+            "Mão inicial: \n ${cardNames.joinToString(", ")}"
         } else {
-            "Mão inicial: —"
+            "Mão inicial: \n —, —, —, —, —, —, —, —, —, —"
         }
-
         return card
     }
 
     private fun trumpSuitDisplay(suit: String?): String {
         return when (suit?.lowercase()) {
-            "hearts"   -> "♥ Copas"
-            "diamonds" -> "♦ Ouros"
-            "clubs"    -> "♣ Paus"
-            "spades"   -> "♠ Espadas"
+            "♥"   -> "♥ Copas"
+            "♦" -> "♦ Ouros"
+            "♣"    -> "♣ Paus"
+            "♠"   -> "♠ Espadas"
             else       -> suit?.replaceFirstChar { it.uppercase() } ?: "?"
         }
     }
 
     private fun formatWinner(winner: String?): String {
         return when (winner?.lowercase()) {
-            "team1"  -> "Equipa 1"
-            "team2"  -> "Equipa 2"
+            "team 1 (n/s)"  -> "Equipa 1 (N/S)"
+            "team 2 (e/w)"  -> "Equipa 2 (E/O)"
             "draw"   -> "Empate"
             else     -> winner?.replaceFirstChar { it.uppercase() } ?: "?"
         }
     }
 
-    private fun winnerColor(winner: String?): Int {
-        return when (winner?.lowercase()) {
-            "team1"  -> getColor(R.color.teal_700)
-            "team2"  -> getColor(R.color.badge_red)
-            else     -> android.graphics.Color.WHITE
+    private fun formatPosition(position: String?): String {
+        return when (position?.lowercase()) {
+            "north" -> "Norte"
+            "south" -> "Sul"
+            "east"  -> "Este"
+            "west"  -> "Oeste"
+            else     -> position ?: "?"
         }
+    }
+
+    fun getDrawableCardName(cardId: Int): String {
+        val suit = CardMapper.getCardSuit(cardId)
+        val rank = CardMapper.getCardRank(cardId)
+        return "${rank}${suit}"
     }
 }

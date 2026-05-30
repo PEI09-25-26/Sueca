@@ -662,7 +662,7 @@ data class GameStatsData(
 data class MatchHistoryEntry(
     @SerializedName("doc_id") val docId: String? = null,
     @SerializedName("game_id") val gameId: String? = null,
-    @SerializedName("gamestats") val gameStats: GameStatsData? = null,
+    @SerializedName("game_stats") val gameStats: GameStatsData? = null,
     @SerializedName("player_id") val playerId: String? = null,
     val position: String? = null,
     @SerializedName("starting_hand") val startingHand: List<String>? = null,
