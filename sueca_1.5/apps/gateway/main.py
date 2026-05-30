@@ -14,7 +14,7 @@ app = FastAPI(title="CV Middleware", version="0.1")
 def on_mqtt_message(client, userdata, msg):
     try:
         topic = msg.topic
-        if not topic.startswith("sueca/games/") or not topic.endswith("/hybrid"):
+        if not topic.startswith("sueca/games/") or (not topic.endswith("/hybrid") and not topic.endswith("/state")):
             return
             
         parts = topic.split("/")
@@ -27,15 +27,22 @@ def on_mqtt_message(client, userdata, msg):
             return
             
         payload = json.loads(msg.payload.decode())
+
+        if topic.endswith("/state"):
+            broadcast_payload = {
+                "type": "state_update",
+                "game_state": payload.get("state", payload),
+            }
+        else:
+            broadcast_payload = {
+                "type": "state_update",
+                "hybrid_state": payload.get("hybrid_state", payload),
+            }
         
         async def broadcast():
-            msg_str = json.dumps({
-                "type": "state_update", 
-                "hybrid_state": payload.get("hybrid_state", payload)
-            })
             for ws in state.hybrid_stream_connections.get(game_id, []):
                 try:
-                    await ws.send_text(msg_str)
+                    await ws.send_text(json.dumps(broadcast_payload))
                 except Exception:
                     pass
                     
@@ -50,8 +57,9 @@ async def startup():
     state.main_loop = asyncio.get_running_loop()
     if connect_mqtt():
         mqtt_client.subscribe("sueca/games/+/hybrid", qos=1)
+        mqtt_client.subscribe("sueca/games/+/state", qos=1)
         mqtt_client.on_message = on_mqtt_message
-        print("[Middleware] Subscribed to MQTT hybrid topics")
+        print("[Middleware] Subscribed to MQTT hybrid and state topics")
     startup_services()
 
 @app.on_event("shutdown")
