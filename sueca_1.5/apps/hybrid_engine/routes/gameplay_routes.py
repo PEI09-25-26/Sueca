@@ -89,6 +89,8 @@ def select_trump(
     if success:
         selector = game.get_player(player_id)
         publish_trump_selected(game_id, selector.player_name, choice, str(game.trump_card))
+        from apps.hybrid_engine.core.hybrid_services import after_trump_dealt
+        after_trump_dealt(game)
     return {"success": success, "message": message}
 
 

@@ -39,7 +39,8 @@ def _push_hybrid_state(game, room):
     payload = {
         "event_type": "hybrid_state_update",
         "game_id": game.game_id,
-        "hybrid_state": hybrid_coordinator.to_payload(room, _players_meta(game))
+        "hybrid_state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "state": game.get_state(),
     }
     mqtt_client.publish_json(f"sueca/games/{game.game_id}/hybrid", payload, retain=True)
 
@@ -227,6 +228,9 @@ async def hybrid_confirm_trump_capture(data: dict = Body(default_factory=dict)):
 
     hybrid_vision.begin_deal_phase(game_id, int(recognized.card_id))
 
+    from apps.hybrid_engine.core.hybrid_services import after_trump_dealt
+    after_trump_dealt(game)
+
     response_payload = {
         "success": True,
         "message": message,
@@ -329,6 +333,113 @@ async def hybrid_deal_recognize(data: dict = Body(default_factory=dict)):
     return response_payload
 
 
+@router.post("/api/hybrid/bot/register")
+async def hybrid_bot_register(data: dict = Body(default_factory=dict)):
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    player_id = data.get("player_id")
+    if not player_id:
+        return error("player_id is required", 400)
+
+    if not game.get_player(player_id):
+        return error("Player not found in this game", 404)
+
+    room = hybrid_coordinator.register_bot(game_id, player_id)
+    if game.phase == "playing":
+        room = hybrid_coordinator.sync_bot_hands_from_game(game_id, game)
+        room = hybrid_coordinator.maybe_auto_finalize_bot_deal(game_id)
+    _push_hybrid_state(game, room)
+    return {
+        "success": True,
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "game_state": game.get_state(),
+    }
+
+
+@router.post("/api/hybrid/play/bot_confirm")
+async def hybrid_bot_confirm_play(data: dict = Body(default_factory=dict)):
+    """Reveal bot card to host (pending) or apply play after host confirmation.
+
+    - No pending: same as virtual select_card (card shown in host hand).
+    - Pending matches: apply play (used if host/API confirms without a new select).
+    """
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    player_id = data.get("player_id")
+    card = data.get("card")
+
+    if not player_id or card is None:
+        return error("player_id and card are required", 400)
+
+    if not hybrid_coordinator.is_bot(game_id, player_id):
+        return error("Player is not registered as a hybrid bot", 403)
+
+    if game.phase != "playing":
+        return error(f"Game is in {game.phase} phase", 400)
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    if not hybrid_coordinator.to_payload(room, _players_meta(game)).get("deal_done"):
+        return error("Complete virtual card dealing before playing", 400)
+
+    current = game.current_player
+    if current is None or current.player_id != player_id:
+        return error(f"Not {player_id}'s turn", 400)
+
+    try:
+        card_int = int(card)
+    except (TypeError, ValueError):
+        return error("card must be an integer", 400)
+
+    pending = room.pending_virtual_play
+    if pending is None:
+        ok, message, room = hybrid_coordinator.select_virtual_card(game_id, player_id, card_int)
+        if not ok:
+            return error(message, 400)
+        _push_hybrid_state(game, room)
+        return {
+            "success": True,
+            "message": message,
+            "pending_only": True,
+            "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+            "game_state": game.get_state(),
+        }
+
+    if pending.player_id != player_id or pending.card_id != card_int:
+        return error("Pending play does not match this bot/card", 400)
+
+    is_renuncia, _ = hybrid_referee.check_play(game_id, player_id, card_int, game.round_suit)
+    if is_renuncia:
+        return error("Renúncia detetada para bot", 400)
+
+    success, message = play_card_hybrid_capture(game, player_id, str(card_int))
+    if not success:
+        return error(message, 400)
+
+    hybrid_vision.record_played_card(game_id, card_int)
+    hybrid_referee.record_play(game_id, player_id, card_int, game.round_suit)
+    room = hybrid_coordinator.confirm_play_success(game_id, player_id, card_int)
+
+    if len(game.round_plays) == 4 and game.round_resolving:
+        await asyncio.sleep(1.75)
+
+    if len(game.round_plays) == 0:
+        room = hybrid_coordinator.clear_pending_virtual_play(game_id)
+
+    response_payload = {
+        "success": True,
+        "message": message,
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "game_state": game.get_state(),
+        "trick_completed": len(game.round_plays) == 0 and not game.round_resolving,
+    }
+    _push_hybrid_state(game, room)
+    return response_payload
+
+
 @router.post("/api/hybrid/virtual/select_card")
 async def hybrid_virtual_select_card(data: dict = Body(default_factory=dict)):
     game, game_id = get_game_from_request(data)
@@ -356,7 +467,12 @@ async def hybrid_virtual_select_card(data: dict = Body(default_factory=dict)):
 
     ok, message, room = hybrid_coordinator.select_virtual_card(game_id, player_id, card)
     status = 200 if ok else 400
-    payload = {"success": ok, "message": message, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
+    payload = {
+        "success": ok,
+        "message": message,
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "game_state": game.get_state(),
+    }
     if ok:
         _push_hybrid_state(game, room)
     return payload if status == 200 else error(payload["message"], status)

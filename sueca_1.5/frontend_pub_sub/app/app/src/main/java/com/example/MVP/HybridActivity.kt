@@ -44,6 +44,7 @@ import com.example.MVP.models.HybridRuntimeState
 import com.example.MVP.models.HybridSelectCardRequest
 import com.example.MVP.models.SelectTrumpRequest
 import com.example.MVP.models.Choice
+import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.HybridWebSocketClient
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.utils.CardMapper
@@ -96,6 +97,7 @@ class HybridActivity : AppCompatActivity() {
 
     private var isRunning = false
     private var hybridWsClient: HybridWebSocketClient? = null
+    private var hybridMqttSubscriber: GameMqttSubscriber? = null
     private var flashJob: Job? = null
     private var trickResolutionSyncJob: Job? = null
     private val gson = Gson()
@@ -182,8 +184,22 @@ class HybridActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             connectHybridWebSocket()
+            startHybridMqtt()
             hybridRoleRegistered = registerHybridRole()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isRunning) {
+            startHybridMqtt()
+            requestSyncState()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        hybridMqttSubscriber?.disconnect()
     }
 
     private fun setupTrumpControls() {
@@ -318,6 +334,40 @@ class HybridActivity : AppCompatActivity() {
         )
         dealResetRequested = true
         dealPauseShown = false
+    }
+
+    /**
+     * Bots publish hybrid state over MQTT (HTTP select_card). WS alone can miss updates
+     * when the gateway bridge drops or the app was backgrounded.
+     */
+    private fun startHybridMqtt() {
+        if (roomId.isBlank()) return
+
+        hybridMqttSubscriber?.disconnect()
+        val subscriber = GameMqttSubscriber(
+            brokerHost = "mqtt.suecadaojogo.com",
+            brokerPort = 443,
+            protocol = "wss"
+        )
+        subscriber.connectAndSubscribe(
+            gameId = roomId,
+            onEnvelope = { envelope ->
+                runOnUiThread {
+                    envelope.hybridState?.let { hybrid ->
+                        hybridState = hybrid
+                        updateUiFromHybridState(hybrid)
+                    }
+                    envelope.state?.let { game ->
+                        gameState = game
+                        updateUiFromGameState(game)
+                    }
+                }
+            },
+            onConnectionError = { reason ->
+                Log.w("HybridActivity", "Hybrid MQTT disconnected: $reason")
+            }
+        )
+        hybridMqttSubscriber = subscriber
     }
 
     private fun connectHybridWebSocket() {
@@ -1337,6 +1387,7 @@ class HybridActivity : AppCompatActivity() {
         cvPauseDialog?.dismiss()
         cvPauseDialog = null
         hybridWsClient?.disconnect()
+        hybridMqttSubscriber?.disconnect()
         flashJob?.cancel()
         frameExecutor?.shutdown()
         cameraProvider?.unbindAll()

@@ -159,6 +159,7 @@ class GameMqttSubscriber(
                     
                     try {
                         subscribeWithLog(mqttClient, "sueca/games/$gameId/state", gameId, sid)
+                        subscribeWithLog(mqttClient, "sueca/games/$gameId/hybrid", gameId, sid)
                         subscribeWithLog(mqttClient, "sueca/games/$gameId/events", gameId, sid)
                         subscribeWithLog(mqttClient, "sueca/games/$gameId/players/+", gameId, sid)
                         subscribeWithLog(
@@ -291,6 +292,8 @@ class GameMqttSubscriber(
             val root = JsonParser.parseString(payload).asJsonObject
             val state = root.getAsJsonObjectOrNull("state")
                 ?.let { gson.fromJson(it, GameStatusResponse::class.java) }
+                ?: root.getAsJsonObjectOrNull("game_state")
+                    ?.let { gson.fromJson(it, GameStatusResponse::class.java) }
 
             val hybridState = root.getAsJsonObjectOrNull("hybrid_state")
                 ?.let { gson.fromJson(it, HybridRuntimeState::class.java) }

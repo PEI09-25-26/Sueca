@@ -85,7 +85,8 @@ class HybridWebSocketClient(
 
                     when (type) {
                         "state_update" -> {
-                            val hybridState = root.getAsJsonObject("hybrid_state")
+                            val hybridState = (root.getAsJsonObject("hybrid_state")
+                                ?: root.getAsJsonObject("state"))
                                 ?.let { gson.fromJson(it, HybridRuntimeState::class.java) }
                             val gameState = root.getAsJsonObject("game_state")
                                 ?.let { gson.fromJson(it, GameStatusResponse::class.java) }

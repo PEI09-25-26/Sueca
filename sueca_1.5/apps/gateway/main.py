@@ -89,6 +89,9 @@ def on_mqtt_message(client, userdata, msg):
                 "type": "state_update",
                 "hybrid_state": payload.get("hybrid_state", payload),
             }
+            game_state = payload.get("state")
+            if isinstance(game_state, dict):
+                broadcast_payload["game_state"] = game_state
         else:
             return
         

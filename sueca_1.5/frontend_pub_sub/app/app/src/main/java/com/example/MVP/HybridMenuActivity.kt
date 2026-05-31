@@ -57,7 +57,12 @@ class HybridMenuActivity : AppCompatActivity() {
                     }
 
                     LogUtils.i("Sala hibrida criada: $roomId")
-                    openHybridRoom(roomId = roomId, playerName = name, isHost = true)
+                    openHybridRoom(
+                        roomId = roomId,
+                        playerName = name,
+                        isHost = true,
+                        playerId = response.playerId.orEmpty()
+                    )
                 } catch (e: Exception) {
                     LogUtils.e("Nao foi possivel criar sala hibrida. Verifica o servidor.", e)
                 }
@@ -89,11 +94,17 @@ class HybridMenuActivity : AppCompatActivity() {
         }
     }
 
-    private fun openHybridRoom(roomId: String, playerName: String, isHost: Boolean) {
+    private fun openHybridRoom(
+        roomId: String,
+        playerName: String,
+        isHost: Boolean,
+        playerId: String = ""
+    ) {
         val intent = Intent(this, RoomHybridActivity::class.java)
         intent.putExtra("roomId", roomId)
         intent.putExtra("playerName", playerName)
         intent.putExtra("isHost", isHost)
+        intent.putExtra("playerId", playerId)
         startActivity(intent)
     }
 

@@ -7,6 +7,8 @@ from ..positions import Positions
 from ..card_mapper import CardMapper
 from ..agents.random_agent.random_agent import RandomAgent
 from ..agents.weak_agent import WeakAgent
+from ..agents.average_agent import AverageAgent
+from ..agents.smart_agent import SmartAgent
 import logging
 import requests
 import threading
@@ -670,6 +672,7 @@ class GameState:
 
         return {
             'game_id': self.game_id,
+            'creator_id': self.creator_id,
             'players': [
                 {
                     'id': p.player_id,
@@ -769,11 +772,12 @@ def create_weak_bot(bot_name, position=None, game_id=None):
     return agent
 
 def create_average_bot(bot_name, position=None, game_id=None):
-    agent = WeakAgent()
-    agent.agent_name = bot_name
-    agent.position = position
-    agent.game_id = game_id
-    return agent
+    return AverageAgent(agent_name=bot_name, game_id=game_id, position=position)
+
+
+def create_smart_bot(bot_name, position=None, game_id=None):
+    return SmartAgent(agent_name=bot_name, game_id=game_id, position=position)
+
 
 class BotFactory:
     """Factory for creating different types of bots."""
@@ -783,7 +787,10 @@ class BotFactory:
         'weak': create_weak_bot,
         'weak_agent': create_weak_bot,
         'average': create_average_bot,
-        'average_agent': create_average_bot
+        'average_agent': create_average_bot,
+        'smart': create_smart_bot,
+        'smart_agent': create_smart_bot,
+        'level4': create_smart_bot,
     }
     
     @classmethod

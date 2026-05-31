@@ -138,7 +138,7 @@ async def websocket_hybrid(websocket: WebSocket, game_id: str):
             if status_response.ok:
                 snapshot["game_state"] = status_json
             if hybrid_state_response.ok:
-                snapshot["state"] = hybrid_json.get("state")
+                snapshot["hybrid_state"] = hybrid_json.get("state")
             await websocket.send_text(json.dumps(snapshot))
         except Exception as exc:
             logger.warning("Failed to push hybrid WS snapshot for %s: %s", game_id, exc)

@@ -51,10 +51,20 @@ class GameClient:
             return
         if self.game_id:
             client.subscribe(f'sueca/games/{self.game_id}/state', qos=1)
+            client.subscribe(f'sueca/games/{self.game_id}/hybrid', qos=1)
 
     def _on_mqtt_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode('utf-8'))
+            if str(msg.topic).endswith('/hybrid'):
+                hybrid_state = payload.get('hybrid_state', payload)
+                if isinstance(hybrid_state, dict) and self.player_id:
+                    for entry in hybrid_state.get('virtual_players', []):
+                        if entry.get('player_id') == self.player_id:
+                            cards = entry.get('cards') or []
+                            self.my_hand = [int(c) for c in cards]
+                return
+
             state = payload.get('state')
             if state is not None:
                 self.latest_state = state
@@ -93,8 +103,13 @@ class GameClient:
             self.mqtt_connected = False
 
     def get_status(self):
-        if MQTT_EVENTS_ENABLED:
+        if MQTT_EVENTS_ENABLED and self.latest_state is not None:
             return self.latest_state
+        if MQTT_EVENTS_ENABLED and self.latest_state is None:
+            polled = self._get('/api/status', params={'game_id': self.game_id})
+            if polled and polled.get('success') is not False:
+                self.latest_state = polled
+                return polled
         params = {'game_id': self.game_id} if self.game_id else None
         data = self._get('/api/status', params=params)
         if data.get('success') is False and data.get('error'):

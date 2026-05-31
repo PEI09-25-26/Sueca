@@ -138,7 +138,7 @@ object GatewayClient {
         )
     }
 
-    suspend fun addBot(request: AddBotRequest): AddBotResponse {
+    suspend fun addBot(request: AddBotRequest, mode: String? = null): AddBotResponse {
         val payload = mapOf(
             "player_id" to request.playerId,
             "game_id" to request.gameId,
@@ -147,7 +147,7 @@ object GatewayClient {
             "name" to request.name
         )
 
-        val envelope = command("add_bot", gameId = request.gameId, mode = null, payload = payload)
+        val envelope = command("add_bot", gameId = request.gameId, mode = mode, payload = payload)
         val response = envelope.response
 
         return AddBotResponse(

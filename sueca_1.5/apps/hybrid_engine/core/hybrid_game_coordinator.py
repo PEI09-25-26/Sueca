@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 
 @dataclass
@@ -33,6 +33,7 @@ class HybridRoomState:
     # back to a distribution phase when virtual players later have fewer
     # cards because they played them.
     deal_finalized: bool = False
+    bot_player_ids: Set[str] = field(default_factory=set)
 
 
 class HybridGameCoordinator:
@@ -46,6 +47,59 @@ class HybridGameCoordinator:
             room = HybridRoomState(game_id=game_id)
             self._rooms[game_id] = room
         return room
+
+    def register_bot(self, game_id: str, player_id: str) -> HybridRoomState:
+        """Mark a player as an automated hybrid bot (virtual seat, no camera)."""
+        with self._lock:
+            room = self._get_room(game_id)
+            room.bot_player_ids.add(player_id)
+            room.player_roles[player_id] = "virtual"
+            if player_id not in room.virtual_order:
+                room.virtual_order.append(player_id)
+            if player_id not in room.virtual_hands:
+                room.virtual_hands[player_id] = []
+            return room
+
+    def is_bot(self, game_id: str, player_id: str) -> bool:
+        with self._lock:
+            room = self._rooms.get(game_id)
+            if room is None:
+                return False
+            return player_id in room.bot_player_ids
+
+    def sync_bot_hands_from_game(self, game_id: str, game) -> HybridRoomState:
+        """Copy server hands into virtual_hands for bot players (no physical deal)."""
+        with self._lock:
+            room = self._get_room(game_id)
+            for pid in list(room.bot_player_ids):
+                player = game.get_player(pid)
+                if not player:
+                    continue
+                room.virtual_hands[pid] = [int(c) for c in player.hand]
+                room.player_roles[pid] = "virtual"
+                if pid not in room.virtual_order:
+                    room.virtual_order.append(pid)
+            return room
+
+    def maybe_auto_finalize_bot_deal(self, game_id: str) -> HybridRoomState:
+        """Skip camera dealing when every virtual seat is a bot with full hands."""
+        with self._lock:
+            room = self._get_room(game_id)
+            virtual_ids = [
+                pid for pid, role in room.player_roles.items()
+                if role == "virtual"
+            ]
+            if not virtual_ids:
+                room.deal_finalized = True
+                return room
+            if not all(pid in room.bot_player_ids for pid in virtual_ids):
+                return room
+            if all(
+                len(room.virtual_hands.get(pid, [])) >= room.cards_per_virtual
+                for pid in virtual_ids
+            ):
+                room.deal_finalized = True
+            return room
 
     def register_player(self, game_id: str, player_id: str, role: str, is_host: bool) -> HybridRoomState:
         role = (role or "real").strip().lower()
@@ -224,6 +278,7 @@ class HybridGameCoordinator:
             "virtual_players": virtual_players,
             "pending_virtual_play": pending,
             "deal_done": room.deal_finalized if virtual_players else True,
+            "bot_player_ids": sorted(room.bot_player_ids),
         }
 
     def finalize_deal(self, game_id: str) -> HybridRoomState:
