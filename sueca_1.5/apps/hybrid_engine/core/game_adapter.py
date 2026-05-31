@@ -5,8 +5,8 @@ the hybrid service owns its gameplay workflow.
 """
 from typing import Tuple
 import logging
-import threading
 from apps.hybrid_engine.card_mapper import CardMapper
+from apps.hybrid_engine.core.game_core import EVENT_DISPATCHER
 
 from datetime import datetime, timezone
 
@@ -19,6 +19,9 @@ def play_card_hybrid_capture(game, player_id, card_str, force_renuncia=False) ->
     This mirrors the previous `play_card_hybrid_capture` method that lived inside
     the virtual engine, but keeps the implementation within hybrid_engine.
     """
+    card = None
+    trick_complete = False
+
     with game._play_lock:
         player = game.get_player(player_id)
         if not player:
@@ -90,12 +93,20 @@ def play_card_hybrid_capture(game, player_id, card_str, force_renuncia=False) ->
         if current_index + 1 < len(game.turn_order):
             game.current_player = game.turn_order[current_index + 1]
 
-    # Keep MQTT/state consumers in sync after every accepted play.
-    if len(game.round_plays) == 4:
-        game.current_player = None
-        game.round_resolving = True
-        game.round_timer = threading.Timer(1.69, game._finish_round)
-        game.round_timer.start()
+        trick_complete = len(game.round_plays) == 4
+        if trick_complete:
+            game._schedule_round_resolution()
 
+    event = {
+        'type': 'card_played',
+        'player': player.player_name,
+        'player_id': player.player_id,
+        'card': str(card),
+        'state': game.get_state(),
+        'game_id': game.game_id,
+    }
+    EVENT_DISPATCHER.dispatch(event)
+
+    # Keep MQTT/state consumers in sync after every accepted play.
     game._push_state('card_played')
     return True, f'Played {CardMapper.get_card(card)}'

@@ -131,6 +131,13 @@ class HybridGameCoordinator:
             room.pending_virtual_play = PendingVirtualPlay(player_id=player_id, card_id=int(card_id))
             return True, "Card selected. Waiting host confirmation", room
 
+    def clear_pending_virtual_play(self, game_id: str) -> HybridRoomState:
+        """Drop any stale virtual selection (e.g. after a trick ends)."""
+        with self._lock:
+            room = self._get_room(game_id)
+            room.pending_virtual_play = None
+            return room
+
     def get_pending_virtual_play(self, game_id: str) -> Optional[PendingVirtualPlay]:
         with self._lock:
             room = self._get_room(game_id)

@@ -97,6 +97,7 @@ class HybridActivity : AppCompatActivity() {
     private var isRunning = false
     private var hybridWsClient: HybridWebSocketClient? = null
     private var flashJob: Job? = null
+    private var trickResolutionSyncJob: Job? = null
     private val gson = Gson()
 
     private var inFlightRecognition = false
@@ -351,11 +352,30 @@ class HybridActivity : AppCompatActivity() {
             },
             onConnectionLost = { reason ->
                 Log.w("HybridActivity", "Hybrid WS connection lost: $reason")
-            }
+            },
+            onConnected = { requestSyncState() }
         )
 
         hybridWsClient?.connect()
         isRunning = true
+    }
+
+    private fun requestSyncState() {
+        if (roomId.isBlank()) return
+        hybridWsClient?.sendAction("sync_state", mapOf("game_id" to roomId))
+    }
+
+    /** Fallback when round_end MQTT/WS update was missed (e.g. reconnect during trick). */
+    private fun scheduleTrickResolutionSync() {
+        trickResolutionSyncJob?.cancel()
+        trickResolutionSyncJob = lifecycleScope.launch {
+            delay(2000)
+            if (!isActive) return@launch
+            val gs = gameState ?: return@launch
+            if (gs.roundPlays.size >= 4 && gs.currentPlayerId.isNullOrBlank()) {
+                requestSyncState()
+            }
+        }
     }
 
     private fun handleWebSocketActionResponse(action: String, response: JsonObject) {
@@ -403,6 +423,11 @@ class HybridActivity : AppCompatActivity() {
                         }
                     } else if (response.get("success")?.asBoolean == true) {
                         flashCheck("Carta captada")
+                        val trickDone = response.get("trick_completed")?.asBoolean == true
+                        val playsStillOnTable = gameState?.roundPlays?.size ?: 0
+                        if (!trickDone && playsStillOnTable >= 4) {
+                            scheduleTrickResolutionSync()
+                        }
                     }
                     inFlightRecognition = false
                 }
@@ -600,8 +625,7 @@ class HybridActivity : AppCompatActivity() {
                     "Carta escolhida por ${pending.playerName}. Joga-a na mesa para confirmar"
                 handAdapter.updateCards(buildRealCopyHand(state, currentPlayerId, pending))
             } else {
-                val current = gameState?.currentPlayer ?: "-"
-                recognitionProgressText.text = "Aguardar jogada captada. Vez: $current"
+                recognitionProgressText.text = hostPlayPhaseStatusText()
                 handAdapter.updateCards(buildRealCopyHand(state, currentPlayerId, pending))
             }
             recognitionStateImage.setImageResource(R.drawable.ic_hybrid_eye)
@@ -703,6 +727,28 @@ class HybridActivity : AppCompatActivity() {
         }
 
         maybeHostAutoCapture(state)
+
+        // MQTT round_end / card_played updates only carry game_state; refresh play UI labels.
+        hybridState?.let { updateUiFromHybridState(it) }
+    }
+
+    /** Host camera overlay: who should play next, or trick resolution in progress. */
+    private fun hostPlayPhaseStatusText(): String {
+        val gs = gameState
+        if (gs == null) {
+            return "Aguardar jogada captada"
+        }
+        val playsOnTable = gs.roundPlays.size
+        if (playsOnTable >= 4 && gs.currentPlayerId.isNullOrBlank()) {
+            scheduleTrickResolutionSync()
+            return "A resolver a volta..."
+        }
+        val name = gs.currentPlayer
+            ?: gs.players.firstOrNull { it.id == gs.currentPlayerId }?.name
+        if (name.isNullOrBlank()) {
+            return "Aguardar jogada captada"
+        }
+        return "Aguardar jogada captada. Vez: $name"
     }
 
     private fun showTrumpSelectionPhase(state: GameStatusResponse) {

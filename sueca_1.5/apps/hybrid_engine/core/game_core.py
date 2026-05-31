@@ -422,19 +422,40 @@ class GameState:
 
         trump_played = [
             play for play in self.round_plays
-            if CardMapper.get_card_suit(int(play['card'])) == self.trump_suit
+            if self.trump_suit and CardMapper.get_card_suit(int(play['card'])) == self.trump_suit
         ]
 
         if trump_played:
             winner_play = max(trump_played, key=lambda p: int(p['card']))
         else:
+            lead_suit = self.round_suit
+            if lead_suit is None and self.round_plays:
+                lead_suit = CardMapper.get_card_suit(int(self.round_plays[0]['card']))
+                self.round_suit = lead_suit
+
             round_suit_plays = [
                 play for play in self.round_plays
-                if CardMapper.get_card_suit(int(play['card'])) == self.round_suit
+                if CardMapper.get_card_suit(int(play['card'])) == lead_suit
             ]
+            if not round_suit_plays:
+                round_suit_plays = list(self.round_plays)
             winner_play = max(round_suit_plays, key=lambda p: int(p['card']))
 
         return self.get_player(winner_play['player_id'])
+
+    def _schedule_round_resolution(self):
+        """Start (or restart) the delayed trick-resolution timer."""
+        if self.round_timer:
+            try:
+                self.round_timer.cancel()
+            except Exception:
+                pass
+            self.round_timer = None
+
+        self.current_player = None
+        self.round_resolving = True
+        self.round_timer = threading.Timer(1.69, self._finish_round)
+        self.round_timer.start()
 
     def _calculate_round_points(self):
         total = 0
@@ -444,9 +465,32 @@ class GameState:
 
     def _finish_round(self):
         with self._play_lock:
+            if self.round_timer:
+                self.round_timer = None
+
+            if len(self.round_plays) != 4:
+                logger.warning(
+                    'Skipping round finish for game %s: expected 4 plays, got %s',
+                    self.game_id,
+                    len(self.round_plays),
+                )
+                self.round_resolving = False
+                return
+
             winner = self._determine_round_winner()
             if not winner:
+                logger.error(
+                    'Could not determine round winner for game %s (round=%s, plays=%s)',
+                    self.game_id,
+                    self.current_round,
+                    self.round_plays,
+                )
+                self.round_plays = []
+                self.round_suit = None
                 self.round_resolving = False
+                if self.last_winner:
+                    self._set_turn_order()
+                self._push_state('round_end_error')
                 return
 
             points = self._calculate_round_points()
@@ -555,6 +599,9 @@ class GameState:
             if current_index + 1 < len(self.turn_order):
                 self.current_player = self.turn_order[current_index + 1]
 
+            if len(self.round_plays) == 4:
+                self._schedule_round_resolution()
+
         event = {
             'type': 'card_played',
             'player': player.player_name,
@@ -565,21 +612,10 @@ class GameState:
         }
         EVENT_DISPATCHER.dispatch(event)
 
-        if len(self.round_plays) == 4:
-            self.current_player = None
-            self.round_resolving = True
-            self.round_timer = threading.Timer(1.69, self._finish_round)
-            self.round_timer.start()
-
-
         # Keep MQTT/state consumers in sync after every accepted play.
         self._push_state('card_played')
 
         return True, f'Played {CardMapper.get_card(card)}'
-
-    # Placeholder: capture behaviour removed from virtual engine core
-    # and implemented by the external service adapter.
-    pass
 
     def undo_last_play(self):
         with self._play_lock:

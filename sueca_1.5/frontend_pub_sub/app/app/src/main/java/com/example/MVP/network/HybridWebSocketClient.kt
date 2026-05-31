@@ -23,7 +23,8 @@ class HybridWebSocketClient(
     private val onStateUpdate: (hybridState: HybridRuntimeState?, gameState: GameStatusResponse?) -> Unit,
     private val onFrameReceived: (ByteArray) -> Unit,
     private val onActionResponse: (action: String, response: JsonObject) -> Unit,
-    private val onConnectionLost: (String) -> Unit = {}
+    private val onConnectionLost: (String) -> Unit = {},
+    private val onConnected: () -> Unit = {}
 ) {
     companion object {
         private const val TAG = "HybridWS"
@@ -68,6 +69,7 @@ class HybridWebSocketClient(
                 connected = true
                 reconnectAttempts = 0
                 Log.i(TAG, "Connected to hybrid WebSocket for room $roomId")
+                onConnected()
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {

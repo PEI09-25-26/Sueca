@@ -33,11 +33,13 @@ def on_mqtt_message(client, userdata, msg):
                 "type": "state_update",
                 "game_state": payload.get("state", payload),
             }
-        else:
+        elif topic.endswith("/hybrid"):
             broadcast_payload = {
                 "type": "state_update",
                 "hybrid_state": payload.get("hybrid_state", payload),
             }
+        else:
+            return
         
         async def broadcast():
             for ws in state.hybrid_stream_connections.get(game_id, []):

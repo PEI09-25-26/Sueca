@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import JSONResponse
 import logging
@@ -116,6 +118,25 @@ async def hybrid_state(game_id: str = Query(default=None)):
     room = hybrid_coordinator.get_room_state(resolved_game_id)
     _autofill_missing_real_players_for_hybrid(game)
     _maybe_skip_hybrid_cut(game, room)
+    return {"success": True, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
+
+
+@router.post("/api/hybrid/deal/finalize")
+async def hybrid_deal_finalize(data: dict = Body(default_factory=dict)):
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    host_player_id = data.get("player_id")
+    if not host_player_id:
+        return error("player_id is required", 400)
+
+    room = hybrid_coordinator.get_room_state(game_id)
+    if room.host_player_id and room.host_player_id != host_player_id:
+        return error("Only host can finalize deal", 403)
+
+    room = hybrid_coordinator.finalize_deal(game_id)
+    _push_hybrid_state(game, room)
     return {"success": True, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
 
 
@@ -325,6 +346,14 @@ async def hybrid_virtual_select_card(data: dict = Body(default_factory=dict)):
     except (TypeError, ValueError):
         return error("card must be an integer", 400)
 
+    current = game.current_player
+    if current is None:
+        return error("No active player", 400)
+    if current.player_id != player_id:
+        return error(f"Not {player_id}'s turn", 400)
+    if game.round_resolving or len(game.round_plays) >= 4:
+        return error("Round resolving, wait for next turn", 400)
+
     ok, message, room = hybrid_coordinator.select_virtual_card(game_id, player_id, card)
     status = 200 if ok else 400
     payload = {"success": ok, "message": message, "state": hybrid_coordinator.to_payload(room, _players_meta(game))}
@@ -422,6 +451,9 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         }
 
     pending = room.pending_virtual_play
+    if pending is not None and current.player_id != pending.player_id:
+        room = hybrid_coordinator.clear_pending_virtual_play(game_id)
+        pending = None
     played_this_round = {int(play["card"]) for play in game.round_plays}
 
     allow_cards: set[int] = set()
@@ -472,6 +504,14 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
     hybrid_vision.record_played_card(game_id, recognized.card_id)
     hybrid_referee.record_play(game_id, player_id, recognized.card_id, game.round_suit)
     room = hybrid_coordinator.confirm_play_success(game_id, player_id, recognized.card_id)
+
+    # Host UI reads this HTTP response; wait for the trick timer so game_state is post-round_end.
+    if len(game.round_plays) == 4 and game.round_resolving:
+        await asyncio.sleep(1.75)
+
+    if len(game.round_plays) == 0:
+        room = hybrid_coordinator.clear_pending_virtual_play(game_id)
+
     response_payload = {
         "success": True,
         "message": message,
@@ -479,6 +519,7 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         "captured_display": recognized.display,
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
         "game_state": game.get_state(),
+        "trick_completed": len(game.round_plays) == 0 and not game.round_resolving,
     }
     _push_hybrid_state(game, room)
     return response_payload

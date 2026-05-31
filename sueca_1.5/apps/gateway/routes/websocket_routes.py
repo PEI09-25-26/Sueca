@@ -112,6 +112,39 @@ async def websocket_hybrid(websocket: WebSocket, game_id: str):
     state.hybrid_stream_connections[game_id].append(websocket)
     logger.info("Hybrid WebSocket connected for game: %s (Total: %d)", game_id, len(state.hybrid_stream_connections[game_id]))
 
+    async def _push_initial_snapshot():
+        """Send latest game/hybrid state so clients recover after WS reconnect."""
+        try:
+            headers = {"Authorization": f"Bearer {token}"}
+            status_response = await asyncio.to_thread(
+                state.INTERNAL_HTTP.get,
+                f"{state.HYBRID_ENGINE_URL}/api/status",
+                params={"game_id": game_id},
+                headers=headers,
+                timeout=5,
+            )
+            hybrid_state_response = await asyncio.to_thread(
+                state.INTERNAL_HTTP.get,
+                f"{state.HYBRID_ENGINE_URL}/api/hybrid/state",
+                params={"game_id": game_id},
+                headers=headers,
+                timeout=5,
+            )
+            if not status_response.ok and not hybrid_state_response.ok:
+                return
+            status_json = status_response.json() if status_response.ok else {}
+            hybrid_json = hybrid_state_response.json() if hybrid_state_response.ok else {}
+            snapshot = {"type": "state_update"}
+            if status_response.ok:
+                snapshot["game_state"] = status_json
+            if hybrid_state_response.ok:
+                snapshot["state"] = hybrid_json.get("state")
+            await websocket.send_text(json.dumps(snapshot))
+        except Exception as exc:
+            logger.warning("Failed to push hybrid WS snapshot for %s: %s", game_id, exc)
+
+    asyncio.create_task(_push_initial_snapshot())
+
     try:
         while True:
             # We must wait for either text (JSON actions) or bytes (camera frames)
