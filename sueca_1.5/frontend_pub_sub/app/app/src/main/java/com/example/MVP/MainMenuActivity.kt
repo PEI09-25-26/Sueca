@@ -6,13 +6,13 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.*
 import com.example.MVP.network.RetrofitClient
 import com.example.MVP.network.GatewayClient
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -186,10 +186,10 @@ class MainMenuActivity : AppCompatActivity() {
                     intent.putExtra("playerName", name)
                     startActivity(intent)
                 } else {
-                    Toast.makeText(this@MainMenuActivity, "Erro ao aceitar convite: ${response.message}", Toast.LENGTH_SHORT).show()
+                    LogUtils.e("Erro ao aceitar convite: ${response.message}")
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@MainMenuActivity, "Erro de rede ao aceitar convite.", Toast.LENGTH_SHORT).show()
+                LogUtils.e("Erro de rede ao aceitar convite.", e)
             }
         }
     }
@@ -288,44 +288,21 @@ class MainMenuActivity : AppCompatActivity() {
                         GameSessionManager.saveToken(actualGameId, response.token)
                     }
 
-                    Toast.makeText(
-                        this@MainMenuActivity,
-                        "Vision AI Started!",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.i("Vision AI Started for game $actualGameId")
 
                     val intent = Intent(this@MainMenuActivity, VisionActivity::class.java)
                     intent.putExtra("playerName", name)
                     intent.putExtra("roomId", actualGameId)
                     startActivity(intent)
                 } else {
-                    Toast.makeText(
-                        this@MainMenuActivity,
-                        "Failed to start: ${response.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    LogUtils.e("Failed to start Vision AI: ${response.message}")
                 }
             } catch (e: retrofit2.HttpException) {
-                e.printStackTrace()
-                Toast.makeText(
-                    this@MainMenuActivity,
-                    "HTTP Error: ${e.code()} - ${e.message()}",
-                    Toast.LENGTH_LONG
-                ).show()
+                LogUtils.e("HTTP Error starting Vision AI: ${e.code()} - ${e.message()}", e)
             } catch (e: java.net.ConnectException) {
-                e.printStackTrace()
-                Toast.makeText(
-                    this@MainMenuActivity,
-                    "Cannot connect to server. Make sure middleware is running.",
-                    Toast.LENGTH_LONG
-                ).show()
+                LogUtils.e("Cannot connect to server for Vision AI. Make sure middleware is running.", e)
             } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(
-                    this@MainMenuActivity,
-                    "Error: ${e.javaClass.simpleName} - ${e.message}",
-                    Toast.LENGTH_LONG
-                ).show()
+                LogUtils.e("Error starting Vision AI: ${e.javaClass.simpleName} - ${e.message}", e)
             }
         }
     }

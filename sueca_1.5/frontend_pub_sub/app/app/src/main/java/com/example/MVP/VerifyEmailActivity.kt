@@ -5,9 +5,10 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.launch
 
 class VerifyEmailActivity : AppCompatActivity() {
@@ -27,7 +28,7 @@ class VerifyEmailActivity : AppCompatActivity() {
         val email = intent.getStringExtra("email") ?: ""
 
         if (verificationId.isBlank()) {
-            Toast.makeText(this, "Pedido de verificacao invalido", Toast.LENGTH_SHORT).show()
+            LogUtils.e("Pedido de verificacao invalido")
             finish()
             return
         }
@@ -41,7 +42,8 @@ class VerifyEmailActivity : AppCompatActivity() {
         verifyButton.setOnClickListener {
             val code = codeEditText.text.toString().trim()
             if (!code.matches(Regex("^\\d{6}$"))) {
-                Toast.makeText(this, "Codigo deve ter 6 digitos", Toast.LENGTH_SHORT).show()
+                codeEditText.error = "O código deve ter exatamente 6 dígitos."
+                LogUtils.w("Validation Error (VerifyEmail): Código inválido ($code).")
                 return@setOnClickListener
             }
             verifyCode(code)
@@ -53,21 +55,14 @@ class VerifyEmailActivity : AppCompatActivity() {
         lifecycleScope.launch {
             AuthManager.verifyEmailCode(verificationId, code)
                 .onSuccess { user ->
-                    Toast.makeText(
-                        this@VerifyEmailActivity,
-                        "Email verificado! Bem-vindo, ${user.username}!",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.i("Email verified successfully for user: ${user.username}")
                     startActivity(Intent(this@VerifyEmailActivity, MainMenuActivity::class.java))
                     finish()
                 }
                 .onFailure { error ->
                     verifyButton.isEnabled = true
-                    Toast.makeText(
-                        this@VerifyEmailActivity,
-                        "Verificacao falhou: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiError(this@VerifyEmailActivity, error)
+                    LogUtils.e("Verificacao falhou: ${error.message}", error)
                 }
         }
     }

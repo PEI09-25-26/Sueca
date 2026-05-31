@@ -5,13 +5,13 @@ import android.content.Intent
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.example.MVP.models.UpdateUserRequest
+import com.example.MVP.utils.ErrorDialogUtils
 import kotlinx.coroutines.launch
 
 class EditActivity : AppCompatActivity() {
@@ -66,7 +66,7 @@ class EditActivity : AppCompatActivity() {
     private fun promptDeleteAccountFlow() {
         val uid = AuthManager.getUid()
         if (uid.isNullOrBlank()) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Utilizador não autenticado.")
             return
         }
 
@@ -80,11 +80,7 @@ class EditActivity : AppCompatActivity() {
                             promptDeleteCode(uid)
                         }
                         .onFailure { error ->
-                            Toast.makeText(
-                                this@EditActivity,
-                                "Erro ao pedir verificacao: ${error.message}",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            ErrorDialogUtils.showApiError(this@EditActivity, error)
                         }
                 }
             }
@@ -103,24 +99,20 @@ class EditActivity : AppCompatActivity() {
             .setPositiveButton("Confirmar") { _, _ ->
                 val code = input.text?.toString()?.trim().orEmpty()
                 if (code.isBlank()) {
-                    Toast.makeText(this, "Codigo obrigatorio", Toast.LENGTH_SHORT).show()
+                    input.error = "O código é obrigatório."
                     return@setPositiveButton
                 }
                 lifecycleScope.launch {
                     AuthManager.confirmAccountDelete(uid, code)
                         .onSuccess {
-                            Toast.makeText(this@EditActivity, "Conta apagada", Toast.LENGTH_SHORT).show()
+                            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Conta apagada com sucesso.")
                             val intent = Intent(this@EditActivity, LoginActivity::class.java)
                             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
                             startActivity(intent)
                             finish()
                         }
                         .onFailure { error ->
-                            Toast.makeText(
-                                this@EditActivity,
-                                "Erro ao apagar conta: ${error.message}",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            ErrorDialogUtils.showApiError(this@EditActivity, error)
                         }
                 }
             }
@@ -131,8 +123,9 @@ class EditActivity : AppCompatActivity() {
     private fun loadCurrentUser() {
         val uid = AuthManager.getUid()
         if (uid == null) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
-            finish()
+            ErrorDialogUtils.showError(this, "Erro", "Utilizador não autenticado.") {
+                finish()
+            }
             return
         }
 
@@ -149,11 +142,9 @@ class EditActivity : AppCompatActivity() {
                     applyPhotoPreview(selectedPhoto)
                 }
                 .onFailure { error ->
-                    Toast.makeText(
-                        this@EditActivity,
-                        "Erro a carregar perfil: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), error) {
+                        loadCurrentUser()
+                    }
                 }
         }
     }
@@ -161,7 +152,7 @@ class EditActivity : AppCompatActivity() {
     private fun saveProfileChanges() {
         val uid = AuthManager.getUid()
         if (uid == null) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Utilizador não autenticado.")
             return
         }
 
@@ -177,16 +168,12 @@ class EditActivity : AppCompatActivity() {
 
             AuthManager.updateUser(uid, request)
                 .onSuccess {
-                    Toast.makeText(this@EditActivity, "Perfil atualizado", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Perfil atualizado com sucesso.")
                     finish()
                 }
                 .onFailure { error ->
                     saveButton.isEnabled = true
-                    Toast.makeText(
-                        this@EditActivity,
-                        "Erro ao guardar: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiError(this@EditActivity, error)
                 }
         }
     }

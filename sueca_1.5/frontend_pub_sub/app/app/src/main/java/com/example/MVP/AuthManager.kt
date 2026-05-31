@@ -2,15 +2,19 @@ package com.example.MVP
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.example.MVP.models.*
+import com.example.MVP.network.PresenceMqttManager
 import com.example.MVP.network.RetrofitClient
+import com.example.MVP.utils.LogUtils
 import org.json.JSONObject
 import retrofit2.HttpException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
+
 
 object AuthManager {
 	private const val PREFS_NAME = "SuecaAuthSecure"
@@ -169,27 +173,6 @@ object AuthManager {
 		return "Guest ${(1000..9999).random()}"
 	}
 
-	private fun extractApiErrorMessage(e: Exception): String {
-		when (e) {
-			is SocketTimeoutException -> return "Connection timed out. Check the device network and try again."
-			is UnknownHostException -> return "Cannot reach the server. Check DNS or internet access on this device."
-			is SSLException -> return "Secure connection failed. Check the device date/time and network trust settings."
-		}
-
-		if (e is HttpException) {
-			val body = e.response()?.errorBody()?.string()
-			if (!body.isNullOrBlank()) {
-				return try {
-					JSONObject(body).optString("message", "Request failed (${e.code()})")
-				} catch (_: Exception) {
-					"Request failed (${e.code()})"
-				}
-			}
-			return "Request failed (${e.code()})"
-		}
-		return e.message ?: "Unknown error"
-	}
-
 	suspend fun register(username: String, email: String, password: String): Result<String> {
 		return try {
 			val request = RegisterRequest(username, email, password)
@@ -201,7 +184,7 @@ object AuthManager {
 				Result.failure(Exception(response.message))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -217,7 +200,7 @@ object AuthManager {
 				Result.failure(Exception(response.message))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -233,7 +216,7 @@ object AuthManager {
 				Result.failure(Exception(response.message))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -247,7 +230,7 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to request password recovery"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -262,7 +245,7 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to reset password"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -290,7 +273,7 @@ object AuthManager {
 
 	suspend fun getUser(uid: String): Result<UserData> {
 		return try {
-			val token = getAuthHeader() ?: return Result.failure(Exception("No auth token"))
+			val token = getAuthHeader() ?: return Result.failure(Exception("No user logged in"))
 			val response = RetrofitClient.api.getUser(uid, token)
 
 			if (response.success && response.user != null) {
@@ -299,7 +282,7 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to get user"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -314,7 +297,7 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to get match history"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -330,7 +313,7 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to update user"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -346,7 +329,7 @@ object AuthManager {
 				Result.failure(Exception(response.message))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -363,7 +346,7 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to request delete"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -381,7 +364,7 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to delete account"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
@@ -397,12 +380,18 @@ object AuthManager {
 				Result.failure(Exception(response.message ?: "Failed to update presence"))
 			}
 		} catch (e: Exception) {
-			Result.failure(Exception(extractApiErrorMessage(e)))
+			Result.failure(e)
 		}
 	}
 
 	private fun saveUserData(user: UserData, token: String) {
 		if (!isInitialized()) return
+		LogUtils.i("Saving user data and token to secure storage for UID: ${user.uid}")
+		
+        // Trigger presence connection immediately upon login
+        Log.i("AuthManager", "Triggering PresenceMqttManager.connect from login")
+        PresenceMqttManager.connect(user.uid)
+
 		// Store to secure prefs when available, otherwise keep in-memory only
 		if (secureStorageAvailable) {
 			prefs.edit().apply {
@@ -437,6 +426,11 @@ object AuthManager {
 
 	private fun clearUserData() {
 		if (!isInitialized()) return
+		LogUtils.i("Clearing user data from storage (Logout/Cleanup)")
+        
+        // Disconnect presence MQTT on logout
+        PresenceMqttManager.disconnect()
+
 		// Clear in-memory and secure storage if used
 		inMemoryToken = null
 		inMemoryUid = null

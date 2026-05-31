@@ -6,10 +6,10 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.MatchHistoryEntry
+import com.example.MVP.utils.LogUtils
 import com.example.MVP.models.RoundData
 import kotlinx.coroutines.launch
 import com.example.MVP.utils.CardMapper
@@ -37,7 +37,7 @@ class MatchHistoryActivity : AppCompatActivity() {
 
         val uid = intent.getStringExtra(EXTRA_UID)
         if (uid == null) {
-            Toast.makeText(this, "Utilizador inválido", Toast.LENGTH_SHORT).show()
+            LogUtils.e("Acesso ao histórico com utilizador inválido (null)")
             finish()
             return
         }
