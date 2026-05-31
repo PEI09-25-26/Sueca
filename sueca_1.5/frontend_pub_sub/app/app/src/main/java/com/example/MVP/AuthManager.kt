@@ -2,9 +2,11 @@ package com.example.MVP
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.example.MVP.models.*
+import com.example.MVP.network.PresenceMqttManager
 import com.example.MVP.network.RetrofitClient
 import com.example.MVP.utils.LogUtils
 import org.json.JSONObject
@@ -12,6 +14,7 @@ import retrofit2.HttpException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
+
 
 object AuthManager {
 	private const val PREFS_NAME = "SuecaAuthSecure"
@@ -384,6 +387,11 @@ object AuthManager {
 	private fun saveUserData(user: UserData, token: String) {
 		if (!isInitialized()) return
 		LogUtils.i("Saving user data and token to secure storage for UID: ${user.uid}")
+		
+        // Trigger presence connection immediately upon login
+        Log.i("AuthManager", "Triggering PresenceMqttManager.connect from login")
+        PresenceMqttManager.connect(user.uid)
+
 		// Store to secure prefs when available, otherwise keep in-memory only
 		if (secureStorageAvailable) {
 			prefs.edit().apply {
@@ -419,6 +427,10 @@ object AuthManager {
 	private fun clearUserData() {
 		if (!isInitialized()) return
 		LogUtils.i("Clearing user data from storage (Logout/Cleanup)")
+        
+        // Disconnect presence MQTT on logout
+        PresenceMqttManager.disconnect()
+
 		// Clear in-memory and secure storage if used
 		inMemoryToken = null
 		inMemoryUid = null

@@ -33,8 +33,8 @@ object ErrorDialogUtils {
         val cleanMessage = cleanTechnicalMessage(message)
         LogUtils.w("UI Snackbar: $message (Clean: $cleanMessage)")
         
-        val duration = if (actionText != null) Snackbar.LENGTH_INDEFINITE else Snackbar.LENGTH_LONG
-        val snackbar = Snackbar.make(view, cleanMessage, duration)
+        // Using LENGTH_LONG ensures the message disappears after ~4 seconds
+        val snackbar = Snackbar.make(view, cleanMessage, Snackbar.LENGTH_LONG)
         if (actionText != null && action != null) {
             snackbar.setAction(actionText) { action() }
         } else {
