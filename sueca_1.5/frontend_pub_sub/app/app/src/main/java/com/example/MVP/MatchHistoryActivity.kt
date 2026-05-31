@@ -75,6 +75,7 @@ class MatchHistoryActivity : AppCompatActivity() {
         val card = inflater.inflate(R.layout.item_match_history, matchListContainer, false)
 
         val gameIdText = card.findViewById<TextView>(R.id.matchItemGameId)
+        val dateText = card.findViewById<TextView>(R.id.matchItemDate)
         val positionText = card.findViewById<TextView>(R.id.matchItemPosition)
         val trumpText = card.findViewById<TextView>(R.id.matchItemTrump)
         val scoreText = card.findViewById<TextView>(R.id.matchItemScore)
@@ -84,7 +85,21 @@ class MatchHistoryActivity : AppCompatActivity() {
         // Format game id — truncate to keep it tidy
         val gameId = entry.gameId ?: "N/A"
         val shortGameId = if (gameId.length > 18) gameId.take(15) + "…" else gameId
-        gameIdText.text = "Jogo: $shortGameId"
+        gameIdText.text = "Id da Sala: $shortGameId"
+
+        // Parse and format date from "YYYY-MM-DD..." to "DD/MM/YYYY"
+        val rawDate = entry.finishedAt?.take(10)
+        val formattedDate = if (rawDate != null && rawDate.length == 10) {
+            val parts = rawDate.split("-")
+            if (parts.size == 3) {
+                "${parts[2]}/${parts[1]}/${parts[0]}"
+            } else {
+                rawDate
+            }
+        } else {
+            "—"
+        }
+        dateText.text = formattedDate
 
         val positionDisplay = formatPosition(entry.position)
         positionText.text = "Posição: $positionDisplay"

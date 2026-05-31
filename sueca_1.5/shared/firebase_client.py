@@ -345,23 +345,13 @@ def get_firestore_db():
 
 
 def get_player_game_history(player_id: str) -> list[dict]:
-    """Fetch match history for a player from the player_game_history collection.
-
-    Documents are named '{friendCode}_{game_id}_{match_number}'.
-    We query using a prefix range on the document ID so we only retrieve
-    documents that belong to the given player_id (friendCode).
-
-    Returns a list of dicts with the following fields (excluded: finished_at, rounds):
-        game_id, gamestats, player_id, position, starting_hand, trump_suit
-    """
     _ensure_app()
     normalized_id = (player_id or "").strip()
     if not normalized_id:
         return []
 
-    # Firestore prefix query using range on document IDs.
     prefix = normalized_id + "_"
-    prefix_end = normalized_id + "`"  # '`' comes right after '_' in ASCII
+    prefix_end = normalized_id + "`"
 
     docs = (
         _DB.collection("player_game_history")
@@ -371,7 +361,7 @@ def get_player_game_history(player_id: str) -> list[dict]:
         .stream()
     )
 
-    excluded_fields = {"finished_at", "rounds"}
+    excluded_fields = {"rounds"}
     history = []
     for doc in docs:
         data = doc.to_dict() or {}
@@ -379,4 +369,5 @@ def get_player_game_history(player_id: str) -> list[dict]:
         entry["doc_id"] = doc.id
         history.append(entry)
 
+    history.sort(key=lambda x: x.get("finished_at") or "", reverse=True)
     return history

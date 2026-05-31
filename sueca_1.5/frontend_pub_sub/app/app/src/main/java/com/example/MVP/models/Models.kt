@@ -666,7 +666,8 @@ data class MatchHistoryEntry(
     @SerializedName("player_id") val playerId: String? = null,
     val position: String? = null,
     @SerializedName("starting_hand") val startingHand: List<String>? = null,
-    @SerializedName("trump_suit") val trumpSuit: String? = null
+    @SerializedName("trump_suit") val trumpSuit: String? = null,
+    @SerializedName("finished_at") val finishedAt: String? = null
 )
 
 data class MatchHistoryResponse(
