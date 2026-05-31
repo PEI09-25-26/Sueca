@@ -6,7 +6,8 @@ import android.util.Patterns
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -29,11 +30,13 @@ class RecoverPasswordActivity : AppCompatActivity() {
         sendCodeButton.setOnClickListener {
             val email = emailEditText.text.toString().trim()
             if (email.isBlank()) {
-                Toast.makeText(this, "Insere o email", Toast.LENGTH_SHORT).show()
+                emailEditText.error = "O endereço de email é obrigatório."
+                LogUtils.w("Validation Error (RecoverPassword): Email vazio.")
                 return@setOnClickListener
             }
             if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                Toast.makeText(this, "Email invalido", Toast.LENGTH_SHORT).show()
+                emailEditText.error = "Introduz um endereço de email válido."
+                LogUtils.w("Validation Error (RecoverPassword): Formato de email inválido ($email).")
                 return@setOnClickListener
             }
             requestRecoveryCode(email)
@@ -49,11 +52,7 @@ class RecoverPasswordActivity : AppCompatActivity() {
         lifecycleScope.launch {
             AuthManager.recoverPassword(email)
                 .onSuccess { verificationId ->
-                    Toast.makeText(
-                        this@RecoverPasswordActivity,
-                        "Codigo enviado para o email",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.i("Codigo de recuperacao enviado para $email")
                     val intent = Intent(this@RecoverPasswordActivity, ResetPasswordActivity::class.java)
                     intent.putExtra("verificationId", verificationId)
                     intent.putExtra("email", email)
@@ -62,11 +61,8 @@ class RecoverPasswordActivity : AppCompatActivity() {
                 }
                 .onFailure { error ->
                     sendCodeButton.isEnabled = true
-                    Toast.makeText(
-                        this@RecoverPasswordActivity,
-                        "Nao foi possivel enviar o codigo: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiError(this@RecoverPasswordActivity, error)
+                    LogUtils.e("Nao foi possivel enviar o codigo de recuperacao: ${error.message}", error)
                 }
         }
     }

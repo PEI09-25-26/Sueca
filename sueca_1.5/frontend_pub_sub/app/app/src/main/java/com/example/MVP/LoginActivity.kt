@@ -5,9 +5,10 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.launch
 
 class LoginActivity : AppCompatActivity() {
@@ -43,10 +44,19 @@ class LoginActivity : AppCompatActivity() {
             val username = usernameEditText.text.toString().trim()
             val password = passwordEditText.text.toString().trim()
 
-            if (username.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            var hasError = false
+            if (username.isEmpty()) {
+                usernameEditText.error = "Por favor, introduz o teu nome de utilizador."
+                LogUtils.w("Validation Error (Login): Nome de utilizador vazio.")
+                hasError = true
             }
+            if (password.isEmpty()) {
+                passwordEditText.error = "A palavra-passe é obrigatória."
+                LogUtils.w("Validation Error (Login): Palavra-passe vazia.")
+                hasError = true
+            }
+
+            if (hasError) return@setOnClickListener
 
             performLogin(username, password)
         }
@@ -61,7 +71,7 @@ class LoginActivity : AppCompatActivity() {
 
         anonymousLink.setOnClickListener {
             AuthManager.startAnonymousSession()
-            Toast.makeText(this, "Entraste como anonimo", Toast.LENGTH_SHORT).show()
+            LogUtils.i("Entraste como anonimo")
             startActivity(Intent(this, MainMenuActivity::class.java))
             finish()
         }
@@ -72,21 +82,14 @@ class LoginActivity : AppCompatActivity() {
         lifecycleScope.launch {
             AuthManager.login(username, password)
                 .onSuccess { user ->
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Welcome back, ${user.username}!",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.i("Login successful for user: ${user.username} (UID: ${user.uid})")
                     startActivity(Intent(this@LoginActivity, MainMenuActivity::class.java))
                     finish()
                 }
                 .onFailure { error ->
                     loginButton.isEnabled = true
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Login failed: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiError(this@LoginActivity, error)
+                    LogUtils.e("Login failed: ${error.message}", error)
                 }
         }
     }

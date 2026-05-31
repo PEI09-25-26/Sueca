@@ -5,9 +5,10 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.launch
 
 class RegisterActivity : AppCompatActivity() {
@@ -37,20 +38,31 @@ class RegisterActivity : AppCompatActivity() {
             val password = passwordEditText.text.toString().trim()
             val confirmPassword = confirmPasswordEditText.text.toString().trim()
 
-            if (username.isEmpty() || email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            var hasError = false
+            if (username.isEmpty()) {
+                usernameEditText.error = "O nome de utilizador é obrigatório."
+                LogUtils.w("Validation Error (Register): Nome de utilizador vazio.")
+                hasError = true
             }
-
-            if (password != confirmPassword) {
-                Toast.makeText(this, "Passwords do not match", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            if (email.isEmpty()) {
+                emailEditText.error = "O endereço de email é obrigatório."
+                LogUtils.w("Validation Error (Register): Email vazio.")
+                hasError = true
+            } else if (!isValidEmail(email)) {
+                emailEditText.error = "Introduz um endereço de email válido."
+                LogUtils.w("Validation Error (Register): Formato de email inválido ($email).")
+                hasError = true
             }
-
-            if (!isValidEmail(email)) {
-                Toast.makeText(this, "Invalid email format", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            if (password.isEmpty()) {
+                passwordEditText.error = "A palavra-passe é obrigatória."
+                LogUtils.w("Validation Error (Register): Palavra-passe vazia.")
+                hasError = true
+            } else if (password != confirmPassword) {
+                confirmPasswordEditText.error = "As palavras-passe não são iguais."
+                LogUtils.w("Validation Error (Register): Passwords não coincidem.")
+                hasError = true
             }
+            if (hasError) return@setOnClickListener
 
             performRegister(username, email, password)
         }
@@ -66,15 +78,12 @@ class RegisterActivity : AppCompatActivity() {
     }
 
     private fun performRegister(username: String, email: String, password: String) {
+        LogUtils.i("Registration started for user: $username ($email)")
         registerButton.isEnabled = false
         lifecycleScope.launch {
             AuthManager.register(username, email, password)
                 .onSuccess { verificationId ->
-                    Toast.makeText(
-                        this@RegisterActivity,
-                        "Codigo enviado para o email",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.i("Registo inicial com sucesso. Codigo enviado para $email")
                     val intent = Intent(this@RegisterActivity, VerifyEmailActivity::class.java)
                     intent.putExtra("verificationId", verificationId)
                     intent.putExtra("email", email)
@@ -83,11 +92,8 @@ class RegisterActivity : AppCompatActivity() {
                 }
                 .onFailure { error ->
                     registerButton.isEnabled = true
-                    Toast.makeText(
-                        this@RegisterActivity,
-                        "Registration failed: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiError(this@RegisterActivity, error)
+                    LogUtils.e("Registration failed: ${error.message}", error)
                 }
         }
     }

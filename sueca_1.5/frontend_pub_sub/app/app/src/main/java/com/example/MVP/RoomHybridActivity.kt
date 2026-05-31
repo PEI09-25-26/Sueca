@@ -15,6 +15,7 @@ import com.example.MVP.models.JoinGameRequest
 import com.example.MVP.models.Position
 import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -56,7 +57,7 @@ class RoomHybridActivity : AppCompatActivity() {
         isHost = intent.getBooleanExtra("isHost", false)
 
         if (roomId.isBlank()) {
-            Toast.makeText(this, "Sala invalida para modo hibrido.", Toast.LENGTH_SHORT).show()
+            LogUtils.e("Tentativa de abrir RoomHybrid com sala invalida")
             finish()
             return
         }
@@ -91,7 +92,7 @@ class RoomHybridActivity : AppCompatActivity() {
 
         btnStartHybridGame.setOnClickListener {
             if (selectedSeat.isBlank()) {
-                Toast.makeText(this, "Escolhe um lugar primeiro.", Toast.LENGTH_SHORT).show()
+                LogUtils.w("Tentativa de iniciar jogo hibrido sem escolher lugar")
                 return@setOnClickListener
             }
             goToHybridGame()
@@ -173,11 +174,7 @@ class RoomHybridActivity : AppCompatActivity() {
                 )
 
                 if (!response.success) {
-                    Toast.makeText(
-                        this@RoomHybridActivity,
-                        response.message ?: "Nao foi possivel entrar no lugar.",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.e(response.message ?: "Nao foi possivel entrar no lugar hibrido.")
                     return@launch
                 }
 
@@ -186,8 +183,8 @@ class RoomHybridActivity : AppCompatActivity() {
                 btnStartHybridGame.visibility = View.VISIBLE
                 hideAllSeatButtons()
                 renderSeatHint()
-            } catch (_: Exception) {
-                Toast.makeText(this@RoomHybridActivity, "Erro a ligar ao servidor.", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                LogUtils.e("Erro a ligar ao servidor para entrar em lugar hibrido.", e)
             }
         }
     }
