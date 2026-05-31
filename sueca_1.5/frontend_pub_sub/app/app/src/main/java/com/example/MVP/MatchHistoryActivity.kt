@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.MatchHistoryEntry
 import com.example.MVP.utils.LogUtils
+import com.example.MVP.models.RoundData
 import kotlinx.coroutines.launch
 import com.example.MVP.utils.CardMapper
 
@@ -75,6 +76,7 @@ class MatchHistoryActivity : AppCompatActivity() {
         val card = inflater.inflate(R.layout.item_match_history, matchListContainer, false)
 
         val gameIdText = card.findViewById<TextView>(R.id.matchItemGameId)
+        val dateText = card.findViewById<TextView>(R.id.matchItemDate)
         val positionText = card.findViewById<TextView>(R.id.matchItemPosition)
         val trumpText = card.findViewById<TextView>(R.id.matchItemTrump)
         val scoreText = card.findViewById<TextView>(R.id.matchItemScore)
@@ -84,7 +86,21 @@ class MatchHistoryActivity : AppCompatActivity() {
         // Format game id — truncate to keep it tidy
         val gameId = entry.gameId ?: "N/A"
         val shortGameId = if (gameId.length > 18) gameId.take(15) + "…" else gameId
-        gameIdText.text = "Jogo: $shortGameId"
+        gameIdText.text = "Id da Sala: $shortGameId"
+
+        // Parse and format date from "YYYY-MM-DD..." to "DD/MM/YYYY"
+        val rawDate = entry.finishedAt?.take(10)
+        val formattedDate = if (rawDate != null && rawDate.length == 10) {
+            val parts = rawDate.split("-")
+            if (parts.size == 3) {
+                "${parts[2]}/${parts[1]}/${parts[0]}"
+            } else {
+                rawDate
+            }
+        } else {
+            "—"
+        }
+        dateText.text = formattedDate
 
         val positionDisplay = formatPosition(entry.position)
         positionText.text = "Posição: $positionDisplay"
@@ -111,7 +127,103 @@ class MatchHistoryActivity : AppCompatActivity() {
         } else {
             "Mão inicial: \n —, —, —, —, —, —, —, —, —, —"
         }
+
+        val roundsContainer = card.findViewById<LinearLayout>(R.id.matchItemRoundsContainer)
+        val toggleText = card.findViewById<TextView>(R.id.matchItemRoundsToggleText)
+
+        card.setOnClickListener {
+            if (roundsContainer.visibility == View.VISIBLE) {
+                roundsContainer.visibility = View.GONE
+                toggleText.text = "▼ Toque para ver rondas"
+            } else {
+                roundsContainer.visibility = View.VISIBLE
+                toggleText.text = "▲ Toque para ocultar rondas"
+                if (roundsContainer.childCount == 0) {
+                    populateRoundsContainer(roundsContainer, entry)
+                }
+            }
+        }
+
         return card
+    }
+
+    private fun populateRoundsContainer(container: LinearLayout, entry: MatchHistoryEntry) {
+        val roundsMap = entry.rounds
+        if (roundsMap.isNullOrEmpty()) {
+            val emptyView = TextView(this)
+            emptyView.text = "Sem detalhes das rondas disponíveis."
+            emptyView.setTextColor(android.graphics.Color.GRAY)
+            emptyView.textSize = 13f
+            emptyView.gravity = android.view.Gravity.CENTER
+            emptyView.setPadding(0, 16, 0, 16)
+            container.addView(emptyView)
+            return
+        }
+
+        // Sort numerical: round_1, round_2, ..., round_10
+        val sortedRounds = roundsMap.entries.sortedBy { (key, _) ->
+            key.removePrefix("round_").toIntOrNull() ?: 0
+        }
+
+        val inflater = layoutInflater
+        sortedRounds.forEach { (key, roundData) ->
+            val roundView = inflater.inflate(R.layout.item_match_history_round, container, false)
+
+            val roundTitleText = roundView.findViewById<TextView>(R.id.roundItemTitle)
+            val leadSuitText = roundView.findViewById<TextView>(R.id.roundItemLeadSuit)
+            val playedCardText = roundView.findViewById<TextView>(R.id.roundItemPlayedCard)
+            val positionText = roundView.findViewById<TextView>(R.id.roundItemPosition)
+            val trickText = roundView.findViewById<TextView>(R.id.roundItemTrick)
+            val handText = roundView.findViewById<TextView>(R.id.roundItemHand)
+
+            val roundNumber = key.removePrefix("round_")
+            roundTitleText.text = "Ronda $roundNumber"
+
+            val leadSuitDisplay = trumpSuitDisplay(roundData.leadSuit)
+            leadSuitText.text = "Saída: $leadSuitDisplay"
+
+            val cardId = roundData.cardPlayed?.toIntOrNull()
+            val cardPlayedDisplay = cardId?.let { getDrawableCardName(it) } ?: "—"
+            playedCardText.text = "Jogou: $cardPlayedDisplay"
+
+            val pos = roundData.positionInTrick ?: 0
+            val posStr = when (pos) {
+                1 -> "1º a jogar"
+                2 -> "2º a jogar"
+                3 -> "3º a jogar"
+                4 -> "4º a jogar"
+                else -> "Posição: —"
+            }
+            positionText.text = posStr
+
+            // Format trick play order sequence: Card1 -> Card2 -> Card3 -> Card4
+            val trickList = roundData.cardsInTrick
+            if (!trickList.isNullOrEmpty()) {
+                val trickCardNames = trickList.mapIndexed { index, cardIdStr ->
+                    val cId = cardIdStr.toIntOrNull()
+                    val cName = cId?.let { getDrawableCardName(it) } ?: "?"
+                    val isOurs = (index + 1) == pos
+                    if (isOurs) "[$cName]" else cName
+                }
+                trickText.text = "Vaza: " + trickCardNames.joinToString(" → ")
+            } else {
+                trickText.text = "Vaza: —"
+            }
+
+            // Format starting hand for this round
+            val handList = roundData.handBeforePlay
+            if (!handList.isNullOrEmpty()) {
+                val handCardNames = handList.map { cardIdStr ->
+                    val cId = cardIdStr.toIntOrNull()
+                    cId?.let { getDrawableCardName(it) } ?: "?"
+                }
+                handText.text = "Mão antes: " + handCardNames.joinToString(", ")
+            } else {
+                handText.text = "Mão antes: —"
+            }
+
+            container.addView(roundView)
+        }
     }
 
     private fun trumpSuitDisplay(suit: String?): String {

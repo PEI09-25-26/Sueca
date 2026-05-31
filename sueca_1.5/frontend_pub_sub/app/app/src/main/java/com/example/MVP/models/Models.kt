@@ -659,6 +659,14 @@ data class GameStatsData(
     val winner: String? = null
 )
 
+data class RoundData(
+    @SerializedName("card_played") val cardPlayed: String? = null,
+    @SerializedName("cards_in_trick") val cardsInTrick: List<String>? = null,
+    @SerializedName("hand_before_play") val handBeforePlay: List<String>? = null,
+    @SerializedName("lead_suit") val leadSuit: String? = null,
+    @SerializedName("position_in_trick") val positionInTrick: Int? = null
+)
+
 data class MatchHistoryEntry(
     @SerializedName("doc_id") val docId: String? = null,
     @SerializedName("game_id") val gameId: String? = null,
@@ -666,7 +674,9 @@ data class MatchHistoryEntry(
     @SerializedName("player_id") val playerId: String? = null,
     val position: String? = null,
     @SerializedName("starting_hand") val startingHand: List<String>? = null,
-    @SerializedName("trump_suit") val trumpSuit: String? = null
+    @SerializedName("trump_suit") val trumpSuit: String? = null,
+    @SerializedName("finished_at") val finishedAt: String? = null,
+    val rounds: Map<String, RoundData>? = null
 )
 
 data class MatchHistoryResponse(
