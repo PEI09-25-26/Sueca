@@ -9,7 +9,6 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -18,6 +17,8 @@ import com.example.MVP.models.*
 import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.network.RetrofitClient
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -415,6 +416,7 @@ class RoomActivity : AppCompatActivity() {
     }
 
     private fun goToGame(state: GameStatusResponse) {
+        LogUtils.i("Transitioning to GameActivity for room ${state.gameId ?: roomId}")
         val intent = Intent(this, GameActivity::class.java)
         intent.putExtra("roomId", state.gameId ?: roomId)
         intent.putExtra("playerId", playerId)
@@ -473,11 +475,10 @@ class RoomActivity : AppCompatActivity() {
                     )
 
                     if (response.success) {
-                        Toast.makeText(
-                            this@RoomActivity,
-                            if (nextIsPublic) "Sala agora é pública" else "Sala agora é privada",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        ErrorDialogUtils.showSnackbar(
+                            findViewById(android.R.id.content),
+                            if (nextIsPublic) "Sala agora é pública" else "Sala agora é privada"
+                        )
 
                         // Update UI immediately
                         imgRoomVisibilityLock.setImageResource(if (nextIsPublic) R.drawable.ic_lock_open else R.drawable.ic_lock_closed)
@@ -485,14 +486,12 @@ class RoomActivity : AppCompatActivity() {
                         txtRoomVisibilityHint.text = if (nextIsPublic) "Qualquer pessoa pode entrar" else "Necessario codigo para entrar"
 
                     } else {
-                        Toast.makeText(
-                            this@RoomActivity,
-                            "Erro ao mudar visibilidade: ${response.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        ErrorDialogUtils.showError(this@RoomActivity, "Erro", "Não foi possível mudar a visibilidade: ${response.message}")
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(this@RoomActivity, "Erro de ligação.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                        imgRoomVisibilityLock.performClick()
+                    }
                 }
             }
         }
@@ -586,7 +585,8 @@ class RoomActivity : AppCompatActivity() {
 
     private fun changeSeatTo(position: String) {
         if (playerId.isBlank()) {
-            Toast.makeText(this, "Ainda sem player_id. Aguarda um instante.", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Aguardando identificação do jogador...")
+            LogUtils.w("Ainda sem player_id. Aguarda um instante.")
             return
         }
 
@@ -598,14 +598,16 @@ class RoomActivity : AppCompatActivity() {
             .orEmpty()
 
         if (normalizedPosition != myCurrentSeat && normalizedPosition !in cachedAvailablePositions) {
-            Toast.makeText(this, "Esse lugar nao esta livre.", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Esse lugar já não está livre.")
+            LogUtils.w("Esse lugar nao esta livre.")
             return
         }
 
         lifecycleScope.launch {
             try {
                 if (GameSessionManager.getAuthHeader(roomId).isNullOrBlank()) {
-                    Toast.makeText(this@RoomActivity, "Ainda sem sessao da sala. Aguarda 1s.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Sessão da sala ainda não disponível.")
+                    LogUtils.w("Ainda sem sessao da sala. Aguarda 1s.")
                     return@launch
                 }
 
@@ -616,16 +618,19 @@ class RoomActivity : AppCompatActivity() {
                 )
 
                 if (response.success) {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Lugar alterado.", Toast.LENGTH_SHORT).show()
+                    LogUtils.i("Seat selected successfully: $normalizedPosition")
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "Lugar alterado.")
                     val state = GatewayClient.getStatus(roomId)
                     if (state != null) {
                         applyState(state)
                     }
                 } else {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Nao foi possivel alterar lugar.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showError(this@RoomActivity, "Lugar Ocupado", response.message ?: "Não foi possível alterar lugar.")
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@RoomActivity, "Erro ao alterar lugar.", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    changeSeatTo(position)
+                }
             }
         }
     }
@@ -635,7 +640,7 @@ class RoomActivity : AppCompatActivity() {
         lifecycleScope.launch {
             FriendsManager.listFriends(uid, onlineOnly = true).onSuccess { friends ->
                 if (friends.isEmpty()) {
-                    Toast.makeText(this@RoomActivity, "Nenhum amigo online no momento.", Toast.LENGTH_SHORT).show()
+                    LogUtils.i("Nenhum amigo online no momento.")
                     return@onSuccess
                 }
 
@@ -653,8 +658,8 @@ class RoomActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Voltar", null)
                     .show()
-            }.onFailure {
-                Toast.makeText(this@RoomActivity, "Erro ao carregar amigos.", Toast.LENGTH_SHORT).show()
+            }.onFailure { error ->
+                LogUtils.e("Erro ao carregar amigos.", error)
             }
         }
     }
@@ -669,12 +674,14 @@ class RoomActivity : AppCompatActivity() {
                     token = token
                 )
                 if (response.success) {
-                    Toast.makeText(this@RoomActivity, "Convite enviado!", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Convite enviado!")
                 } else {
-                    Toast.makeText(this@RoomActivity, "Erro: ${response.message}", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showError(this@RoomActivity, "Erro ao convidar", response.message ?: "Falha ao enviar convite.")
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@RoomActivity, "Erro de rede.", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    sendInvitation(friendUid, position)
+                }
             }
         }
     }
@@ -712,7 +719,7 @@ class RoomActivity : AppCompatActivity() {
 
     private fun toggleBotPlacementMode(difficulty: String, namePrefix: String) {
         if (!isHost) {
-            Toast.makeText(this, "So o host pode adicionar bots.", Toast.LENGTH_SHORT).show()
+            LogUtils.w("So o host pode adicionar bots.")
             return
         }
 
@@ -726,7 +733,7 @@ class RoomActivity : AppCompatActivity() {
         botPlacementMode = true
         latestRoomState?.let { updateUI(it) }
         updateBotPlacementVisualState()
-        Toast.makeText(this, "Escolhe onde colocar o bot.", Toast.LENGTH_SHORT).show()
+        LogUtils.i("Escolhe onde colocar o bot.")
     }
 
     private fun exitBotPlacementMode() {
@@ -740,20 +747,20 @@ class RoomActivity : AppCompatActivity() {
     private fun addBotAtPosition(position: String) {
         val normalizedPosition = position.uppercase(Locale.ROOT)
         if (normalizedPosition !in cachedAvailablePositions) {
-            Toast.makeText(this, "Esse lugar nao esta livre.", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Lugar já ocupado.")
             return
         }
 
         val difficulty = pendingBotDifficulty ?: return
         if (playerId.isBlank()) {
-            Toast.makeText(this, "Ainda sem player_id do host. Aguarda 1s.", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Identificando anfitrião...")
             return
         }
 
         lifecycleScope.launch {
             try {
                 if (GameSessionManager.getAuthHeader(roomId).isNullOrBlank()) {
-                    Toast.makeText(this@RoomActivity, "Ainda sem sessao da sala. Entra numa posicao primeiro.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Entra numa posição primeiro.")
                     return@launch
                 }
 
@@ -769,20 +776,23 @@ class RoomActivity : AppCompatActivity() {
                 )
 
                 if (response.success) {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Bot adicionado.", Toast.LENGTH_SHORT).show()
+                    LogUtils.i("Bot added to position $normalizedPosition (difficulty: $difficulty, name: $botName)")
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "Bot adicionado.")
                     exitBotPlacementMode()
                 } else {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Nao foi possivel adicionar bot.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showError(this@RoomActivity, "Erro ao adicionar bot", response.message ?: "Não foi possível adicionar o bot.")
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@RoomActivity, "Erro ao adicionar bot.", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    addBotAtPosition(position)
+                }
             }
         }
     }
 
     private fun joinWithPosition(position: String) {
         if (playerId.isNotBlank()) {
-            Toast.makeText(this, "Ja escolheste um lugar.", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Já tens um lugar escolhido.")
             return
         }
 
@@ -799,12 +809,14 @@ class RoomActivity : AppCompatActivity() {
                 if (response.success) {
                     playerId = response.playerId ?: playerId
                     GameSessionManager.saveToken(roomId, response.token)
-                    Toast.makeText(this@RoomActivity, response.message ?: "Entraste na sala.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "Entraste na sala.")
                 } else {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Nao foi possivel escolher esse lugar.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showError(this@RoomActivity, "Erro ao entrar", response.message ?: "Não foi possível escolher esse lugar.")
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@RoomActivity, "Erro ao escolher lugar.", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    joinWithPosition(position)
+                }
             }
         }
     }
@@ -870,11 +882,11 @@ class RoomActivity : AppCompatActivity() {
 
     private fun removeParticipant(targetId: String, displayName: String) {
         if (!isHost) {
-            Toast.makeText(this, "So o host pode remover jogadores.", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Apenas o anfitrião pode remover jogadores.")
             return
         }
         if (playerId.isBlank()) {
-            Toast.makeText(this, "Host sem player_id. Aguarda 1s.", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Aguardando identificação do anfitrião...")
             return
         }
 
@@ -889,12 +901,14 @@ class RoomActivity : AppCompatActivity() {
                 )
 
                 if (response.success) {
-                    Toast.makeText(this@RoomActivity, response.message ?: "$displayName removido.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "$displayName removido.")
                 } else {
-                    Toast.makeText(this@RoomActivity, response.message ?: "Nao foi possivel remover.", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showError(this@RoomActivity, "Erro ao remover", response.message ?: "Não foi possível remover o jogador.")
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@RoomActivity, "Erro ao remover participante.", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    removeParticipant(targetId, displayName)
+                }
             }
         }
     }

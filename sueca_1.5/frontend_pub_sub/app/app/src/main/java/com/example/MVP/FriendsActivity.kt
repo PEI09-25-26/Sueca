@@ -9,7 +9,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -17,6 +16,8 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.example.MVP.models.IncomingFriendRequestData
 import com.example.MVP.models.PlayerStatsData
 import com.example.MVP.models.UserData
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,7 +79,8 @@ class FriendsActivity : AppCompatActivity() {
         addFriendButton.setOnClickListener {
             val friendCode = addFriendInput.text.toString().trim()
             if (friendCode.isBlank()) {
-                Toast.makeText(this, "Insere o codigo de amigo", Toast.LENGTH_SHORT).show()
+                addFriendInput.error = "Insere o código de amigo."
+                LogUtils.w("Insere o codigo de amigo")
                 return@setOnClickListener
             }
             sendFriendRequest(friendCode)
@@ -91,17 +93,19 @@ class FriendsActivity : AppCompatActivity() {
             FriendsManager.sendFriendRequestByCode(friendCode)
                 .onSuccess {
                     addFriendInput.text?.clear()
-                    Toast.makeText(this@FriendsActivity, "Pedido enviado", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Pedido de amizade enviado.")
                     loadPendingRequests()
                 }
                 .onFailure { error ->
                     val msg = error.message ?: "Erro desconhecido"
                     if (msg.contains("already friends", ignoreCase = true) || msg.contains("já são amigos", ignoreCase = true)) {
-                        Toast.makeText(this@FriendsActivity, "Já são amigos", Toast.LENGTH_SHORT).show()
+                        ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Vocês já são amigos.")
                     } else if (msg.contains("exists", ignoreCase = true)) {
-                        Toast.makeText(this@FriendsActivity, "Pedido já existe", Toast.LENGTH_SHORT).show()
+                        ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "O pedido de amizade já existe.")
                     } else {
-                        Toast.makeText(this@FriendsActivity, msg, Toast.LENGTH_SHORT).show()
+                        ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), error) {
+                            sendFriendRequest(friendCode)
+                        }
                     }
                 }
         }
@@ -181,19 +185,13 @@ class FriendsActivity : AppCompatActivity() {
             }
 
             result.onSuccess {
-                Toast.makeText(
-                    this@FriendsActivity,
-                    if (accept) "Pedido aceite" else "Pedido recusado",
-                    Toast.LENGTH_SHORT
-                ).show()
+                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), if (accept) "Pedido de amizade aceite." else "Pedido de amizade recusado.")
                 loadPendingRequests()
                 loadFriends()
             }.onFailure { error ->
-                Toast.makeText(
-                    this@FriendsActivity,
-                    "Erro: ${error.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), error) {
+                    respondToRequest(requestId, accept)
+                }
             }
         }
     }
@@ -201,7 +199,7 @@ class FriendsActivity : AppCompatActivity() {
     private fun loadFriends() {
         val uid = AuthManager.getUid()
         if (uid == null) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
+            LogUtils.e("User not logged in while loading friends")
             return
         }
 
@@ -212,11 +210,7 @@ class FriendsActivity : AppCompatActivity() {
                 friendsListView.adapter = adapter
                 adapter.notifyDataSetChanged()
             }.onFailure { error ->
-                Toast.makeText(
-                    this@FriendsActivity,
-                    "Error loading friends: ${error.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                LogUtils.e("Error loading friends: ${error.message}", error)
             }
         }
     }
@@ -230,7 +224,7 @@ class FriendsActivity : AppCompatActivity() {
             if (friend != null) {
                 showFriendInfoSheet(friend, request, showActions = true)
             } else {
-                Toast.makeText(this@FriendsActivity, "Nao foi possivel carregar o perfil.", Toast.LENGTH_SHORT).show()
+                LogUtils.e("Nao foi possivel carregar o perfil.")
             }
         }
     }
@@ -285,12 +279,14 @@ class FriendsActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     FriendsManager.removeFriend(friend.uid)
                         .onSuccess {
-                            Toast.makeText(this@FriendsActivity, "Amigo removido", Toast.LENGTH_SHORT).show()
+                            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Amigo removido.")
                             loadFriends()
                             dialog.dismiss()
                         }
                         .onFailure { error ->
-                            Toast.makeText(this@FriendsActivity, "Erro ao remover amigo: ${error.message}", Toast.LENGTH_SHORT).show()
+                            ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), error) {
+                                removeFriendButton.performClick()
+                            }
                         }
                 }
             }

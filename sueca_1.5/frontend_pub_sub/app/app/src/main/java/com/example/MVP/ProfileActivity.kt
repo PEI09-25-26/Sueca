@@ -5,12 +5,13 @@ import android.os.Bundle
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.button.MaterialButton
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.PlayerStatsData
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.launch
 
 class ProfileActivity : AppCompatActivity() {
@@ -107,16 +108,17 @@ class ProfileActivity : AppCompatActivity() {
     private fun loadUserProfile() {
         val uid = viewedUid
         if (uid == null) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
+            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Utilizador não autenticado.")
             return
         }
 
         lifecycleScope.launch {
             AuthManager.getUser(uid)
                 .onSuccess { user ->
-                    usernameTextView.text = "${user.username}"
-                    emailTextView.text = "${user.email}"
-                    descriptionTextView.text = "${user.description}"
+                    LogUtils.i("Successfully loaded profile for user: ${user.username}")
+                    usernameTextView.text = user.username
+                    emailTextView.text = user.email
+                    descriptionTextView.text = user.description
                     updateFriendsCount(user.uid, user.friendsCount)
                     applyBannerPreview(user.bannerURL)
                     applyPhotoPreview(user.photoURL)
@@ -125,11 +127,9 @@ class ProfileActivity : AppCompatActivity() {
                     applyPlayerStats(user.stats)
                 }
                 .onFailure { error ->
-                    Toast.makeText(
-                        this@ProfileActivity,
-                        "Failed to load profile: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), error) {
+                        loadUserProfile()
+                    }
                 }
         }
     }
@@ -195,7 +195,7 @@ class ProfileActivity : AppCompatActivity() {
     private fun performLogout() {
         lifecycleScope.launch {
             AuthManager.logout()
-            Toast.makeText(this@ProfileActivity, "Logged out", Toast.LENGTH_SHORT).show()
+            LogUtils.i("Logged out")
             val intent = Intent(this@ProfileActivity, LoginActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)

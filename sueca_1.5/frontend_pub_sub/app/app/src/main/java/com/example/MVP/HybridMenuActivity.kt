@@ -6,10 +6,10 @@ import android.text.InputFilter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.network.GatewayClient
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.launch
 
 class HybridMenuActivity : AppCompatActivity() {
@@ -46,28 +46,20 @@ class HybridMenuActivity : AppCompatActivity() {
                 try {
                     val response = GatewayClient.createRoom(name, mode = "hybrid")
                     if (!response.success) {
-                        Toast.makeText(
-                            this@HybridMenuActivity,
-                            response.message ?: "Falha ao criar sala hibrida.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        LogUtils.e(response.message ?: "Falha ao criar sala hibrida.")
                         return@launch
                     }
 
                     val roomId = response.gameId ?: response.roomId
                     if (roomId.isNullOrBlank()) {
-                        Toast.makeText(this@HybridMenuActivity, "Resposta invalida do servidor.", Toast.LENGTH_SHORT).show()
+                        LogUtils.e("Resposta invalida do servidor ao criar sala hibrida.")
                         return@launch
                     }
 
-                    Toast.makeText(this@HybridMenuActivity, "Sala hibrida criada: $roomId", Toast.LENGTH_SHORT).show()
+                    LogUtils.i("Sala hibrida criada: $roomId")
                     openHybridRoom(roomId = roomId, playerName = name, isHost = true)
                 } catch (e: Exception) {
-                    Toast.makeText(
-                        this@HybridMenuActivity,
-                        "Nao foi possivel criar sala. Verifica o servidor.",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.e("Nao foi possivel criar sala hibrida. Verifica o servidor.", e)
                 }
             }
         }
@@ -77,7 +69,7 @@ class HybridMenuActivity : AppCompatActivity() {
             val roomId = inputRoomId.text.toString().trim().uppercase()
 
             if (roomId.isBlank()) {
-                Toast.makeText(this, "Insere o ID da sala.", Toast.LENGTH_SHORT).show()
+                LogUtils.w("Tentativa de entrar em sala hibrida sem ID.")
                 return@setOnClickListener
             }
 
@@ -85,13 +77,13 @@ class HybridMenuActivity : AppCompatActivity() {
                 try {
                     val status = GatewayClient.getStatus(roomId)
                     if (status == null) {
-                        Toast.makeText(this@HybridMenuActivity, "Sala nao encontrada.", Toast.LENGTH_SHORT).show()
+                        LogUtils.e("Sala hibrida nao encontrada: $roomId")
                         return@launch
                     }
-                    Toast.makeText(this@HybridMenuActivity, "Entraste na sala: $roomId", Toast.LENGTH_SHORT).show()
+                    LogUtils.i("Entraste na sala hibrida: $roomId")
                     openHybridRoom(roomId = roomId, playerName = name, isHost = false)
                 } catch (e: Exception) {
-                    Toast.makeText(this@HybridMenuActivity, "Sala nao encontrada.", Toast.LENGTH_SHORT).show()
+                    LogUtils.e("Erro ao procurar sala hibrida: $roomId", e)
                 }
             }
         }

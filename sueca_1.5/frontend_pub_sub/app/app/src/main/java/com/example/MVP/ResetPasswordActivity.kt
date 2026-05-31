@@ -5,9 +5,10 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.launch
 
 class ResetPasswordActivity : AppCompatActivity() {
@@ -31,7 +32,7 @@ class ResetPasswordActivity : AppCompatActivity() {
         email = intent.getStringExtra("email") ?: ""
 
         if (verificationId.isBlank()) {
-            Toast.makeText(this, "Pedido de recuperacao invalido", Toast.LENGTH_SHORT).show()
+            LogUtils.e("Pedido de recuperacao invalido")
             finish()
             return
         }
@@ -50,18 +51,24 @@ class ResetPasswordActivity : AppCompatActivity() {
             val newPassword = newPasswordEditText.text.toString().trim()
             val confirmPassword = confirmPasswordEditText.text.toString().trim()
 
+            var hasError = false
             if (!code.matches(Regex("^\\d{6}$"))) {
-                Toast.makeText(this, "Codigo deve ter 6 digitos", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+                codeEditText.error = "O código deve ter exatamente 6 dígitos."
+                LogUtils.w("Validation Error (ResetPassword): Código inválido ($code).")
+                hasError = true
             }
-            if (newPassword.isBlank()) {
-                Toast.makeText(this, "Insere a nova password", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            if (newPassword.isEmpty()) {
+                newPasswordEditText.error = "A nova palavra-passe é obrigatória."
+                LogUtils.w("Validation Error (ResetPassword): Nova password vazia.")
+                hasError = true
             }
             if (newPassword != confirmPassword) {
-                Toast.makeText(this, "As passwords nao coincidem", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+                confirmPasswordEditText.error = "As palavras-passe não são iguais."
+                LogUtils.w("Validation Error (ResetPassword): Passwords não coincidem.")
+                hasError = true
             }
+
+            if (hasError) return@setOnClickListener
 
             resetPassword(code, newPassword)
         }
@@ -76,11 +83,7 @@ class ResetPasswordActivity : AppCompatActivity() {
         lifecycleScope.launch {
             AuthManager.resetPassword(verificationId, code, newPassword)
                 .onSuccess {
-                    Toast.makeText(
-                        this@ResetPasswordActivity,
-                        "Password atualizada com sucesso",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    LogUtils.i("Password atualizada com sucesso")
                     val intent = Intent(this@ResetPasswordActivity, LoginActivity::class.java)
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(intent)
@@ -88,11 +91,8 @@ class ResetPasswordActivity : AppCompatActivity() {
                 }
                 .onFailure { error ->
                     resetButton.isEnabled = true
-                    Toast.makeText(
-                        this@ResetPasswordActivity,
-                        "Nao foi possivel atualizar a password: ${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showApiError(this@ResetPasswordActivity, error)
+                    LogUtils.e("Nao foi possivel atualizar a password: ${error.message}", error)
                 }
         }
     }

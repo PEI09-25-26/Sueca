@@ -25,6 +25,8 @@ import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.network.RetrofitClient
 import com.example.MVP.utils.CardMapper
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -92,7 +94,7 @@ class GameActivity : AppCompatActivity() {
         gameId = intent.getStringExtra("roomId") ?: ""
 
         if (playerName.isEmpty()) {
-            Toast.makeText(this, "Player name required!", Toast.LENGTH_SHORT).show()
+            LogUtils.e("Player name required for GameActivity!")
             finish()
             return
         }
@@ -168,7 +170,8 @@ class GameActivity : AppCompatActivity() {
             if (isMyTurn && currentState?.phase == "playing") {
                 playCard(card)
             } else {
-                Toast.makeText(this, "Not your turn", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Não é a tua vez de jogar.")
+                LogUtils.w("Not your turn to play card")
             }
         }
 
@@ -396,6 +399,8 @@ class GameActivity : AppCompatActivity() {
 
         val team1 = state.teamScores?.team1 ?: 0
         val team2 = state.teamScores?.team2 ?: 0
+        LogUtils.i("Match Finished. Winner: ${if (team1 > team2) "Team 1" else if (team2 > team1) "Team 2" else "Draw"} | Final Score: $team1 - $team2")
+
         val winnerText = when {
             team1 > team2 -> "TEAM 1 (N/S) WINS"
             team2 > team1 -> "TEAM 2 (E/W) WINS"
@@ -501,13 +506,11 @@ class GameActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val res = GatewayClient.requestRematch(gameId)
-                Toast.makeText(
-                    this@GameActivity,
-                    res.message ?: if (res.success) "Rematch requested" else "Rematch failed",
-                    Toast.LENGTH_SHORT
-                ).show()
+                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: if (res.success) "Desforra solicitada" else "Falha ao pedir desforra")
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, "Rematch error: ${e.message}", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    requestRematch()
+                }
             }
         }
     }
@@ -519,11 +522,7 @@ class GameActivity : AppCompatActivity() {
             try {
                 val response = GatewayClient.getMatchPoints(gameId)
                 if (!response.success) {
-                    Toast.makeText(
-                        this@GameActivity,
-                        response.message ?: "Could not load match score",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ErrorDialogUtils.showError(this@GameActivity, "Erro", response.message ?: "Não foi possível carregar a pontuação.")
                     return@launch
                 }
 
@@ -542,7 +541,9 @@ class GameActivity : AppCompatActivity() {
                     .setPositiveButton("OK", null)
                     .show()
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, "Score error: ${e.message}", Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    showMatchScoreDialog()
+                }
             }
         }
     }
@@ -563,7 +564,7 @@ class GameActivity : AppCompatActivity() {
                 if (index != null && index in 1..40) {
                     cutDeck(index)
                 } else {
-                    Toast.makeText(this, "Invalid number", Toast.LENGTH_SHORT).show()
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Número inválido. Escolhe entre 1 e 40.")
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -571,7 +572,6 @@ class GameActivity : AppCompatActivity() {
     }
 
     private fun cutDeck(index: Int) {
-
         lifecycleScope.launch {
             try {
                 val res = GatewayClient.cutDeck(
@@ -582,23 +582,19 @@ class GameActivity : AppCompatActivity() {
                     )
                 )
 
-                Toast.makeText(
-                    this@GameActivity,
-                    res.message ?: "Deck cut",
-                    Toast.LENGTH_SHORT
-                ).show()
+                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: "Baralho cortado")
 
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, e.message, Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    cutDeck(index)
+                }
             }
         }
     }
 
     private fun selectTrump(choice: String) {
-
         lifecycleScope.launch {
             try {
-
                 val choiceEnum = if (choice.equals("top", ignoreCase = true)) Choice.TOP else Choice.BOTTOM
                 val res = GatewayClient.selectTrump(
                     SelectTrumpRequest(
@@ -608,14 +604,12 @@ class GameActivity : AppCompatActivity() {
                     )
                 )
 
-                Toast.makeText(
-                    this@GameActivity,
-                    res.message ?: "Trump selected",
-                    Toast.LENGTH_SHORT
-                ).show()
+                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: "Trunfo selecionado")
 
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, e.message, Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    selectTrump(choice)
+                }
             }
         }
     }
@@ -645,12 +639,12 @@ class GameActivity : AppCompatActivity() {
                     )
                 )
 
-                val toastMessage = res.message ?: if (res.success) "Card played" else "Illegal card"
-                Toast.makeText(
-                    this@GameActivity,
-                    toastMessage,
-                    Toast.LENGTH_SHORT
-                ).show()
+                if (res.success) {
+                    LogUtils.i("User played card: ${card.id} (Suit: ${card.suit}, Value: ${card.value})")
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: "Carta jogada")
+                } else {
+                    ErrorDialogUtils.showError(this@GameActivity, "Jogada Inválida", res.message ?: "Não podes jogar essa carta.")
+                }
 
                 if (!res.success) {
                     cachedRoundPlays = cachedRoundPlays.filterNot {
@@ -660,7 +654,9 @@ class GameActivity : AppCompatActivity() {
                 }
 
             } catch (e: Exception) {
-                Toast.makeText(this@GameActivity, e.message, Toast.LENGTH_SHORT).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    playCard(card)
+                }
                 cachedRoundPlays = cachedRoundPlays.filterNot {
                     it.playerName == playerName && it.card == card.id
                 }
@@ -731,6 +727,7 @@ class GameActivity : AppCompatActivity() {
             ?.position
 
         if (currentRound > previousRoundNumber && cachedRoundPlays.isNotEmpty()) {
+            LogUtils.i("Round $previousRoundNumber ended. Transitioning cards to winner.")
             displayCachedCardsAndAnimate()
             previousRoundNumber = currentRound
             return

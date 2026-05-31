@@ -13,7 +13,6 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -22,6 +21,8 @@ import com.example.MVP.models.GameInvite
 import com.example.MVP.network.RetrofitClient
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.models.JoinGameRequest
+import com.example.MVP.utils.ErrorDialogUtils
+import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,7 +79,7 @@ class OnlineMenuActivity : AppCompatActivity() {
             btnRefreshRooms.animate().rotationBy(360f).setDuration(500).start()
             lifecycleScope.launch {
                 refreshRoomsOnce()
-                Toast.makeText(this@OnlineMenuActivity, "Salas atualizadas", Toast.LENGTH_SHORT).show()
+                LogUtils.i("Salas atualizadas")
             }
         }
 
@@ -110,8 +111,10 @@ class OnlineMenuActivity : AppCompatActivity() {
                     if (response.success) {
                         val roomId = response.gameId ?: response.roomId
                         if (roomId.isNullOrBlank()) {
-                            Toast.makeText(this@OnlineMenuActivity, "Resposta invalida ao criar sala.", Toast.LENGTH_SHORT).show()
+                            ErrorDialogUtils.showError(this@OnlineMenuActivity, "Erro", "Resposta inválida ao criar sala.")
+                            LogUtils.e("Resposta invalida ao criar sala.")
                         } else {
+                            LogUtils.i("Room created successfully: $roomId")
                             refreshRoomsOnce()
                             goToRoom(
                                 roomId = roomId,
@@ -120,11 +123,12 @@ class OnlineMenuActivity : AppCompatActivity() {
                             )
                         }
                     } else {
-                        Toast.makeText(this@OnlineMenuActivity, "Erro ao criar sala: ${response.message}", Toast.LENGTH_SHORT).show()
+                        ErrorDialogUtils.showError(this@OnlineMenuActivity, "Erro ao criar sala", response.message ?: "Ocorreu um erro desconhecido.")
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    Toast.makeText(this@OnlineMenuActivity, "Connection error. Check if server is running.", Toast.LENGTH_LONG).show()
+                    ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                        btnCreateRoom.performClick()
+                    }
                 }
             }
         }
@@ -133,7 +137,8 @@ class OnlineMenuActivity : AppCompatActivity() {
             val roomId = inputRoomId.text.toString().trim().uppercase()
 
             if (roomId.isBlank()) {
-                Toast.makeText(this@OnlineMenuActivity, "Insere o ID da sala.", Toast.LENGTH_SHORT).show()
+                inputRoomId.error = "Por favor, insira o ID da sala."
+                LogUtils.w("Tentativa de entrar em sala sem ID.")
                 return@setOnClickListener
             }
 
@@ -358,21 +363,19 @@ class OnlineMenuActivity : AppCompatActivity() {
                     )
                 )
                 if (response.success) {
+                    LogUtils.i("Successfully joined room: $normalizedRoomId")
                     goToRoom(
                         roomId = normalizedRoomId,
                         playerName = playerName,
                         playerId = response.playerId.orEmpty()
                     )
                 } else {
-                    Toast.makeText(
-                        this@OnlineMenuActivity,
-                        response.message ?: "Nao foi possivel entrar na sala.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    ErrorDialogUtils.showError(this@OnlineMenuActivity, "Erro ao entrar", response.message ?: "Não foi possível entrar na sala.")
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(this@OnlineMenuActivity, "Sala nao encontrada ou servidor offline.", Toast.LENGTH_LONG).show()
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
+                    joinRoomById(roomId)
+                }
             }
         }
     }
@@ -539,10 +542,10 @@ class OnlineMenuActivity : AppCompatActivity() {
                 if (response.success) {
                     goToRoom(invite.gameId, name, response.playerId ?: "")
                 } else {
-                    Toast.makeText(this@OnlineMenuActivity, "Erro ao aceitar convite: ${response.message}", Toast.LENGTH_SHORT).show()
+                    LogUtils.e("Erro ao aceitar convite: ${response.message}")
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@OnlineMenuActivity, "Erro de rede ao aceitar convite.", Toast.LENGTH_SHORT).show()
+                LogUtils.e("Erro de rede ao aceitar convite.", e)
             }
         }
     }
