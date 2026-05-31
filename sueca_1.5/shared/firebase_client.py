@@ -361,7 +361,7 @@ def get_player_game_history(player_id: str) -> list[dict]:
         .stream()
     )
 
-    excluded_fields = {"rounds"}
+    excluded_fields = set()
     history = []
     for doc in docs:
         data = doc.to_dict() or {}
