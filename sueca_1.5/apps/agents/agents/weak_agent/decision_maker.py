@@ -1,4 +1,4 @@
-"""Decision maker for WeakAgent, ported from sueca_1.3 heuristics."""
+"""Decision maker for WeakAgent"""
 
 import random
 
