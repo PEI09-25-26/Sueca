@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import android.view.Gravity
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -27,6 +28,7 @@ import com.example.MVP.network.RetrofitClient
 import com.example.MVP.utils.CardMapper
 import com.example.MVP.utils.ErrorDialogUtils
 import com.example.MVP.utils.LogUtils
+import com.example.MVP.utils.showExitDialog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -117,13 +119,12 @@ class GameActivity : AppCompatActivity() {
 
     private fun setupUI() {
 
-        findViewById<ImageView>(R.id.backButton).setOnClickListener {
-            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-                .setMessage("Desistir do jogo?")
-                .setPositiveButton("Sim") { _, _ -> finish() }
-                .setNegativeButton("Nao", null)
-                .show()
-        }
+        findViewById<ImageView>(R.id.backButton).setOnClickListener { showExitConfirmationDialog() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                showExitConfirmationDialog()
+            }
+        })
 
         slotPlayer = findViewById(R.id.slotPlayer)
         slotPartner = findViewById(R.id.slotPartner)
@@ -1082,5 +1083,20 @@ class GameActivity : AppCompatActivity() {
         val id = resources.getIdentifier("${suit}_$value", "drawable", packageName)
 
         return if (id != 0) id else R.drawable.card_back
+    }
+
+    /**
+     * Shows a themed exit confirmation dialog. On confirm, cancels MQTT and polling before finishing.
+     */
+    private fun showExitConfirmationDialog() {
+        showExitDialog(
+            context = this,
+            title = "Sair do Jogo?",
+            message = "Tens a certeza que queres abandonar a partida?"
+        ) {
+            pollingJob?.cancel()
+            mqttSubscriber?.disconnect()
+            finish()
+        }
     }
 }

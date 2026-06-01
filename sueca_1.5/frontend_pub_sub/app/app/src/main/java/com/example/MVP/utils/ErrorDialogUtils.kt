@@ -14,16 +14,39 @@ object ErrorDialogUtils {
     /**
      * Shows a blocking error dialog for critical issues.
      */
-    fun showError(context: Context, title: String, message: String, onDismiss: (() -> Unit)? = null) {
+    fun showError(
+        context: Context,
+        title: String,
+        message: String,
+        buttonText: String = "OK",
+        onDismiss: (() -> Unit)? = null
+    ) {
         val cleanMessage = cleanTechnicalMessage(message)
         LogUtils.e("UI Error Dialog ($title): $message (Clean: $cleanMessage)")
         
-        AlertDialog.Builder(context, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle(title)
-            .setMessage(cleanMessage)
-            .setPositiveButton("OK") { _, _ -> onDismiss?.invoke() }
-            .setOnDismissListener { onDismiss?.invoke() }
-            .show()
+        val dialog = android.app.Dialog(context, com.example.MVP.R.style.CustomDialogTheme)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        
+        val inflater = android.view.LayoutInflater.from(context)
+        val view = inflater.inflate(com.example.MVP.R.layout.dialog_info, null)
+        dialog.setContentView(view)
+        
+        view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogTitle).text = title
+        view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogMessage).text = cleanMessage
+        
+        val btnOk = view.findViewById<android.widget.Button>(com.example.MVP.R.id.btnDialogOk)
+        btnOk.text = buttonText
+        btnOk.setOnClickListener {
+            dialog.dismiss()
+            onDismiss?.invoke()
+        }
+        
+        dialog.setOnDismissListener {
+            onDismiss?.invoke()
+        }
+        
+        dialog.show()
     }
 
     /**
@@ -33,13 +56,34 @@ object ErrorDialogUtils {
         val cleanMessage = cleanTechnicalMessage(message)
         LogUtils.w("UI Snackbar: $message (Clean: $cleanMessage)")
         
-        // Using LENGTH_LONG ensures the message disappears after ~4 seconds
         val snackbar = Snackbar.make(view, cleanMessage, Snackbar.LENGTH_LONG)
         if (actionText != null && action != null) {
             snackbar.setAction(actionText) { action() }
         } else {
             snackbar.setAction("OK") { snackbar.dismiss() }
         }
+        
+        // Custom styling to make it unified and premium
+        val snackbarView = snackbar.view
+        snackbarView.setBackgroundResource(com.example.MVP.R.drawable.snackbar_bg)
+        
+        // Adjust padding to make it elegant
+        val params = snackbarView.layoutParams as? android.view.ViewGroup.MarginLayoutParams
+        if (params != null) {
+            params.setMargins(16, 16, 16, 16)
+            snackbarView.layoutParams = params
+        }
+        
+        // Text styling
+        val textView = snackbarView.findViewById<android.widget.TextView>(com.google.android.material.R.id.snackbar_text)
+        textView.setTextColor(android.graphics.Color.WHITE)
+        textView.textSize = 14f
+        
+        // Action styling
+        val actionButton = snackbarView.findViewById<android.widget.Button>(com.google.android.material.R.id.snackbar_action)
+        actionButton.setTextColor(android.graphics.Color.parseColor("#FF9900")) // Bright orange accent
+        actionButton.setTypeface(null, android.graphics.Typeface.BOLD)
+        
         snackbar.show()
     }
 
@@ -54,10 +98,18 @@ object ErrorDialogUtils {
 
     /**
      * Maps API exceptions to user-friendly messages for Snackbars.
+     * Swapped to display a premium Dialog like requested.
      */
-    fun showApiSnackbar(view: View, throwable: Throwable, actionText: String? = "Tentar", action: (() -> Unit)? = null) {
+    fun showApiSnackbar(view: View, throwable: Throwable, actionText: String? = "OK", action: (() -> Unit)? = null) {
         val message = mapThrowableToMessage(throwable)
-        showSnackbar(view, message, actionText, action)
+        val context = view.context
+        showError(
+            context = context,
+            title = "Atenção",
+            message = message,
+            buttonText = "OK",
+            onDismiss = action
+        )
     }
 
     /**
