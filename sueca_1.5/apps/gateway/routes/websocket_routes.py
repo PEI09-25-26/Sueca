@@ -202,6 +202,7 @@ async def websocket_hybrid(websocket: WebSocket, game_id: str):
                                 "virtual_select_card": f"{state.HYBRID_ENGINE_URL}/api/hybrid/virtual/select_card",
                                 "play_confirm_capture": f"{state.HYBRID_ENGINE_URL}/api/hybrid/play/confirm_capture",
                                 "play_undo": f"{state.HYBRID_ENGINE_URL}/api/hybrid/play/undo",
+                                "confirm_trick": f"{state.HYBRID_ENGINE_URL}/api/hybrid/play/confirm_trick",
                                 "play_force_renuncia": f"{state.HYBRID_ENGINE_URL}/api/hybrid/play/force_renuncia",
                                 "select_trump": f"{state.HYBRID_ENGINE_URL}/api/select_trump",
                             }

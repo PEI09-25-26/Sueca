@@ -117,6 +117,7 @@ class GameState:
         self.round_plays = []
         self.round_suit = None
         self.round_resolving = False
+        self.trick_awaiting_confirmation = False
         self.round_timer = None
         self.current_player = None
 
@@ -140,6 +141,7 @@ class GameState:
         self.round_plays = []
         self.round_suit = None
         self.round_resolving = False
+        self.trick_awaiting_confirmation = False
         self.round_timer = None
         self.current_player = None
 
@@ -446,7 +448,7 @@ class GameState:
         return self.get_player(winner_play['player_id'])
 
     def _schedule_round_resolution(self):
-        """Start (or restart) the delayed trick-resolution timer."""
+        """Pause after the 4th card until the host confirms or corrects the trick."""
         if self.round_timer:
             try:
                 self.round_timer.cancel()
@@ -456,8 +458,19 @@ class GameState:
 
         self.current_player = None
         self.round_resolving = True
-        self.round_timer = threading.Timer(1.69, self._finish_round)
-        self.round_timer.start()
+        self.trick_awaiting_confirmation = True
+
+    def confirm_trick_resolution(self):
+        """Apply trick scoring after host review (called from hybrid confirm_trick API)."""
+        with self._play_lock:
+            if not self.trick_awaiting_confirmation:
+                return False, 'No trick awaiting confirmation'
+            if len(self.round_plays) != 4:
+                return False, 'Trick is not complete'
+            self.trick_awaiting_confirmation = False
+
+        self._finish_round()
+        return True, 'Trick confirmed'
 
     def _calculate_round_points(self):
         total = 0
@@ -629,6 +642,7 @@ class GameState:
                     self.round_timer.cancel()
                     self.round_timer = None
                 self.round_resolving = False
+                self.trick_awaiting_confirmation = False
 
             last_play = self.round_plays.pop()
             player = self.get_player(last_play['player_id'])
@@ -715,6 +729,8 @@ class GameState:
             'current_match_number': self.current_match_number,
             'last_match': self.match_history[-1] if self.match_history else None,
             'round_plays': self.round_plays,
+            'round_resolving': self.round_resolving,
+            'trick_awaiting_confirmation': self.trick_awaiting_confirmation,
             'available_slots': [
                 {'position': p.name, 'team': 'team1', 'team_label': 'N/S'}
                 for p in self.available_team_positions['team1']

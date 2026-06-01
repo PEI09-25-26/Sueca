@@ -423,9 +423,6 @@ async def hybrid_bot_confirm_play(data: dict = Body(default_factory=dict)):
     hybrid_referee.record_play(game_id, player_id, card_int, game.round_suit)
     room = hybrid_coordinator.confirm_play_success(game_id, player_id, card_int)
 
-    if len(game.round_plays) == 4 and game.round_resolving:
-        await asyncio.sleep(1.75)
-
     if len(game.round_plays) == 0:
         room = hybrid_coordinator.clear_pending_virtual_play(game_id)
 
@@ -435,6 +432,7 @@ async def hybrid_bot_confirm_play(data: dict = Body(default_factory=dict)):
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
         "game_state": game.get_state(),
         "trick_completed": len(game.round_plays) == 0 and not game.round_resolving,
+        "trick_awaiting_confirmation": game.trick_awaiting_confirmation,
     }
     _push_hybrid_state(game, room)
     return response_payload
@@ -621,10 +619,6 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
     hybrid_referee.record_play(game_id, player_id, recognized.card_id, game.round_suit)
     room = hybrid_coordinator.confirm_play_success(game_id, player_id, recognized.card_id)
 
-    # Host UI reads this HTTP response; wait for the trick timer so game_state is post-round_end.
-    if len(game.round_plays) == 4 and game.round_resolving:
-        await asyncio.sleep(1.75)
-
     if len(game.round_plays) == 0:
         room = hybrid_coordinator.clear_pending_virtual_play(game_id)
 
@@ -636,6 +630,30 @@ async def hybrid_confirm_capture(data: dict = Body(default_factory=dict)):
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
         "game_state": game.get_state(),
         "trick_completed": len(game.round_plays) == 0 and not game.round_resolving,
+        "trick_awaiting_confirmation": game.trick_awaiting_confirmation,
+    }
+    _push_hybrid_state(game, room)
+    return response_payload
+
+
+@router.post("/api/hybrid/play/confirm_trick")
+async def hybrid_confirm_trick(data: dict = Body(default_factory=dict)):
+    """Host confirms the completed trick after reviewing the four cards on the table."""
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    success, message = game.confirm_trick_resolution()
+    if not success:
+        return error(message, 400)
+
+    room = hybrid_coordinator.clear_pending_virtual_play(game_id)
+    response_payload = {
+        "success": True,
+        "message": message,
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "game_state": game.get_state(),
+        "trick_completed": True,
     }
     _push_hybrid_state(game, room)
     return response_payload

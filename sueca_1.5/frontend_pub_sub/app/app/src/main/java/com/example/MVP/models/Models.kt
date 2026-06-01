@@ -199,7 +199,9 @@ data class GameStatusResponse(
     @SerializedName("is_public") val isPublic: Boolean? = null,
     val scores: Map<String, Int>?,
     @SerializedName("available_slots") val availableSlots: List<LobbySlot>? = emptyList(),
-    @SerializedName("match_points") val matchPoints: MatchPoints? = null
+    @SerializedName("match_points") val matchPoints: MatchPoints? = null,
+    @SerializedName("trick_awaiting_confirmation") val trickAwaitingConfirmation: Boolean? = false,
+    @SerializedName("round_resolving") val roundResolving: Boolean? = false
 )
 
 data class GamePlayer(

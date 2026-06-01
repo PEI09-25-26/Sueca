@@ -41,4 +41,7 @@
     <string name="hybrid_cv_pause_deal_title">Distribuicao concluida</string>
     <string name="hybrid_cv_pause_deal_message">A distribuicao das cartas virtuais terminou. Organiza a mesa antes de comecar a jogar. Toca em Continuar quando estiveres pronto para detetar jogadas.</string>
     <string name="hybrid_cv_pause_continue">Continuar</string>
+    <string name="hybrid_trick_review_title">Volta concluida</string>
+    <string name="hybrid_trick_review_message">Confirma se as quatro cartas na mesa estao corretas antes de avancar para a proxima volta.</string>
+    <string name="hybrid_trick_review_fix">Corrigir ultima carta</string>
 </resources>

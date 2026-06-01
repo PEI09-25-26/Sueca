@@ -112,6 +112,7 @@ class HybridActivity : AppCompatActivity() {
     private var dealPauseShown = false
     private var lastDealDone = false
     private var cvPauseDialog: AlertDialog? = null
+    private var trickReviewDialogShownForKey: String? = null
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
@@ -125,6 +126,7 @@ class HybridActivity : AppCompatActivity() {
     private enum class CvPauseReason {
         AFTER_TRUMP,
         AFTER_DEAL,
+        AFTER_TRICK,
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -473,11 +475,7 @@ class HybridActivity : AppCompatActivity() {
                         }
                     } else if (response.get("success")?.asBoolean == true) {
                         flashCheck("Carta captada")
-                        val trickDone = response.get("trick_completed")?.asBoolean == true
-                        val playsStillOnTable = gameState?.roundPlays?.size ?: 0
-                        if (!trickDone && playsStillOnTable >= 4) {
-                            scheduleTrickResolutionSync()
-                        }
+                        gameState?.let { maybeShowTrickReviewDialog(it) }
                     }
                     inFlightRecognition = false
                 }
@@ -486,7 +484,23 @@ class HybridActivity : AppCompatActivity() {
                         recognitionProgressText.text = response.get("message")?.asString ?: "Falha ao selecionar trunfo"
                     }
                 }
-                "play_undo", "virtual_select_card", "register_player", "deal_reset", "sync_state", "deal_finalize", "play_force_renuncia" -> {
+                "play_undo" -> {
+                    if (response.get("success")?.asBoolean == true) {
+                        trickReviewDialogShownForKey = null
+                        cvPauseDialog?.dismiss()
+                        cvPauseDialog = null
+                        cvRecognitionPaused = false
+                    }
+                }
+                "confirm_trick" -> {
+                    if (response.get("success")?.asBoolean == true) {
+                        trickReviewDialogShownForKey = null
+                        cvPauseDialog?.dismiss()
+                        cvPauseDialog = null
+                        cvRecognitionPaused = false
+                    }
+                }
+                "virtual_select_card", "register_player", "deal_reset", "sync_state", "deal_finalize", "play_force_renuncia" -> {
                     // State is handled above when present.
                 }
             }
@@ -534,16 +548,41 @@ class HybridActivity : AppCompatActivity() {
             val titleRes = when (reason) {
                 CvPauseReason.AFTER_TRUMP -> R.string.hybrid_cv_pause_trump_title
                 CvPauseReason.AFTER_DEAL -> R.string.hybrid_cv_pause_deal_title
+                CvPauseReason.AFTER_TRICK -> R.string.hybrid_trick_review_title
             }
             val messageRes = when (reason) {
                 CvPauseReason.AFTER_TRUMP -> R.string.hybrid_cv_pause_trump_message
                 CvPauseReason.AFTER_DEAL -> R.string.hybrid_cv_pause_deal_message
+                CvPauseReason.AFTER_TRICK -> R.string.hybrid_trick_review_message
             }
 
-            cvPauseDialog = AlertDialog.Builder(this, R.style.CustomDialogTheme)
+            val dialogBuilder = AlertDialog.Builder(this, R.style.CustomDialogTheme)
                 .setTitle(titleRes)
                 .setMessage(messageRes)
                 .setCancelable(false)
+
+            if (reason == CvPauseReason.AFTER_TRICK) {
+                cvRecognitionPaused = true
+                dialogBuilder
+                    .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
+                        requestConfirmTrick()
+                        dialog.dismiss()
+                        cvPauseDialog = null
+                        cvRecognitionPaused = false
+                    }
+                    .setNegativeButton(R.string.hybrid_trick_review_fix) { dialog, _ ->
+                        trickReviewDialogShownForKey = null
+                        requestUndoMove()
+                        dialog.dismiss()
+                        cvPauseDialog = null
+                        cvRecognitionPaused = false
+                    }
+                cvPauseDialog = dialogBuilder.create()
+                cvPauseDialog?.show()
+                return@runOnUiThread
+            }
+
+            cvPauseDialog = dialogBuilder
                 .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
                     if (reason == CvPauseReason.AFTER_DEAL) {
                         lifecycleScope.launch {
@@ -732,6 +771,33 @@ class HybridActivity : AppCompatActivity() {
         )
     }
 
+    private fun requestConfirmTrick() {
+        if (roomId.isBlank()) return
+        hybridWsClient?.sendAction(
+            "confirm_trick",
+            mapOf(
+                "game_id" to roomId,
+                "host_player_id" to playerId
+            )
+        )
+    }
+
+    private fun trickReviewKey(state: GameStatusResponse): String {
+        val playsKey = state.roundPlays.joinToString("|") { "${it.playerName}:${it.card}" }
+        return "${state.currentRound}:$playsKey"
+    }
+
+    private fun maybeShowTrickReviewDialog(state: GameStatusResponse) {
+        if (!isHost || state.phase != "playing") return
+        if (state.trickAwaitingConfirmation != true) return
+        if (state.roundPlays.size < 4) return
+
+        val key = trickReviewKey(state)
+        if (trickReviewDialogShownForKey == key) return
+        trickReviewDialogShownForKey = key
+        showCvPauseDialog(CvPauseReason.AFTER_TRICK)
+    }
+
     private fun updateUiFromGameState(state: GameStatusResponse) {
         updateTableFromGameState(state)
 
@@ -778,20 +844,21 @@ class HybridActivity : AppCompatActivity() {
 
         maybeHostAutoCapture(state)
 
+        maybeShowTrickReviewDialog(state)
+
         // MQTT round_end / card_played updates only carry game_state; refresh play UI labels.
         hybridState?.let { updateUiFromHybridState(it) }
     }
 
-    /** Host camera overlay: who should play next, or trick resolution in progress. */
+    /** Host camera overlay: who should play next, or trick review in progress. */
     private fun hostPlayPhaseStatusText(): String {
         val gs = gameState
         if (gs == null) {
             return "Aguardar jogada captada"
         }
         val playsOnTable = gs.roundPlays.size
-        if (playsOnTable >= 4 && gs.currentPlayerId.isNullOrBlank()) {
-            scheduleTrickResolutionSync()
-            return "A resolver a volta..."
+        if (playsOnTable >= 4 && gs.trickAwaitingConfirmation == true) {
+            return "Confirma a volta na janela ou corrige a ultima carta"
         }
         val name = gs.currentPlayer
             ?: gs.players.firstOrNull { it.id == gs.currentPlayerId }?.name
@@ -1185,6 +1252,11 @@ class HybridActivity : AppCompatActivity() {
             // Se for a vez de um virtual e ele ainda não escolheu, paramos de enviar frames (mas mantemos o preview)
             // IMPORTANTE: Só impedimos se a distribuição já estiver concluída.
             if (isDistributionReallyDone(localHybrid) && currentRole == "virtual" && pending == null) {
+                return
+            }
+
+            if (localGame?.trickAwaitingConfirmation == true) {
+                inFlightRecognition = false
                 return
             }
 
