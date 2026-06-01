@@ -21,6 +21,7 @@ import android.widget.TextView
 import android.widget.LinearLayout
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.Camera
@@ -51,6 +52,7 @@ import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.HybridWebSocketClient
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.utils.CardMapper
+import com.example.MVP.utils.showExitDialog
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import java.io.ByteArrayOutputStream
@@ -149,7 +151,12 @@ class HybridActivity : AppCompatActivity() {
             return
         }
 
-        findViewById<ImageView>(R.id.backButton).setOnClickListener { finish() }
+        findViewById<ImageView>(R.id.backButton).setOnClickListener { showExitConfirmationDialog() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                showExitConfirmationDialog()
+            }
+        })
 
         modeSwitch = findViewById(R.id.activity_hybrid_switch)
         previewView = findViewById(R.id.previewView)
@@ -1612,6 +1619,7 @@ class HybridActivity : AppCompatActivity() {
         }
     }
 
+
     private fun allPermissionsGranted(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
@@ -1640,6 +1648,25 @@ class HybridActivity : AppCompatActivity() {
             grantResults[0] == PackageManager.PERMISSION_GRANTED
         ) {
             startCameraPipeline()
+        }
+    }
+
+    /**
+     * Shows a themed exit confirmation dialog.
+     * Cleans up WebSocket, MQTT, camera and coroutine resources on confirmation.
+     */
+    private fun showExitConfirmationDialog() {
+        showExitDialog(
+            context = this,
+            title = "Desistir do Jogo?",
+            message = "Tens a certeza que queres abandonar a partida?"
+        ) {
+            hybridWsClient?.disconnect()
+            hybridMqttSubscriber?.disconnect()
+            flashJob?.cancel()
+            frameExecutor?.shutdown()
+            cameraProvider?.unbindAll()
+            finish()
         }
     }
 }

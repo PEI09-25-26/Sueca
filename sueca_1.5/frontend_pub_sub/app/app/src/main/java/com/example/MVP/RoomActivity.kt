@@ -19,6 +19,7 @@ import com.example.MVP.network.GatewayClient
 import com.example.MVP.network.RetrofitClient
 import com.example.MVP.utils.ErrorDialogUtils
 import com.example.MVP.utils.LogUtils
+import com.example.MVP.utils.showExitDialog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -560,23 +561,30 @@ class RoomActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Shows a themed exit confirmation dialog before leaving the room.
+     * Calls leaveRoom API, then cancels MQTT/polling and finishes on confirm.
+     */
     private fun leaveRoomAndExit() {
         if (roomId == "SALA_LOCAL") {
             finish()
             return
         }
 
-        if (playerId.isBlank()) {
-            finish()
-            return
-        }
-
-        lifecycleScope.launch {
-            try {
-                runCatching {
-                    GatewayClient.leaveRoom(roomId, playerId)
+        showExitDialog(
+            context = this,
+            title = "Sair da Sala?",
+            message = "Tens a certeza que queres sair desta sala?"
+        ) {
+            pollingJob?.cancel()
+            stabilizationJob?.cancel()
+            mqttSubscriber?.disconnect()
+            if (playerId.isNotBlank()) {
+                lifecycleScope.launch {
+                    runCatching { GatewayClient.leaveRoom(roomId, playerId) }
+                    finish()
                 }
-            } finally {
+            } else {
                 finish()
             }
         }
