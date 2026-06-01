@@ -211,19 +211,21 @@ class ProfileActivity : AppCompatActivity() {
     }
 
     private fun showCreateAccountPrompt() {
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle("Criar conta")
-            .setMessage("Para aceder ao perfil precisas de criar ou iniciar conta.")
-            .setPositiveButton("Registar") { _, _ ->
+        com.example.MVP.utils.showCustomConfirmDialog(
+            context = this,
+            title = "Criar conta",
+            message = "Para aceder ao perfil precisas de criar ou iniciar conta.",
+            positiveText = "REGISTAR",
+            negativeText = "LOGIN",
+            onConfirm = {
                 startActivity(Intent(this, RegisterActivity::class.java))
                 finish()
-            }
-            .setNegativeButton("Login") { _, _ ->
+            },
+            onCancel = {
                 startActivity(Intent(this, LoginActivity::class.java))
                 finish()
             }
-            .setCancelable(false)
-            .show()
+        )
     }
 
 }

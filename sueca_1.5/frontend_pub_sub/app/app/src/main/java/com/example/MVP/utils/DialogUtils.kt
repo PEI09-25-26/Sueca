@@ -24,7 +24,31 @@ fun showExitDialog(
     message: String,
     onConfirm: () -> Unit
 ) {
-    val dialog = Dialog(context)
+    showCustomConfirmDialog(
+        context = context,
+        title = title,
+        message = message,
+        positiveText = "SIM",
+        negativeText = "NÃO",
+        onConfirm = onConfirm
+    )
+}
+
+/**
+ * Displays a customizable themed two-button confirmation dialog.
+ */
+fun showCustomConfirmDialog(
+    context: Context,
+    title: String,
+    message: String,
+    positiveText: String = "SIM",
+    negativeText: String = "NÃO",
+    neutralText: String? = null,
+    onConfirm: () -> Unit,
+    onCancel: (() -> Unit)? = null,
+    onNeutral: (() -> Unit)? = null
+) {
+    val dialog = Dialog(context, com.example.MVP.R.style.CustomDialogTheme)
     dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
     dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
@@ -34,12 +58,30 @@ fun showExitDialog(
     view.findViewById<TextView>(R.id.dialogTitle).text = title
     view.findViewById<TextView>(R.id.dialogMessage).text = message
 
-    view.findViewById<Button>(R.id.btnDialogNo).setOnClickListener {
+    val btnNo = view.findViewById<Button>(R.id.btnDialogNo)
+    btnNo.text = negativeText
+    btnNo.setOnClickListener {
         dialog.dismiss()
+        onCancel?.invoke()
     }
-    view.findViewById<Button>(R.id.btnDialogYes).setOnClickListener {
+
+    val btnYes = view.findViewById<Button>(R.id.btnDialogYes)
+    btnYes.text = positiveText
+    btnYes.setOnClickListener {
         dialog.dismiss()
         onConfirm()
+    }
+
+    val btnNeutral = view.findViewById<Button>(R.id.btnDialogNeutral)
+    if (neutralText != null) {
+        btnNeutral.visibility = android.view.View.VISIBLE
+        btnNeutral.text = neutralText
+        btnNeutral.setOnClickListener {
+            dialog.dismiss()
+            onNeutral?.invoke()
+        }
+    } else {
+        btnNeutral.visibility = android.view.View.GONE
     }
 
     dialog.show()

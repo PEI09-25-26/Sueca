@@ -51,36 +51,11 @@
         android:gravity="end">
 
         <Button
-            android:id="@+id/btnDialogNeutral"
+            android:id="@+id/btnDialogOk"
             style="?attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:text="CANCELAR"
-            android:textColor="#80FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.05"
-            android:layout_marginEnd="4dp"
-            android:visibility="gone" />
-
-        <Button
-            android:id="@+id/btnDialogNo"
-            style="?attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:text="NÃO"
-            android:textColor="#80FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.05"
-            android:layout_marginEnd="4dp" />
-
-        <Button
-            android:id="@+id/btnDialogYes"
-            style="?attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:text="SIM"
+            android:text="OK"
             android:textColor="#FF9900"
             android:textSize="13sp"
             android:textStyle="bold"

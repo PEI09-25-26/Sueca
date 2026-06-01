@@ -456,18 +456,22 @@ class OnlineMenuActivity : AppCompatActivity() {
     }
 
     private fun showCreateAccountPrompt(message: String) {
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle("Criar conta")
-            .setMessage(message)
-            .setPositiveButton("Registar") { _, _ ->
+        com.example.MVP.utils.showCustomConfirmDialog(
+            context = this,
+            title = "Criar conta",
+            message = message,
+            positiveText = "REGISTAR",
+            negativeText = "LOGIN",
+            neutralText = "CANCELAR",
+            onConfirm = {
                 startActivity(Intent(this, RegisterActivity::class.java))
-            }
-            .setNegativeButton("Login") { _, _ ->
+            },
+            onCancel = {
                 startActivity(Intent(this, LoginActivity::class.java))
                 finish()
-            }
-            .setNeutralButton("Cancelar", null)
-            .show()
+            },
+            onNeutral = {}
+        )
     }
 
     private fun goToRoom(roomId: String, playerName: String, playerId: String) {
@@ -509,16 +513,19 @@ class OnlineMenuActivity : AppCompatActivity() {
     }
 
     private fun showInviteNotification(invite: GameInvite) {
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle("Convite de Jogo")
-            .setMessage("${invite.inviterName} convidou-te para um jogo na posição ${invite.position}!")
-            .setPositiveButton("Aceitar") { _, _ ->
+        com.example.MVP.utils.showCustomConfirmDialog(
+            context = this,
+            title = "Convite de Jogo",
+            message = "${invite.inviterName} convidou-te para um jogo na posição ${invite.position}!",
+            positiveText = "ACEITAR",
+            negativeText = "RECUSAR",
+            onConfirm = {
                 acceptInvite(invite)
-            }
-            .setNegativeButton("Recusar") { _, _ ->
+            },
+            onCancel = {
                 declineInvite(invite)
             }
-            .show()
+        )
     }
 
     private fun acceptInvite(invite: GameInvite) {
