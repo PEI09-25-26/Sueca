@@ -1,4 +1,1 @@
-from .opencv import CardDetector
-from .yolo import CardClassifier
-
-__all__ = ["CardDetector", "CardClassifier"]
+"""Hybrid-local computer vision helpers."""

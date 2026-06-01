@@ -43,3 +43,9 @@ class CommandRequestDTO(BaseModel):
     game_id: Optional[str] = None
     mode: Optional[str] = None
     payload: dict[str, Any] = {}
+
+
+class CorrectCardRequest(BaseModel):
+    rank: str
+    suit: str
+    wrong_label: Optional[str] = None

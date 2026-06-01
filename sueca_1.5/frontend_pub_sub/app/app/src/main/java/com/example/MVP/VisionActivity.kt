@@ -133,6 +133,8 @@ class VisionActivity : AppCompatActivity() {
     private var resetRunnable: Runnable? = null
     private var lastWebSocketMessage: String? = null
 
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var imageAnalyzer: ImageAnalysis? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -175,39 +177,65 @@ class VisionActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (setupComplete && !cvEnabled) {
+            startCameraSession()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopCamera()
+    }
+
     // ------------------ CAMERA X ---------------------
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(findViewById<PreviewView>(R.id.previewView).surfaceProvider)
-            }
-
-            val imageAnalyzer = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-
-            imageAnalyzer.setAnalyzer(executor) { imageProxy ->
-                sendFrameToBackend(imageProxy)
-            }
-
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
             try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
+                cameraProvider = cameraProviderFuture.get()
+
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(findViewById<PreviewView>(R.id.previewView).surfaceProvider)
+                }
+
+                imageAnalyzer = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+
+                imageAnalyzer?.setAnalyzer(executor) { imageProxy ->
+                    sendFrameToBackend(imageProxy)
+                }
+
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                cameraProvider?.unbindAll()
+                cameraProvider?.bindToLifecycle(
                     this,
                     cameraSelector,
                     preview,
                     imageAnalyzer
                 )
+                Log.d("VisionActivity", "Camera started and bound to lifecycle")
             } catch (e: Exception) {
                 Log.e("VisionActivity", "Use case binding failed", e)
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun stopCamera() {
+        try {
+            Log.d("VisionActivity", "Stopping camera...")
+            imageAnalyzer?.clearAnalyzer()
+            cameraProvider?.unbindAll()
+            cameraProvider = null
+            imageAnalyzer = null
+            Log.d("VisionActivity", "Camera stopped and unbound")
+        } catch (e: Exception) {
+            Log.e("VisionActivity", "Error stopping camera", e)
+        }
     }
 
     // ------- CONVERTER FRAME -> JPEG -> BASE64 -------

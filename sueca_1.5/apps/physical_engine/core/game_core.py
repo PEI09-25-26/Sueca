@@ -93,6 +93,10 @@ def _card_to_id(card: CardDTO) -> Optional[int]:
 def reset_game_state(game_id: Optional[str] = None, dealer_id: int = -1, starter_id: int = -1):
     normalized_game_id = _normalize_game_id(game_id)
     ref = Referee(game_id=normalized_game_id)
+    
+    # Default dealer to 3 (West) and starter to 2 (South) if not specified
+    if dealer_id == -1:
+        dealer_id = 3
     ref.dealer = dealer_id
 
     if starter_id != -1:
@@ -100,7 +104,7 @@ def reset_game_state(game_id: Optional[str] = None, dealer_id: int = -1, starter
     elif dealer_id != -1:
         ref.current_player = (dealer_id + 3) % 4
     else:
-        ref.current_player = 0
+        ref.current_player = 2 # Default starter
 
     ref.phase = "waiting"
     GAME_SESSIONS[normalized_game_id] = ref
@@ -119,12 +123,15 @@ def start_new_round(game_id: Optional[str] = None):
     game_ref = _get_ref(game_id)
     team1_vict = game_ref.team1_victories
     team2_vict = game_ref.team2_victories
+    old_match = game_ref.current_match
+    
     new_ref = Referee(game_id=game_ref.game_id)
     new_ref.team1_victories = team1_vict
     new_ref.team2_victories = team2_vict
     new_ref.dealer = (game_ref.dealer + 1) % 4
-    new_ref.current_player = new_ref.dealer
-    new_ref.current_round = game_ref.current_round + 1
+    new_ref.current_player = (new_ref.dealer + 3) % 4
+    new_ref.current_match = old_match + 1
+    
     GAME_SESSIONS[game_ref.game_id] = new_ref
     PRE_ROUND_SESSIONS.pop(game_ref.game_id, None)
     REF_HISTORY.pop(game_ref.game_id, None)
@@ -194,6 +201,12 @@ def process_card(card: CardDTO):
             print(f"[RONDA] Acabou por rendicao! Equipa {winner_team} ganhou com {winner_points} pontos")
         elif ref.rounds_played >= MAX_RODADAS:
             round_ended = True
+            
+            # Capture match details before calling get_game_winner which might reset points if called there (though we removed it)
+            # Actually we removed self.reset_players() from get_game_winner(), so points are safe.
+            
+            ref.get_game_winner() # Update victories
+            
             if ref.team1_points > ref.team2_points:
                 winner_team = 1
                 winner_points = ref.team1_points
@@ -205,12 +218,12 @@ def process_card(card: CardDTO):
         if round_ended:
             try:
                 round_data = {
-                    "round_number": ref.current_round,
+                    "round_number": ref.current_match, # Use current_match instead of current_round for clarity if needed
                     "winner_team": winner_team,
                     "winner_points": winner_points,
                     "team1_points": ref.team1_points,
                     "team2_points": ref.team2_points,
-                    "game_ended": ref.current_round >= MAX_ROUNDS,
+                    "game_ended": ref.rounds_played >= MAX_RODADAS,
                     "reason": "renuncia" if not round_ok else "score",
                 }
                 requests.post(MIDDLEWARE_ROUND_END_URL, json=round_data, timeout=1)

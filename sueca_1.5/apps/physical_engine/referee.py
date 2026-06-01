@@ -116,6 +116,8 @@ class Referee:
             "matches_played": self.current_match - 1,
             "current_match_number": self.current_match,
             "round_plays": round_plays,
+            "dealer": self.dealer,
+            "trick_starter": self.trick_starter,
         }
 
     def receive_card(self):
@@ -245,7 +247,7 @@ class Referee:
 
     def get_round_sum(self, winner_abs_id):
         round_sum = sum(CardMapper.get_card_points(card_number) for card_number in self.round_vector)
-        # NORTH (0) and SOUTH (2) are on Team 1 (which in our canonical mapping is points for team1)
+        # NORTH (0) and SOUTH (2) are on Team 1
         # EAST (1) and WEST (3) are on Team 2
         if winner_abs_id in [0, 2]:
             self.team1_points += round_sum
@@ -274,4 +276,4 @@ class Referee:
             else:
                 self.team2_victories += 4
                 print("Team 2 wins the game and team 1 made no points (Team 2 +4 victories)!")
-        self.reset_players()
+

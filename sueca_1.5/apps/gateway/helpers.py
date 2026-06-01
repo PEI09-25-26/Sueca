@@ -6,10 +6,13 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+import jwt
+from fastapi import Header, HTTPException
 
 from shared.contracts import normalize_event, normalize_room_state, to_dict
 
 from . import state
+from apps.virtual_engine.session import session_manager
 
 
 class _ForwardDispatcher:
@@ -156,3 +159,37 @@ def stop_managed_services():
                 pass
         finally:
             state.service_processes.pop(name, None)
+
+
+def require_any_token(authorization: str | None = Header(default=None)):
+    """
+    FastAPI dependency that validates either a local session token or a global JWT.
+    Returns the decoded payload if valid.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="missing authorization header")
+
+    if authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    else:
+        token = authorization.strip()
+
+    if not token:
+        raise HTTPException(status_code=401, detail="empty authorization token")
+
+    # 1. Try local session manager (guest or virtual engine sessions)
+    session_data = session_manager.validate_token(token)
+    if session_data:
+        return session_data
+
+    # 2. Try global secret (Firebase or main auth service)
+    secret = os.getenv("SECRET_KEY") or os.getenv("SUECA_JWT_SECRET")
+    if secret:
+        try:
+            # We use HS256 as standard across internal services
+            payload = jwt.decode(token, secret, algorithms=["HS256"])
+            return payload
+        except jwt.PyJWTError:
+            pass
+
+    raise HTTPException(status_code=401, detail="invalid or expired authorization token")
