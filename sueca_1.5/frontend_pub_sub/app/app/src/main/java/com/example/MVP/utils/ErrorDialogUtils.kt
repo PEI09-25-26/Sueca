@@ -11,8 +11,12 @@ import java.net.UnknownHostException
 
 object ErrorDialogUtils {
 
+    /** Guards against stacking multiple identical error dialogs simultaneously. */
+    private var isDialogVisible = false
+
     /**
      * Shows a blocking error dialog for critical issues.
+     * Skips silently if a dialog is already on screen to prevent spam.
      */
     fun showError(
         context: Context,
@@ -21,31 +25,38 @@ object ErrorDialogUtils {
         buttonText: String = "OK",
         onDismiss: (() -> Unit)? = null
     ) {
+        // Prevent stacking multiple dialogs
+        if (isDialogVisible) {
+            LogUtils.w("Error dialog already visible, skipping: $title - $message")
+            return
+        }
+
         val cleanMessage = cleanTechnicalMessage(message)
         LogUtils.e("UI Error Dialog ($title): $message (Clean: $cleanMessage)")
-        
+
         val dialog = android.app.Dialog(context, com.example.MVP.R.style.CustomDialogTheme)
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-        
+
         val inflater = android.view.LayoutInflater.from(context)
         val view = inflater.inflate(com.example.MVP.R.layout.dialog_info, null)
         dialog.setContentView(view)
-        
+
         view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogTitle).text = title
         view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogMessage).text = cleanMessage
-        
+
         val btnOk = view.findViewById<android.widget.Button>(com.example.MVP.R.id.btnDialogOk)
         btnOk.text = buttonText
         btnOk.setOnClickListener {
             dialog.dismiss()
-            onDismiss?.invoke()
         }
-        
+
         dialog.setOnDismissListener {
+            isDialogVisible = false
             onDismiss?.invoke()
         }
-        
+
+        isDialogVisible = true
         dialog.show()
     }
 
@@ -108,7 +119,7 @@ object ErrorDialogUtils {
             title = "Atenção",
             message = message,
             buttonText = "OK",
-            onDismiss = action
+            onDismiss = null
         )
     }
 
