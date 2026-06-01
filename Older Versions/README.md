@@ -35,30 +35,30 @@
 ## Frontend
 ### frontend_1.0
 
-    The very first :D 
+    This is the very first version of our app's frontend, it was extremely simple but it kept getting additions and new features on top of what was deemed extremely necessary, eventually, it reached a point where we moved each frontend version and implementation to the sueca_1.x folders (starting in sueca_1.4_pubsub), at which point this folder became deprecated and archived.
 
 ### frontend_REST
 
-    This version
+    A version of the frontend we used in development that used the older RESTAPI implementation to communicate with the backend.
 
 ### frontend_pub_sub
 
-    This version
+    A version of the frontend we used in development that used the more recent publish-subscribe systems to communicate with the backend, it was soon discutinued due to the frontend implementations at that point being moved to their respective sueca_1.x folders (starting in sueca_1.4_pubsub).
 
 ## Computer Vision
 ### ComputerVision_1.0
 
-    (used in MVP)
+    The version of the Computer Vision service that was used in this project's MVP and the very first completed model we used. It is structured around OpenCV and a bit of YOLO that work toguether to complete the full cycle of the card detection system needed for the physical and hybrid game-modes.
 
 ### ComputerVision_1.1
 
-    (upgrades lol)
+    This version is a straight up upgrade from the previous version, with the only couple of details worth mentioning seperately are the upgrades in the usage of the OpenCV model to cut the card into a rectangle and then using YOLO to detect and recognize the cut image.
 
 ### ComputerVision_1.2
 
-    (removed opencv and update yolo) 
+    This is the final version used for the Computer Vision service in our project, it brings near to complete removal of the OpenCV model with a small ammount of exceptions where it is used, for a similar purpose than in the previous version. It also features an update on the version YOLO is running and a major upgrade on the overall system.
 
 ### DataSet_Creator
 
-    This... This
+    These were the materials used when training our Computer Vision models. The info archived here ranges from the runs, the full dataset to other things such as the actual code implemented and the assets we used to train the models.
     
