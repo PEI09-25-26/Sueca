@@ -112,7 +112,13 @@ class MatchHistoryActivity : AppCompatActivity() {
         if (stats != null) {
             scoreText.text = "Pontuação: ${stats.team1Points} — ${stats.team2Points}"
             val winnerStr = formatWinner(stats.winner)
-            winnerText.text = "Vencedor: $winnerStr"
+            val isWinner = didPlayerWin(entry.position, stats.winner)
+            val emoji = when {
+                stats.winner?.lowercase() == "draw" -> "🤝"
+                isWinner -> "🏆"
+                else -> "❌"
+            }
+            winnerText.text = "Vencedor: $winnerStr $emoji"
         } else {
             scoreText.text = "Pontuação: —"
             winnerText.text = "Vencedor: —"
@@ -259,5 +265,15 @@ class MatchHistoryActivity : AppCompatActivity() {
         val suit = CardMapper.getCardSuit(cardId)
         val rank = CardMapper.getCardRank(cardId)
         return "${rank}${suit}"
+    }
+
+    private fun didPlayerWin(position: String?, winner: String?): Boolean {
+        if (position == null || winner == null) return false
+
+        return when (position.lowercase()) {
+            "north", "south" -> winner.lowercase().contains("team 1")
+            "east", "west"   -> winner.lowercase().contains("team 2")
+            else -> false
+        }
     }
 }
