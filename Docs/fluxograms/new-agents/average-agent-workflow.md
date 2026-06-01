@@ -147,7 +147,7 @@ H12 --> H13{Exists?}
 H13 -->|Yes| H11
 H13 -->|No| H7
 
-H8 -->|No| H14[Try Winning Card (Any)]
+H8 -->|No| H14[Try Any Winning Card]
 H14 --> H13
 
 H3 --> END
