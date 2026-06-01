@@ -35,15 +35,15 @@
 ## Frontend
 ### frontend_1.0
 
-    The very first :D 
+    This is the very first version of our app's frontend, it was extremely simple but it kept getting additions and new features on top of what was deemed extremely necessary, eventually, it reached a point where we moved each frontend version and implementation to the sueca_1.x folders (starting in sueca_1.4_pubsub), at which point this folder became deprecated and archived.
 
 ### frontend_REST
 
-    This version
+    A version of the frontend we used in development that used the older RESTAPI implementation to communicate with the backend.
 
 ### frontend_pub_sub
 
-    This version
+    A version of the frontend we used in development that used the more recent publish-subscribe systems to communicate with the backend, it was soon discutinued due to the frontend implementations at that point being moved to their respective sueca_1.x folders (starting in sueca_1.4_pubsub).
 
 ## Computer Vision
 ### ComputerVision_1.0
