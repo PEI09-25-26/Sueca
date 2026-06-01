@@ -41,8 +41,7 @@ end
 subgraph External
     Cloudflare["Cloudflare"]
     Firebase["Firebase (Firestore)"]
-    Twilio["Twilio SMS API"]
-    SendGrid["Sendgrid Email"]
+    SendGrid["Sendgrid Email "]
 end
 
 %% ==================== FLOWS ====================
@@ -58,7 +57,6 @@ Gateway --> HE
 Gateway --> PE
 
 Auth --> Firebase
-Auth --> Twilio
 Auth --> SendGrid
 
 Auth --> Redis
@@ -102,7 +100,7 @@ class Gateway edge
 class Auth,Friends,Agents service
 class VE,HE,PE engine
 class Redis,EMQX infra
-class Firebase,Twilio,SendGrid,Cloudflare external
+class Firebase,SendGrid,Cloudflare external
 class YOLO_H,YOLO_P ml
 
 %% ==================== SUBGRAPH BACKGROUNDS ====================
