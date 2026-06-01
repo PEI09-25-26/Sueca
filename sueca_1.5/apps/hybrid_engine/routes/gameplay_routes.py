@@ -162,4 +162,9 @@ def reset_game(
     if not game:
         return error(f"Game {game_id} not found", 404)
     game.reset()
+
+    from apps.hybrid_engine.core.hybrid_services import reset_renunciation_tracking
+
+    reset_renunciation_tracking(game_id)
+
     return {"success": True, "message": "Game reset"}

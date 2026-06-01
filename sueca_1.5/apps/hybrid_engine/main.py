@@ -42,7 +42,11 @@ from apps.hybrid_engine.core import hybrid_services
 from apps.hybrid_engine.routes import player_routes as player_routes_module
 from apps.hybrid_engine.routes import room_routes as room_routes_module
 
-hybrid_services.configure(hybrid_coordinator, hybrid_routes_module._push_hybrid_state)
+hybrid_services.configure(
+    hybrid_coordinator,
+    hybrid_routes_module._push_hybrid_state,
+    hybrid_referee,
+)
 player_routes_module.hybrid_coordinator = hybrid_coordinator
 
 # Give room_routes access to the same coordinator and vision service so it

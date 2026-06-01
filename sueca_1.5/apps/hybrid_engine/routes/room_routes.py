@@ -112,6 +112,10 @@ def start_room_rematch(game_id: str):
         hybrid_vision.clear_game(game_id)
         hybrid_vision.begin_trump_phase(game_id)
 
+    from apps.hybrid_engine.core.hybrid_services import reset_renunciation_tracking
+
+    reset_renunciation_tracking(game_id)
+
     return {"success": True, "message": message, "state": game.get_state()}
 
 

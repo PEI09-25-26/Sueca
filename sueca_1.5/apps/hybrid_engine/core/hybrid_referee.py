@@ -33,19 +33,14 @@ class HybridReferee:
     ) -> Tuple[bool, str]:
         """Returns (is_renuncia, reason). Analyzes without modifying state."""
         self._ensure_player(game_id, player_id)
-        
-        if not round_suit:
-            return False, "" # First play of round
 
         card_suit = CardMapper.get_card_suit(card_id)
-        round_suit_index = CardMapper.SUITS.index(round_suit)
+        card_suit_index = CardMapper.SUITS.index(card_suit)
 
-        # If they play the round suit, but we know they are void
-        if card_suit == round_suit:
-            if not self.suit_tracking[game_id][player_id][round_suit_index]:
-                return True, "Falta de assistência. Jogou naipe de que não tinha cartas."
-            return False, ""
-        
+        # Known void in the suit being played (includes opening lead of a new trick).
+        if not self.suit_tracking[game_id][player_id][card_suit_index]:
+            return True, "Falta de assistência. Jogou naipe de que não tinha cartas."
+
         return False, ""
 
     def record_play(self, game_id: str, player_id: str, card_id: int, round_suit: str):

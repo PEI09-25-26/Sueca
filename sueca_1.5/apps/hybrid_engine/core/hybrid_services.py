@@ -2,18 +2,33 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from apps.hybrid_engine.core.hybrid_game_coordinator import HybridGameCoordinator
 
+if TYPE_CHECKING:
+    from apps.hybrid_engine.core.hybrid_referee import HybridReferee
+
 hybrid_coordinator: Optional[HybridGameCoordinator] = None
+hybrid_referee: Optional["HybridReferee"] = None
 _push_hybrid_state_fn: Optional[Callable] = None
 
 
-def configure(coordinator: HybridGameCoordinator, push_state_fn: Callable) -> None:
-    global hybrid_coordinator, _push_hybrid_state_fn
+def configure(
+    coordinator: HybridGameCoordinator,
+    push_state_fn: Callable,
+    referee: Optional["HybridReferee"] = None,
+) -> None:
+    global hybrid_coordinator, hybrid_referee, _push_hybrid_state_fn
     hybrid_coordinator = coordinator
+    hybrid_referee = referee
     _push_hybrid_state_fn = push_state_fn
+
+
+def reset_renunciation_tracking(game_id: str) -> None:
+    """Clear suit-void history when a new match starts or the game is fully reset."""
+    if hybrid_referee is not None:
+        hybrid_referee.reset_game(game_id)
 
 
 def assign_trump_to_dealer(game) -> None:
