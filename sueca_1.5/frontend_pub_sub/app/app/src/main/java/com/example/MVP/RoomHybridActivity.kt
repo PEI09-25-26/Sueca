@@ -3,11 +3,13 @@ package com.example.MVP
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.models.AddBotRequest
@@ -47,11 +49,6 @@ class RoomHybridActivity : AppCompatActivity() {
     private lateinit var btnStartHybridGame: Button
     private lateinit var switchVirtualRole: Switch
 
-    private lateinit var botActionsContainer: View
-    private lateinit var btnAddRandomBot: Button
-    private lateinit var btnAddAgent1Bot: Button
-    private lateinit var btnAddAgent2Bot: Button
-    private lateinit var btnAddAgent3Bot: Button
     private lateinit var botPlacementOverlay: View
     private lateinit var txtBotPlacementHint: TextView
 
@@ -96,11 +93,6 @@ class RoomHybridActivity : AppCompatActivity() {
         btnStartHybridGame = findViewById(R.id.btnStartHybridGame)
         switchVirtualRole = findViewById(R.id.switchVirtualRole)
 
-        botActionsContainer = findViewById(R.id.botActionsContainer)
-        btnAddRandomBot = findViewById(R.id.btnAddRandomBot)
-        btnAddAgent1Bot = findViewById(R.id.btnAddAgent1Bot)
-        btnAddAgent2Bot = findViewById(R.id.btnAddAgent2Bot)
-        btnAddAgent3Bot = findViewById(R.id.btnAddAgent3Bot)
         botPlacementOverlay = findViewById(R.id.botPlacementOverlay)
         txtBotPlacementHint = findViewById(R.id.txtBotPlacementHint)
 
@@ -114,7 +106,6 @@ class RoomHybridActivity : AppCompatActivity() {
 
         btnBack.setOnClickListener { finish() }
         wireSeatSelection()
-        wireBotActions()
 
         btnStartHybridGame.setOnClickListener {
             if (selectedSeat.isBlank()) {
@@ -126,7 +117,6 @@ class RoomHybridActivity : AppCompatActivity() {
 
         renderSeatHint()
         btnStartHybridGame.visibility = View.GONE
-        botActionsContainer.visibility = if (isRoomCreator) View.VISIBLE else View.GONE
     }
 
     override fun onResume() {
@@ -170,27 +160,20 @@ class RoomHybridActivity : AppCompatActivity() {
         btnSeatWest.setOnClickListener { onSeatActionClick("west") }
     }
 
-    private fun wireBotActions() {
-        btnAddRandomBot.setOnClickListener {
-            toggleBotPlacementMode("random", "RandomBot")
-        }
-        btnAddAgent1Bot.setOnClickListener {
-            toggleBotPlacementMode("weak", "WeakBot")
-        }
-        btnAddAgent2Bot.setOnClickListener {
-            toggleBotPlacementMode("Average", "AverageBot")
-        }
-        btnAddAgent3Bot.setOnClickListener {
-            toggleBotPlacementMode("smart", "SmartBot")
-        }
-        botPlacementOverlay.setOnClickListener { }
-    }
-
     private fun onSeatActionClick(position: String) {
         if (botPlacementMode) {
             addBotAtPosition(position)
             return
         }
+
+        // Check if player already has a seat
+        val me = latestRoomState?.players?.firstOrNull { it.id == playerId || it.name == playerName }
+        if (me != null && selectedSeat.isNotBlank()) {
+            // Show management dialog
+            showSeatManagementDialog(position)
+            return
+        }
+
         joinWithPosition(position)
     }
 
@@ -227,7 +210,7 @@ class RoomHybridActivity : AppCompatActivity() {
                 selectedSeat = position.uppercase(Locale.ROOT)
                 btnStartHybridGame.visibility = View.VISIBLE
                 latestRoomState?.let { updateUI(it) } ?: run {
-                    hideAllSeatButtons()
+                
                     renderSeatHint()
                 }
             } catch (e: Exception) {
@@ -278,8 +261,6 @@ class RoomHybridActivity : AppCompatActivity() {
         }
 
         val canUseBotActions = state.phase == "waiting" && isRoomCreator && available.isNotEmpty()
-        botActionsContainer.visibility =
-            if (isRoomCreator && state.phase == "waiting") View.VISIBLE else View.GONE
 
         if (!canUseBotActions && botPlacementMode) {
             exitBotPlacementMode()
@@ -292,10 +273,6 @@ class RoomHybridActivity : AppCompatActivity() {
         renderHybridSeat("EAST", occupied["EAST"], "EAST" in available, mySeat == "EAST", seatButtonsForBotPlacement)
         renderHybridSeat("SOUTH", occupied["SOUTH"], "SOUTH" in available, mySeat == "SOUTH", seatButtonsForBotPlacement)
         renderHybridSeat("WEST", occupied["WEST"], "WEST" in available, mySeat == "WEST", seatButtonsForBotPlacement)
-
-        if (!seatButtonsForBotPlacement && me != null) {
-            hideAllSeatButtons()
-        }
 
         updateBotPlacementVisualState()
         renderSeatHint()
@@ -315,7 +292,7 @@ class RoomHybridActivity : AppCompatActivity() {
             else -> btnSeatWest to txtSeatWestPlayer
         }
 
-        val showButton = forceShowAction || (isAvailable && selectedSeat.isBlank())
+        val showButton = forceShowAction || isAvailable
         button.visibility = if (showButton) View.VISIBLE else View.GONE
         button.isEnabled = showButton || forceShowAction
 
@@ -422,17 +399,119 @@ class RoomHybridActivity : AppCompatActivity() {
         botPlacementOverlay.visibility = if (modeActive) View.VISIBLE else View.GONE
         txtBotPlacementHint.visibility = if (modeActive) View.VISIBLE else View.GONE
 
-        btnAddRandomBot.alpha = if (pendingBotDifficulty == "random" && modeActive) 1f else 0.85f
-        btnAddAgent1Bot.alpha = if (pendingBotDifficulty == "weak" && modeActive) 1f else 0.85f
-        btnAddAgent2Bot.alpha = if (pendingBotDifficulty == "Average" && modeActive) 1f else 0.85f
-        btnAddAgent3Bot.alpha = if (pendingBotDifficulty == "smart" && modeActive) 1f else 0.85f
-
         if (modeActive) {
             btnSeatNorth.bringToFront()
             btnSeatEast.bringToFront()
             btnSeatSouth.bringToFront()
             btnSeatWest.bringToFront()
             txtBotPlacementHint.bringToFront()
+        }
+    }
+
+    private fun showSeatManagementDialog(position: String) {
+        val options = if (isHost) {
+            arrayOf("Adicionar Agente", "Mudar Lugar")
+        } else {
+            arrayOf("Mudar Lugar")
+        }
+        val adapter = ArrayAdapter(this, R.layout.dialog_custom_item, options)
+        
+        val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
+        titleView.text = "Lugar ${position.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}"
+
+        AlertDialog.Builder(this, R.style.CustomDialogTheme)
+            .setCustomTitle(titleView)
+            .setAdapter(adapter) { _, which ->
+                if (isHost) {
+                    when (which) {
+                        0 -> showAgentLevelDialog(position)
+                        1 -> changeSeatTo(position)
+                    }
+                } else {
+                    changeSeatTo(position)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun showAgentLevelDialog(position: String) {
+        val levels = arrayOf(
+            "Nível 1",
+            "Nível 2",
+            "Nível 3",
+            "Nível 4"
+        )
+        val adapter = ArrayAdapter(this, R.layout.dialog_custom_item, levels)
+        
+        val titleView = layoutInflater.inflate(R.layout.dialog_custom_title, null) as TextView
+        titleView.text = "Escolher nível do agente"
+
+        AlertDialog.Builder(this, R.style.CustomDialogTheme)
+            .setCustomTitle(titleView)
+            .setAdapter(adapter) { _, which ->
+                val (difficulty, namePrefix) = when (which) {
+                    0 -> "random" to "BOT_LV1"
+                    1 -> "weak" to "BOT_LV2"
+                    2 -> "Average" to "BOT_LV3"
+                    3 -> "smart" to "BOT_LV4"
+                    else -> "random" to "Bot"
+                }
+                
+                pendingBotDifficulty = difficulty
+                pendingBotNamePrefix = namePrefix
+                addBotAtPosition(position)
+            }
+            .setNegativeButton("Voltar", null)
+            .show()
+    }
+
+    private fun changeSeatTo(position: String) {
+        if (playerId.isBlank()) {
+            Toast.makeText(this, "Aguardando identificação do jogador...", Toast.LENGTH_SHORT).show()
+            LogUtils.w("Ainda sem player_id. Aguarda um instante.")
+            return
+        }
+
+        val normalizedPosition = position.uppercase(Locale.ROOT)
+        val myCurrentSeat = latestRoomState?.players
+            ?.firstOrNull { it.id == playerId || it.name == playerName }
+            ?.position
+            ?.let { normalizePosition(it) }
+            .orEmpty()
+
+        if (normalizedPosition != myCurrentSeat && normalizedPosition !in cachedAvailablePositions) {
+            Toast.makeText(this, "Esse lugar já não está livre.", Toast.LENGTH_SHORT).show()
+            LogUtils.w("Esse lugar nao esta livre.")
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                if (GameSessionManager.getAuthHeader(roomId).isNullOrBlank()) {
+                    Toast.makeText(this@RoomHybridActivity, "Sessão da sala ainda não disponível.", Toast.LENGTH_SHORT).show()
+                    LogUtils.w("Ainda sem sessao da sala. Aguarda 1s.")
+                    return@launch
+                }
+
+                val response = GatewayClient.changePosition(
+                    playerId = playerId,
+                    gameId = roomId,
+                    position = normalizedPosition
+                )
+
+                if (response.success) {
+                    val state = GatewayClient.getStatus(roomId)
+                    if (state != null) {
+                        updateUI(state)
+                    }
+                } else {
+                    Toast.makeText(this@RoomHybridActivity, response.message ?: "Não foi possível alterar lugar.", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                LogUtils.e("Erro ao mudar lugar hibrido.", e)
+                Toast.makeText(this@RoomHybridActivity, "Erro ao mudar lugar.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

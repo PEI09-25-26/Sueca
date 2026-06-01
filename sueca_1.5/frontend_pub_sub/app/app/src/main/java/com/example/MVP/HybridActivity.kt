@@ -69,7 +69,6 @@ import kotlinx.coroutines.launch
 class HybridActivity : AppCompatActivity() {
 
     private lateinit var modeSwitch: Switch
-    private lateinit var modeText: TextView
     private lateinit var previewView: PreviewView
     private lateinit var mesaContainer: ConstraintLayout
     private lateinit var handRecyclerView: RecyclerView
@@ -153,7 +152,6 @@ class HybridActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.backButton).setOnClickListener { finish() }
 
         modeSwitch = findViewById(R.id.activity_hybrid_switch)
-        modeText = findViewById(R.id.txtHybridMode)
         previewView = findViewById(R.id.previewView)
         mesaContainer = findViewById(R.id.mesaContainer)
         handRecyclerView = findViewById(R.id.playerHandRecyclerView)
@@ -255,7 +253,6 @@ class HybridActivity : AppCompatActivity() {
     private fun applyModeVisibility(isTableMode: Boolean) {
         if (isTableMode) {
             modeSwitch.text = "Mesa ativa"
-            modeText.text = "Modo atual: mesa"
             previewView.visibility = View.GONE
             hostCameraPreview.visibility = View.GONE
             recognitionOverlay.visibility = View.GONE
@@ -268,7 +265,6 @@ class HybridActivity : AppCompatActivity() {
         }
 
         modeSwitch.text = "Camera ativa"
-        modeText.text = "Modo atual: camera"
         mesaContainer.visibility = View.GONE
         handLabel.visibility = View.GONE
         handRecyclerView.visibility = View.GONE
