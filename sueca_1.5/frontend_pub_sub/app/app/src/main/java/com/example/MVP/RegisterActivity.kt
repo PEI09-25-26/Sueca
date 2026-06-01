@@ -78,12 +78,10 @@ class RegisterActivity : AppCompatActivity() {
     }
 
     private fun performRegister(username: String, email: String, password: String) {
-        LogUtils.i("Registration started for user: $username ($email)")
         registerButton.isEnabled = false
         lifecycleScope.launch {
             AuthManager.register(username, email, password)
                 .onSuccess { verificationId ->
-                    LogUtils.i("Registo inicial com sucesso. Codigo enviado para $email")
                     val intent = Intent(this@RegisterActivity, VerifyEmailActivity::class.java)
                     intent.putExtra("verificationId", verificationId)
                     intent.putExtra("email", email)

@@ -71,7 +71,6 @@ class LoginActivity : AppCompatActivity() {
 
         anonymousLink.setOnClickListener {
             AuthManager.startAnonymousSession()
-            LogUtils.i("Entraste como anonimo")
             startActivity(Intent(this, MainMenuActivity::class.java))
             finish()
         }

@@ -416,7 +416,6 @@ class RoomActivity : AppCompatActivity() {
     }
 
     private fun goToGame(state: GameStatusResponse) {
-        LogUtils.i("Transitioning to GameActivity for room ${state.gameId ?: roomId}")
         val intent = Intent(this, GameActivity::class.java)
         intent.putExtra("roomId", state.gameId ?: roomId)
         intent.putExtra("playerId", playerId)
@@ -618,8 +617,6 @@ class RoomActivity : AppCompatActivity() {
                 )
 
                 if (response.success) {
-                    LogUtils.i("Seat selected successfully: $normalizedPosition")
-                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "Lugar alterado.")
                     val state = GatewayClient.getStatus(roomId)
                     if (state != null) {
                         applyState(state)
@@ -640,7 +637,7 @@ class RoomActivity : AppCompatActivity() {
         lifecycleScope.launch {
             FriendsManager.listFriends(uid, onlineOnly = true).onSuccess { friends ->
                 if (friends.isEmpty()) {
-                    LogUtils.i("Nenhum amigo online no momento.")
+                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Nenhum amigo online para convidar.")
                     return@onSuccess
                 }
 
@@ -659,7 +656,7 @@ class RoomActivity : AppCompatActivity() {
                     .setNegativeButton("Voltar", null)
                     .show()
             }.onFailure { error ->
-                LogUtils.e("Erro ao carregar amigos.", error)
+                ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), error)
             }
         }
     }
@@ -674,7 +671,7 @@ class RoomActivity : AppCompatActivity() {
                     token = token
                 )
                 if (response.success) {
-                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Convite enviado!")
+                    // Success
                 } else {
                     ErrorDialogUtils.showError(this@RoomActivity, "Erro ao convidar", response.message ?: "Falha ao enviar convite.")
                 }
@@ -733,7 +730,6 @@ class RoomActivity : AppCompatActivity() {
         botPlacementMode = true
         latestRoomState?.let { updateUI(it) }
         updateBotPlacementVisualState()
-        LogUtils.i("Escolhe onde colocar o bot.")
     }
 
     private fun exitBotPlacementMode() {
@@ -776,8 +772,6 @@ class RoomActivity : AppCompatActivity() {
                 )
 
                 if (response.success) {
-                    LogUtils.i("Bot added to position $normalizedPosition (difficulty: $difficulty, name: $botName)")
-                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "Bot adicionado.")
                     exitBotPlacementMode()
                 } else {
                     ErrorDialogUtils.showError(this@RoomActivity, "Erro ao adicionar bot", response.message ?: "Não foi possível adicionar o bot.")
@@ -809,7 +803,6 @@ class RoomActivity : AppCompatActivity() {
                 if (response.success) {
                     playerId = response.playerId ?: playerId
                     GameSessionManager.saveToken(roomId, response.token)
-                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "Entraste na sala.")
                 } else {
                     ErrorDialogUtils.showError(this@RoomActivity, "Erro ao entrar", response.message ?: "Não foi possível escolher esse lugar.")
                 }
@@ -901,7 +894,7 @@ class RoomActivity : AppCompatActivity() {
                 )
 
                 if (response.success) {
-                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), response.message ?: "$displayName removido.")
+                    // Success
                 } else {
                     ErrorDialogUtils.showError(this@RoomActivity, "Erro ao remover", response.message ?: "Não foi possível remover o jogador.")
                 }

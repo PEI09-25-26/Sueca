@@ -402,7 +402,6 @@ class RoomHybridActivity : AppCompatActivity() {
                 )
 
                 if (response.success) {
-                    Toast.makeText(this@RoomHybridActivity, response.message ?: "Bot adicionado.", Toast.LENGTH_SHORT).show()
                     exitBotPlacementMode()
                 } else {
                     Toast.makeText(

@@ -449,7 +449,6 @@ class VisionActivity : AppCompatActivity() {
         mySelectedPosition = pos
         targetInput.setText(myAccountName)
         targetInput.isEnabled = false
-        Toast.makeText(this, "Lugar trocado!", Toast.LENGTH_SHORT).show()
     }
 
     private fun saveNamesFromOverlay() {
@@ -717,7 +716,6 @@ class VisionActivity : AppCompatActivity() {
                             }
 
                             statusBanner.text = "Carta corrigida para ${correctRank} de ${correctSuit}."
-                            Toast.makeText(this@VisionActivity, "Carta corrigida", Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(this@VisionActivity, "Erro: ${response.message}", Toast.LENGTH_LONG).show()
                         }
@@ -802,9 +800,6 @@ class VisionActivity : AppCompatActivity() {
                     override fun onOpen(ws: WebSocket, response: Response) {
                         isWebSocketOpen = true
                         Log.d("WS", "WebSocket connected successfully to $wsEndpoint. Status: ${response.code}")
-                        runOnUiThread {
-                            Toast.makeText(this@VisionActivity, "Vision AI Connected", Toast.LENGTH_SHORT).show()
-                        }
                     }
 
                     override fun onMessage(ws: WebSocket, text: String) {

@@ -505,8 +505,7 @@ class GameActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val res = GatewayClient.requestRematch(gameId)
-                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: if (res.success) "Desforra solicitada" else "Falha ao pedir desforra")
+                GatewayClient.requestRematch(gameId)
             } catch (e: Exception) {
                 ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
                     requestRematch()
@@ -581,9 +580,6 @@ class GameActivity : AppCompatActivity() {
                         gameId = gameId.ifBlank { null }
                     )
                 )
-
-                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: "Baralho cortado")
-
             } catch (e: Exception) {
                 ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
                     cutDeck(index)
@@ -603,9 +599,6 @@ class GameActivity : AppCompatActivity() {
                         gameId = gameId.ifBlank { null }
                     )
                 )
-
-                ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: "Trunfo selecionado")
-
             } catch (e: Exception) {
                 ErrorDialogUtils.showApiSnackbar(findViewById(android.R.id.content), e) {
                     selectTrump(choice)
@@ -641,7 +634,6 @@ class GameActivity : AppCompatActivity() {
 
                 if (res.success) {
                     LogUtils.i("User played card: ${card.id} (Suit: ${card.suit}, Value: ${card.value})")
-                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), res.message ?: "Carta jogada")
                 } else {
                     ErrorDialogUtils.showError(this@GameActivity, "Jogada Inválida", res.message ?: "Não podes jogar essa carta.")
                 }

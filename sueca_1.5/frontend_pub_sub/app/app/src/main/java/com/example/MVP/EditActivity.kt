@@ -105,7 +105,6 @@ class EditActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     AuthManager.confirmAccountDelete(uid, code)
                         .onSuccess {
-                            ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Conta apagada com sucesso.")
                             val intent = Intent(this@EditActivity, LoginActivity::class.java)
                             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
                             startActivity(intent)
@@ -168,7 +167,6 @@ class EditActivity : AppCompatActivity() {
 
             AuthManager.updateUser(uid, request)
                 .onSuccess {
-                    ErrorDialogUtils.showSnackbar(findViewById(android.R.id.content), "Perfil atualizado com sucesso.")
                     finish()
                 }
                 .onFailure { error ->

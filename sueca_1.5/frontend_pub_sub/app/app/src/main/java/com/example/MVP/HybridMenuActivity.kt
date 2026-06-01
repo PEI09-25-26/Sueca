@@ -9,6 +9,7 @@ import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.MVP.network.GatewayClient
+import com.example.MVP.utils.ErrorDialogUtils
 import com.example.MVP.utils.LogUtils
 import kotlinx.coroutines.launch
 
@@ -46,17 +47,16 @@ class HybridMenuActivity : AppCompatActivity() {
                 try {
                     val response = GatewayClient.createRoom(name, mode = "hybrid")
                     if (!response.success) {
-                        LogUtils.e(response.message ?: "Falha ao criar sala hibrida.")
+                        ErrorDialogUtils.showError(this@HybridMenuActivity, "Erro", response.message ?: "Falha ao criar sala hibrida.")
                         return@launch
                     }
 
                     val roomId = response.gameId ?: response.roomId
                     if (roomId.isNullOrBlank()) {
-                        LogUtils.e("Resposta invalida do servidor ao criar sala hibrida.")
+                        ErrorDialogUtils.showError(this@HybridMenuActivity, "Erro", "Resposta inválida do servidor ao criar sala híbrida.")
                         return@launch
                     }
 
-                    LogUtils.i("Sala hibrida criada: $roomId")
                     openHybridRoom(
                         roomId = roomId,
                         playerName = name,
@@ -64,7 +64,7 @@ class HybridMenuActivity : AppCompatActivity() {
                         playerId = response.playerId.orEmpty()
                     )
                 } catch (e: Exception) {
-                    LogUtils.e("Nao foi possivel criar sala hibrida. Verifica o servidor.", e)
+                    ErrorDialogUtils.showApiError(this@HybridMenuActivity, e)
                 }
             }
         }
@@ -82,13 +82,12 @@ class HybridMenuActivity : AppCompatActivity() {
                 try {
                     val status = GatewayClient.getStatus(roomId)
                     if (status == null) {
-                        LogUtils.e("Sala hibrida nao encontrada: $roomId")
+                        ErrorDialogUtils.showError(this@HybridMenuActivity, "Erro", "Sala híbrida não encontrada: $roomId")
                         return@launch
                     }
-                    LogUtils.i("Entraste na sala hibrida: $roomId")
                     openHybridRoom(roomId = roomId, playerName = name, isHost = false)
                 } catch (e: Exception) {
-                    LogUtils.e("Erro ao procurar sala hibrida: $roomId", e)
+                    ErrorDialogUtils.showApiError(this@HybridMenuActivity, e)
                 }
             }
         }

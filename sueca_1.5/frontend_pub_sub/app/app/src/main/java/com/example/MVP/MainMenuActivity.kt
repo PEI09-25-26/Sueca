@@ -288,8 +288,6 @@ class MainMenuActivity : AppCompatActivity() {
                         GameSessionManager.saveToken(actualGameId, response.token)
                     }
 
-                    LogUtils.i("Vision AI Started for game $actualGameId")
-
                     val intent = Intent(this@MainMenuActivity, VisionActivity::class.java)
                     intent.putExtra("playerName", name)
                     intent.putExtra("roomId", actualGameId)

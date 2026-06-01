@@ -386,7 +386,6 @@ object AuthManager {
 
 	private fun saveUserData(user: UserData, token: String) {
 		if (!isInitialized()) return
-		LogUtils.i("Saving user data and token to secure storage for UID: ${user.uid}")
 		
         // Trigger presence connection immediately upon login
         Log.i("AuthManager", "Triggering PresenceMqttManager.connect from login")
@@ -426,7 +425,6 @@ object AuthManager {
 
 	private fun clearUserData() {
 		if (!isInitialized()) return
-		LogUtils.i("Clearing user data from storage (Logout/Cleanup)")
         
         // Disconnect presence MQTT on logout
         PresenceMqttManager.disconnect()

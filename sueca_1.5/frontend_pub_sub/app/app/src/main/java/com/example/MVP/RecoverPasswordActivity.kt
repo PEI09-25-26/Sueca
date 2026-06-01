@@ -52,7 +52,6 @@ class RecoverPasswordActivity : AppCompatActivity() {
         lifecycleScope.launch {
             AuthManager.recoverPassword(email)
                 .onSuccess { verificationId ->
-                    LogUtils.i("Codigo de recuperacao enviado para $email")
                     val intent = Intent(this@RecoverPasswordActivity, ResetPasswordActivity::class.java)
                     intent.putExtra("verificationId", verificationId)
                     intent.putExtra("email", email)

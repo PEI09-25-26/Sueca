@@ -79,7 +79,6 @@ class OnlineMenuActivity : AppCompatActivity() {
             btnRefreshRooms.animate().rotationBy(360f).setDuration(500).start()
             lifecycleScope.launch {
                 refreshRoomsOnce()
-                LogUtils.i("Salas atualizadas")
             }
         }
 
@@ -112,9 +111,7 @@ class OnlineMenuActivity : AppCompatActivity() {
                         val roomId = response.gameId ?: response.roomId
                         if (roomId.isNullOrBlank()) {
                             ErrorDialogUtils.showError(this@OnlineMenuActivity, "Erro", "Resposta inválida ao criar sala.")
-                            LogUtils.e("Resposta invalida ao criar sala.")
                         } else {
-                            LogUtils.i("Room created successfully: $roomId")
                             refreshRoomsOnce()
                             goToRoom(
                                 roomId = roomId,
@@ -363,7 +360,6 @@ class OnlineMenuActivity : AppCompatActivity() {
                     )
                 )
                 if (response.success) {
-                    LogUtils.i("Successfully joined room: $normalizedRoomId")
                     goToRoom(
                         roomId = normalizedRoomId,
                         playerName = playerName,
