@@ -49,6 +49,7 @@ import com.example.MVP.models.SelectTrumpRequest
 import com.example.MVP.models.Choice
 import com.example.MVP.network.GameMqttSubscriber
 import com.example.MVP.network.HybridWebSocketClient
+import com.example.MVP.network.HybridWebSocketHub
 import com.example.MVP.network.GatewayClient
 import com.example.MVP.utils.CardMapper
 import com.google.gson.Gson
@@ -408,6 +409,7 @@ class HybridActivity : AppCompatActivity() {
             onConnected = { requestSyncState() }
         )
 
+        HybridWebSocketHub.put(roomId, hybridWsClient!!)
         hybridWsClient?.connect()
         isRunning = true
     }
@@ -1622,7 +1624,7 @@ class HybridActivity : AppCompatActivity() {
         cvPauseDialog?.dismiss()
         cvPauseDialog = null
         dismissTrickReviewOverlay()
-        hybridWsClient?.disconnect()
+        HybridWebSocketHub.disconnect(roomId)
         hybridMqttSubscriber?.disconnect()
         flashJob?.cancel()
         frameExecutor?.shutdown()
