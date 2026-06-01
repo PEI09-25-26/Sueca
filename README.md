@@ -17,7 +17,11 @@ The main repository used during the development and testing phases of this proje
 
 ### sueca_1.5
 
-    The current implementation of this project which includes the final versions of all three game-modes (virtual, physical and hybrid) and FAAAH
+    The current implementation of this project which includes the final versions of all three game-modes (virtual, physical and hybrid) and more. Some more completed features include, but are not limited to:
+  - Complete Friend system
+  - Fleshed out User Profile page
+  - Match History
+  - Camera streaming during Hybrid matches
 
 ### website
 
