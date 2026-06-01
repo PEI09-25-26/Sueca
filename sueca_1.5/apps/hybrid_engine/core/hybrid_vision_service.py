@@ -35,6 +35,7 @@ class GameCvState:
     consumed_card_ids: Set[int] = field(default_factory=set)
     trump_card_id: Optional[int] = None
     dealt_card_ids: Set[int] = field(default_factory=set)
+    frame_consistency: dict[int, int] = field(default_factory=dict)
 
 
 class HybridVisionService:
@@ -193,6 +194,9 @@ class HybridVisionService:
             logger.error("Hybrid CV inference failed for game %s: %s", game_id, exc)
             return None
 
+        detected_cards = []
+        detected_card_ids = set()
+
         for detection in detections:
             label = str(detection.get("label", ""))
             rank, suit = self._parse_label(label)
@@ -215,13 +219,34 @@ class HybridVisionService:
             if card_id in state.consumed_card_ids and card_id not in allow_card_ids:
                 continue
 
-            logger.info(
-                "Detected card locally: %s (game: %s, phase: %s)",
-                recognized.display,
-                game_id,
-                state.phase,
-            )
-            return recognized
+            detected_cards.append(recognized)
+            detected_card_ids.add(card_id)
+
+        # Update frame consistency counts
+        # Clean up card IDs that are no longer detected in this frame
+        keys_to_remove = [cid for cid in state.frame_consistency if cid not in detected_card_ids]
+        for cid in keys_to_remove:
+            state.frame_consistency.pop(cid, None)
+
+        # Increment counts for detected cards
+        for recognized in detected_cards:
+            card_id = int(recognized.card_id)
+            if card_id not in state.frame_consistency:
+                state.frame_consistency[card_id] = 1
+            else:
+                state.frame_consistency[card_id] += 1
+
+            if state.frame_consistency[card_id] == 3:
+                # Clear consistency for this card so it doesn't trigger again
+                state.frame_consistency.pop(card_id, None)
+
+                logger.info(
+                    "Detected card locally (consistently for 3 frames): %s (game: %s, phase: %s)",
+                    recognized.display,
+                    game_id,
+                    state.phase,
+                )
+                return recognized
 
         return None
 
@@ -267,7 +292,7 @@ class HybridVisionService:
             return False
         if rank == "A":
             return confidence >= 0.5
-        return confidence >= 0.6
+        return confidence >= 0.8
 
     def _build_from_detection(self, detection: dict) -> Optional[RecognizedCard]:
         rank = self._normalize_rank(str(detection.get("rank", "")).strip())
