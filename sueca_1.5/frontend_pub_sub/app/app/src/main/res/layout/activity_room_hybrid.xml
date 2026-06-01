@@ -20,16 +20,16 @@
         android:text="Sala: ---"
         android:textColor="@android:color/white"
         android:textSize="18sp"
-        android:layout_marginTop="8dp"/>
+        android:textStyle="bold"/>
 
     <TextView
         android:id="@+id/txtSeatHint"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="4dp"
         android:text="Escolhe o teu lugar (+)"
         android:textColor="@android:color/white"
-        android:textSize="15sp"
+        android:textSize="14sp"
         android:textStyle="bold" />
 
     <TextView
@@ -50,80 +50,6 @@
         android:text="Entrar como jogador virtual"
         android:textColor="@android:color/white"
         android:checked="true" />
-
-    <LinearLayout
-        android:id="@+id/botActionsContainer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddRandomBot"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp"
-                android:layout_weight="1"
-                android:text="+ Random"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                app:backgroundTint="#26FFFFFF"
-                app:cornerRadius="16dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddAgent1Bot"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_weight="1"
-                android:text="+ Fraco"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                app:backgroundTint="#26FFFFFF"
-                app:cornerRadius="16dp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddAgent2Bot"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp"
-                android:layout_weight="1"
-                android:text="+ Average"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                app:backgroundTint="#26FFFFFF"
-                app:cornerRadius="16dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddAgent3Bot"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_weight="1"
-                android:text="+ Smart"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                app:backgroundTint="#26FFFFFF"
-                app:cornerRadius="16dp" />
-        </LinearLayout>
-    </LinearLayout>
 
     <RelativeLayout
         android:id="@+id/seatChooserLayout"
