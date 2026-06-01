@@ -37,3 +37,5 @@ __pycache__/
 **/apps/cloudflare/*.json
 !**/apps/cloudflare/config.yml
 *.pem
+
+.gradle/
