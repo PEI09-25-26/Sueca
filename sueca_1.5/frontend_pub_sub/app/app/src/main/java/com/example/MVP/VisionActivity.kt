@@ -75,10 +75,10 @@ class VisionActivity : AppCompatActivity() {
     private var lastDetectedPlayer: String? = null
     private var lastDetectedIsTrump: Boolean = false
     private val seatNames = linkedMapOf(
+        "0" to "Este",
         "1" to "Norte",
         "2" to "Oeste",
-        "3" to "Sul",
-        "0" to "Este"
+        "3" to "Sul"
     )
 
     // Views for the cards on the table
@@ -584,10 +584,10 @@ class VisionActivity : AppCompatActivity() {
 
     private fun cardViewForPlayer(player: String): ImageView? {
         return when (player) {
+            "0" -> cardEast
             "1" -> cardNorth
             "2" -> cardWest
             "3" -> cardSouth
-            "0" -> cardEast
             else -> null
         }
     }
@@ -885,7 +885,8 @@ class VisionActivity : AppCompatActivity() {
 
                                 // Reset table only when starting a new trick (queue size 1) 
                                 // but NOT for the trump card detection
-                                if (queueSize == 1 && !isTrumpMsg) {
+                                val isTrumpSet = gameState.optBoolean("trump_set", false)
+                                if (queueSize == 1 && isTrumpSet && !isTrumpMsg) {
                                     resetCardsToBack()
                                 }
 
@@ -1128,17 +1129,18 @@ class VisionActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 // Inform the backend about the actual dealer/starter
-                // The backend reset expects the dealer_id.
-                // We've already advanced SetupState through IDLE -> SHUFFLE -> CUT -> TRUMP
-                // and currentPlayerStep has been used to identify those people.
                 val dealerId = currentPlayerStep
-                val starterId = (dealerId + 3) % 4 // Right of dealer
+                val starterId = (dealerId + 1) % 4 // Left of dealer
                 
+                Log.d("VisionActivity", "Starting game: dealer=$dealerId, starter=$starterId")
                 val response = RetrofitClient.api.startGameReady(gameId, dealerId, starterId, authHeader)
                 if (response.success) {
                     Toast.makeText(this@VisionActivity, "✅ Jogo iniciado! Podem jogar.", Toast.LENGTH_LONG).show()
                     currentSetupState = SetupState.GAME_RUNNING
                     trumpSelectionArea.visibility = View.GONE
+                    
+                    // Reset trump tracking so next card is a play
+                    lastDetectedIsTrump = false
 
                     // Update turn indicator with initial state from response
                     response.gameState?.let {
@@ -1168,10 +1170,10 @@ class VisionActivity : AppCompatActivity() {
 
     private fun updateTrumpView(cardId: String, owner: String) {
         val trumpView = when (owner) {
+            "0" -> trumpEast
             "1" -> trumpNorth
             "2" -> trumpWest
             "3" -> trumpSouth
-            "0" -> trumpEast
             else -> null
         }
 

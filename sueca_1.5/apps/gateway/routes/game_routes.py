@@ -1,7 +1,7 @@
 import json
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from .. import state
 from ..dto import RoundEndData, ScanEventDTO, StartGameRequest, StartGameResponse, CorrectCardRequest
@@ -85,20 +85,25 @@ async def start_game(request: StartGameRequest):
 
 
 @router.post("/game/ready/{game_id}")
-async def game_ready(game_id: str):
+async def game_ready(game_id: str, dealer_id: int = Query(-1), starter_id: int = Query(-1)):
     try:
-        # Reset CV history for this game
+        # Reset CV history for this game and RESUME in TRICK mode
         if game_id in state.cv_connections:
             cv_ws = state.cv_connections[game_id]
-            reset_command = json.dumps({"action": "reset_cards", "full": True})
-            await cv_ws.send(reset_command)
-            print(f"[Middleware] CV history reset for {game_id}")
 
-        # Reset Physical Engine state for this game
+            # Switch mode to trick and resume
+            await cv_ws.send(json.dumps({"action": "set_mode", "mode": "trick"}))
+
+            # action=resume or reset with resume=True
+            reset_command = json.dumps({"action": "reset_cards", "full": True, "resume": True})
+            await cv_ws.send(reset_command)
+            print(f"[Middleware] CV history reset and RESUMED in TRICK mode for {game_id}")
+
+        # Ensure Physical Engine is ready for this game
         response = await asyncio.to_thread(
             state.INTERNAL_HTTP.post,
-            f"{state.GAME_SERVICE_URL}/reset",
-            params={"game_id": game_id},
+            f"{state.GAME_SERVICE_URL}/ready",
+            params={"game_id": game_id, "dealer_id": dealer_id, "starter_id": starter_id},
             timeout=5,
         )
         

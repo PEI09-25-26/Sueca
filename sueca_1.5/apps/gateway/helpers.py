@@ -43,6 +43,17 @@ class _ForwardDispatcher:
             try:
                 if kind == "state":
                     state.frontend.send_state(payload)
+
+                    # Also broadcast to active mobile WebSockets
+                    game_id = payload.get("game_id")
+                    if game_id and game_id in state.active_connections:
+                        ws = state.active_connections[game_id]
+                        # Use main loop to send as this is a separate thread
+                        if state.main_loop:
+                            asyncio.run_coroutine_threadsafe(
+                                ws.send_json({"success": True, "game_state": payload}),
+                                state.main_loop
+                            )
                 else:
                     state.frontend.send_event(payload)
             except Exception as error:

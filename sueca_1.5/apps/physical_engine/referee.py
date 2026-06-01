@@ -42,7 +42,7 @@ class Referee:
         if self.phase == "waiting" and not self.trump_set:
             highlight = self.dealer
 
-        positions = ["North", "East", "South", "West"]
+        positions = ["East", "North", "West", "South"]
         players_list = []
         for idx in range(4):
             cards_left = 10 - self.rounds_played
@@ -96,8 +96,8 @@ class Referee:
             "player_count": 4,
             "game_started": self.trump_set,
             "teams": {
-                "team1": ["Player 0 (North)", "Player 2 (South)"],
-                "team2": ["Player 1 (East)", "Player 3 (West)"],
+                "team1": ["Player 1 (North)", "Player 3 (South)"],
+                "team2": ["Player 0 (East)", "Player 2 (West)"],
             },
             "scores": {
                 "player0": 0,
@@ -141,8 +141,8 @@ class Referee:
         self.trump_set = True
         self.trump_owner_player = self.dealer
         self.phase = "playing"
-        # Starter is the player to the right of the dealer (counter-clockwise).
-        self.current_player = (self.dealer + 3) % 4
+        # Starter is the player to the left of the dealer.
+        self.current_player = (self.dealer + 1) % 4
         print(
             f"Trump set to {CardMapper.get_card(self.trump)} for dealer {self.dealer}. "
             f"Starter: {self.current_player}"
@@ -214,9 +214,9 @@ class Referee:
         self.team1_points = 0
         self.team2_points = 0
 
-        self.dealer = (self.dealer + 1) % 4
-        self.current_player = self.dealer
-        print(f"[DEBUG] PLAYERS RESET. New dealer: {self.dealer}")
+        # Note: Dealer increment is handled by game_core.py or explicitly set
+        self.current_player = (self.dealer + 1) % 4
+        print(f"[DEBUG] PLAYERS RESET. Dealer remains: {self.dealer}. Starter: {self.current_player}")
 
     def reset_round(self):
         self.round_vector = []
@@ -247,9 +247,9 @@ class Referee:
 
     def get_round_sum(self, winner_abs_id):
         round_sum = sum(CardMapper.get_card_points(card_number) for card_number in self.round_vector)
-        # NORTH (0) and SOUTH (2) are on Team 1
-        # EAST (1) and WEST (3) are on Team 2
-        if winner_abs_id in [0, 2]:
+        # NORTH (1) and SOUTH (3) are on Team 1
+        # EAST (0) and WEST (2) are on Team 2
+        if winner_abs_id in [1, 3]:
             self.team1_points += round_sum
         else:
             self.team2_points += round_sum

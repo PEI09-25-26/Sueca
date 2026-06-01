@@ -2,10 +2,10 @@ from fastapi import APIRouter
 from typing import Optional
 
 try:
-    from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round, undo_last_play, correct_last_card
+    from ..core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round, undo_last_play, correct_last_card, ensure_game_ready
     from ..event_publisher import publish_physical_event
 except (ImportError, ValueError):
-    from apps.physical_engine.core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round, undo_last_play, correct_last_card
+    from apps.physical_engine.core.game_core import CardDTO, get_state_data, process_card, reset_game_state, start_new_round, undo_last_play, correct_last_card, ensure_game_ready
     from apps.physical_engine.event_publisher import publish_physical_event
 
 
@@ -26,8 +26,8 @@ def reset_game(game_id: Optional[str] = None, dealer_id: int = -1, starter_id: i
 
 @router.post("/ready")
 def game_ready(game_id: Optional[str] = None, dealer_id: int = -1, starter_id: int = -1):
-    """Alias for reset_game to match frontend expectations."""
-    return reset_game(game_id, dealer_id, starter_id)
+    """Ensure game is ready for play without wiping setup data if already present."""
+    return ensure_game_ready(game_id, dealer_id, starter_id)
 
 
 @router.post("/new_round")

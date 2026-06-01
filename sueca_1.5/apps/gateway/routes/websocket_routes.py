@@ -37,6 +37,13 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
         state.cv_connections[game_id] = cv_ws
         print(f"[Middleware] Connected to CV Service WebSocket for game: {game_id}")
 
+        # Initialize CV in trump mode
+        try:
+            await cv_ws.send(json.dumps({"action": "set_mode", "mode": "trump"}))
+            print(f"[Middleware] Initialized CV in trump mode for {game_id}")
+        except Exception as e:
+            print(f"[Middleware] Failed to initialize CV mode: {e}")
+
         async def receive_from_cv():
             try:
                 async for message in cv_ws:
@@ -52,15 +59,30 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                                 state.INTERNAL_HTTP.post,
                                 f"{state.GAME_SERVICE_URL}/card",
                                 json={
+                                    "game_id": game_id,
                                     "rank": detection["rank"],
                                     "suit": suit_symbol,
                                     "confidence": detection.get("confidence", 1.0),
                                 },
-                                timeout=2,
+                                timeout=5,
                             )
                             if game_response.status_code == 200:
                                 game_result = game_response.json()
                                 print(f"[Middleware] Game Service response: {game_result}")
+
+                                # If trump was just set, reset CV history and PAUSE until start
+                                if "message" in game_result and "Trump card set" in game_result["message"]:
+                                    try:
+                                        # Full reset + Pause
+                                        reset_cmd = json.dumps({"action": "reset_cards", "delay": 1, "full": True})
+                                        await cv_ws.send(reset_cmd)
+
+                                        pause_cmd = json.dumps({"action": "pause"})
+                                        await cv_ws.send(pause_cmd)
+
+                                        print(f"[Middleware] Reset and PAUSED CV history after trump detection for {game_id}")
+                                    except Exception as e:
+                                        print(f"[Middleware] Failed to send pause/reset to CV: {e}")
 
                                 combined_data = {
                                     "success": True,

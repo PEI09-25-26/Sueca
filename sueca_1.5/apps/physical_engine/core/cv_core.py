@@ -145,6 +145,8 @@ async def start_cv(request: StartCVRequest):
                 "paused_until": 0.0,
                 "trick_count": 0,
                 "trick_locked": False,
+                "is_paused": False,
+                "mode": "trump",  # default to trump detection
             }
 
         return {
@@ -181,6 +183,8 @@ async def stream_cv(websocket: WebSocket, game_id: str):
             "paused_until": 0.0,
             "trick_count": 0,
             "trick_locked": False,
+            "is_paused": False,
+            "mode": "trump",
         }
 
     game_state = active_games[game_id]
@@ -194,27 +198,47 @@ async def stream_cv(websocket: WebSocket, game_id: str):
             if message.startswith("{"):
                 try:
                     command = json.loads(message)
-                    if command.get("action") == "reset_cards":
+                    action = command.get("action")
+                    if action == "reset_cards":
                         delay = command.get("delay", 3)
                         full = command.get("full", False)
+                        resume = command.get("resume", False)
                         game_state["paused_until"] = time.time() + delay
                         exclusion_zones.clear()
                         game_state["trick_count"] = 0
                         game_state["trick_locked"] = False
                         if full:
                             sent_labels.clear()
-                        
+                        if resume:
+                            game_state["is_paused"] = False
+
                         await websocket.send_json({
                             "success": True,
                             "message": "cards_reset",
                             "paused_seconds": delay,
                         })
-                        print(f"[CV Core] Game {game_id} reset (full={full})")
+                        print(f"[CV Core] Game {game_id} reset (full={full}, resume={resume})")
+                        continue
+                    elif action == "pause":
+                        game_state["is_paused"] = True
+                        await websocket.send_json({"success": True, "message": "paused"})
+                        print(f"[CV Core] Game {game_id} paused")
+                        continue
+                    elif action == "resume":
+                        game_state["is_paused"] = False
+                        await websocket.send_json({"success": True, "message": "resumed"})
+                        print(f"[CV Core] Game {game_id} resumed")
+                        continue
+                    elif action == "set_mode":
+                        new_mode = command.get("mode", "trick")
+                        game_state["mode"] = new_mode
+                        await websocket.send_json({"success": True, "message": f"mode_set_{new_mode}"})
+                        print(f"[CV Core] Game {game_id} mode set to: {new_mode}")
                         continue
                 except json.JSONDecodeError:
                     pass
 
-            if time.time() < game_state["paused_until"] or game_state["trick_locked"]:
+            if game_state.get("is_paused") or time.time() < game_state["paused_until"] or game_state["trick_locked"]:
                 continue
 
             frame = base64_to_image(message)
@@ -259,6 +283,12 @@ async def stream_cv(websocket: WebSocket, game_id: str):
                         "detection": detection_result,
                     })
                     print(f"[CV Core] Game {game_id}: Detected {rank} of {suit}")
+
+                    # Self-pause after trump detection to prevent race conditions
+                    if game_state["mode"] == "trump":
+                        game_state["is_paused"] = True
+                        print(f"[CV Core] Game {game_id}: Auto-paused after trump detection")
+                        break
 
                     if game_state["trick_count"] >= MAX_CARDS_PER_TRICK:
                         game_state["trick_locked"] = True

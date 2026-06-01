@@ -94,17 +94,15 @@ def reset_game_state(game_id: Optional[str] = None, dealer_id: int = -1, starter
     normalized_game_id = _normalize_game_id(game_id)
     ref = Referee(game_id=normalized_game_id)
     
-    # Default dealer to 3 (West) and starter to 2 (South) if not specified
+    # Default dealer to 0 (East) if not specified
     if dealer_id == -1:
-        dealer_id = 3
+        dealer_id = 0
     ref.dealer = dealer_id
 
     if starter_id != -1:
         ref.current_player = starter_id
-    elif dealer_id != -1:
-        ref.current_player = (dealer_id + 3) % 4
     else:
-        ref.current_player = 2 # Default starter
+        ref.current_player = (dealer_id + 1) % 4
 
     ref.phase = "waiting"
     GAME_SESSIONS[normalized_game_id] = ref
@@ -119,6 +117,28 @@ def reset_game_state(game_id: Optional[str] = None, dealer_id: int = -1, starter
     }
 
 
+def ensure_game_ready(game_id: Optional[str] = None, dealer_id: int = -1, starter_id: int = -1):
+    normalized_game_id = _normalize_game_id(game_id)
+    ref = _get_ref(normalized_game_id)
+
+    if ref.trump_set:
+        print(f"[DEBUG] Game {normalized_game_id} already has trump. Updating dealer/starter only.")
+        if dealer_id != -1:
+            ref.dealer = dealer_id
+        if starter_id != -1:
+            ref.current_player = starter_id
+
+        return {
+            "success": True,
+            "message": "Game state preserved",
+            "dealer": ref.dealer,
+            "starter": ref.current_player,
+            "game_state": ref.state(),
+        }
+
+    return reset_game_state(game_id, dealer_id, starter_id)
+
+
 def start_new_round(game_id: Optional[str] = None):
     game_ref = _get_ref(game_id)
     team1_vict = game_ref.team1_victories
@@ -129,7 +149,7 @@ def start_new_round(game_id: Optional[str] = None):
     new_ref.team1_victories = team1_vict
     new_ref.team2_victories = team2_vict
     new_ref.dealer = (game_ref.dealer + 1) % 4
-    new_ref.current_player = (new_ref.dealer + 3) % 4
+    new_ref.current_player = (new_ref.dealer + 1) % 4
     new_ref.current_match = old_match + 1
     
     GAME_SESSIONS[game_ref.game_id] = new_ref
@@ -170,7 +190,7 @@ def process_card(card: CardDTO):
         res.update({
             "success": True,
             "message": "Trump card set",
-            "who_played": str(who_played),
+            "who_played": str(ref.dealer),
             "next_player": str(ref.current_player),
             "card": card.rank + card.suit,
         })
@@ -216,20 +236,23 @@ def process_card(card: CardDTO):
             print(f"[RONDA] Acabou apos 10 rodadas! Equipa {winner_team} ganhou com {winner_points} pontos")
 
         if round_ended:
-            try:
-                round_data = {
-                    "round_number": ref.current_match, # Use current_match instead of current_round for clarity if needed
-                    "winner_team": winner_team,
-                    "winner_points": winner_points,
-                    "team1_points": ref.team1_points,
-                    "team2_points": ref.team2_points,
-                    "game_ended": ref.rounds_played >= MAX_RODADAS,
-                    "reason": "renuncia" if not round_ok else "score",
-                }
-                requests.post(MIDDLEWARE_ROUND_END_URL, json=round_data, timeout=1)
-                print("[SYNC] Round end notification sent to middleware")
-            except Exception as error:
-                print(f"[WARN] Failed to notify middleware: {error}")
+            def _notify_round_end(data: dict):
+                try:
+                    requests.post(MIDDLEWARE_ROUND_END_URL, json=data, timeout=1.5)
+                    print("[SYNC] Round end notification sent to middleware")
+                except Exception as error:
+                    print(f"[WARN] Failed to notify middleware: {error}")
+
+            round_data = {
+                "round_number": ref.current_match, # Use current_match instead of current_round for clarity if needed
+                "winner_team": winner_team,
+                "winner_points": winner_points,
+                "team1_points": ref.team1_points,
+                "team2_points": ref.team2_points,
+                "game_ended": ref.rounds_played >= MAX_RODADAS,
+                "reason": "renuncia" if not round_ok else "score",
+            }
+            threading.Thread(target=_notify_round_end, args=(round_data,), daemon=True).start()
 
     _push_state(game_id)
 
