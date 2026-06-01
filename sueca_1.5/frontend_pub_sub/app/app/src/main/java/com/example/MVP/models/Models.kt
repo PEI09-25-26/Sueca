@@ -519,6 +519,8 @@ data class HybridRuntimeState(
     @SerializedName("player_roles") val playerRoles: Map<String, String>,
     @SerializedName("virtual_players") val virtualPlayers: List<HybridPlayerRuntime>,
     @SerializedName("pending_virtual_play") val pendingVirtualPlay: HybridPendingPlay?,
+    @SerializedName("pending_trump_side") val pendingTrumpSide: String? = null,
+    @SerializedName("trump_selector_player_id") val trumpSelectorPlayerId: String? = null,
     @SerializedName("deal_done") val dealDone: Boolean
 )
 

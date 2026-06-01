@@ -484,7 +484,13 @@ class HybridActivity : AppCompatActivity() {
                     inFlightRecognition = false
                 }
                 "select_trump" -> {
-                    if (response.get("success")?.asBoolean == false) {
+                    if (response.get("success")?.asBoolean == true) {
+                        response.getAsJsonObject("state")?.let {
+                            val hybridObj = gson.fromJson(it, HybridRuntimeState::class.java)
+                            hybridState = hybridObj
+                            gameState?.let { gs -> applyTrumpSelectionHybridHints(hybridObj, gs) }
+                        }
+                    } else {
                         recognitionProgressText.text = response.get("message")?.asString ?: "Falha ao selecionar trunfo"
                     }
                 }
@@ -517,6 +523,11 @@ class HybridActivity : AppCompatActivity() {
      * Decide se a UI deve mostrar a fase de Distribuição ou a fase de Jogo.
      */
     private fun updateUiFromHybridState(state: HybridRuntimeState) {
+        if (gameState?.phase == "trump_selection") {
+            gameState?.let { applyTrumpSelectionHybridHints(state, it) }
+            return
+        }
+
         if (gameState?.phase != "playing") {
             handAdapter.isEnabled = false
             return
@@ -751,9 +762,16 @@ class HybridActivity : AppCompatActivity() {
         if (isHost) {
             val nextTarget = state.virtualPlayers.firstOrNull { it.cardsCount < state.cardsPerVirtual }
             if (nextTarget != null) {
+                val trumpId = gameState?.trump?.toIntOrNull()
                 recognitionProgressText.text =
                     "Distribui para ${nextTarget.playerName}: ${nextTarget.cardsCount + 1}/${state.cardsPerVirtual}"
-                val hostViewCards = List(nextTarget.cardsCount) { idx -> Card(idx.toString(), "hidden", "hidden") }
+                val hostViewCards = nextTarget.cards.map { cardId ->
+                    if (trumpId != null && cardId == trumpId) {
+                        cardIdToCard(cardId)
+                    } else {
+                        Card(cardId.toString(), "hidden", "hidden")
+                    }
+                }
                 handAdapter.updateCards(hostViewCards)
             } else {
                 recognitionProgressText.text = "Distribuicao concluida"
@@ -765,9 +783,15 @@ class HybridActivity : AppCompatActivity() {
         if (isVirtualPlayer) {
             val me = resolveVirtualPlayer(state)
             if (me != null) {
+                val trumpId = gameState?.trump?.toIntOrNull()
                 val cards = me.cards.map { id -> cardIdToCard(id) }
                 handAdapter.updateCards(cards)
-                recognitionProgressText.text = "A receber cartas: ${me.cardsCount}/${state.cardsPerVirtual}"
+                val hasTrump = trumpId != null && me.cards.contains(trumpId)
+                recognitionProgressText.text = if (hasTrump && me.cardsCount < state.cardsPerVirtual) {
+                    "Trunfo atribuido. A receber: ${me.cardsCount}/${state.cardsPerVirtual}"
+                } else {
+                    "A receber cartas: ${me.cardsCount}/${state.cardsPerVirtual}"
+                }
             } else {
                 handAdapter.updateCards(emptyList())
                 recognitionProgressText.text = "Aguardando configuracao do host"
@@ -922,6 +946,7 @@ class HybridActivity : AppCompatActivity() {
 
         if (phase == "trump_selection") {
             showTrumpSelectionPhase(state)
+            hybridState?.let { applyTrumpSelectionHybridHints(it, state) }
             return
         }
 
@@ -988,19 +1013,35 @@ class HybridActivity : AppCompatActivity() {
         val selectorName = state.trumpSelectorPlayer ?: state.westPlayer ?: "jogador do trunfo"
         val isSelector = matchesCurrentPlayer(selectorId, selectorName, state)
 
-        btnTrumpTop.isEnabled = isSelector
-        btnTrumpBottom.isEnabled = isSelector
+        // Host captures the physical trump card; only non-host selectors pick top/bottom.
+        btnTrumpTop.isEnabled = isSelector && !isHost
+        btnTrumpBottom.isEnabled = isSelector && !isHost
 
-        // Host should keep camera mode in trump selection to allow physical capture.
         if (isHost) {
             modeSwitch.isEnabled = true
             modeSwitch.isChecked = false
         }
 
-        recognitionProgressText.text = if (isSelector) {
-            "E a tua vez de escolher o trunfo (topo/fundo)"
+        recognitionProgressText.text = if (isHost) {
+            "Aguardar escolha de topo/fundo ou capturar trunfo com a camara"
+        } else if (isSelector) {
+            "Escolhe TOPO ou FUNDO (instrucao para o host)"
         } else {
-            "Aguardar $selectorName escolher o trunfo"
+            "Aguardar $selectorName escolher topo ou fundo"
+        }
+    }
+
+    private fun applyTrumpSelectionHybridHints(hybrid: HybridRuntimeState, game: GameStatusResponse) {
+        val selectorName = game.trumpSelectorPlayer ?: game.westPlayer ?: "jogador do trunfo"
+        val side = hybrid.pendingTrumpSide?.lowercase()
+
+        if (isHost && !side.isNullOrBlank()) {
+            val sideLabel = if (side == "top") "TOPO" else "FUNDO"
+            recognitionProgressText.text =
+                "$selectorName escolheu $sideLabel. Capta a carta do $sideLabel do baralho fisico."
+            btnTrumpTop.isEnabled = false
+            btnTrumpBottom.isEnabled = false
+            cvRecognitionPaused = false
         }
     }
 

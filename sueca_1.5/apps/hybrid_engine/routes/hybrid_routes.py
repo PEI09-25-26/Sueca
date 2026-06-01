@@ -179,6 +179,10 @@ async def hybrid_deal_reset(data: dict = Body(default_factory=dict)):
         virtual_player_ids=registered_virtual_ids,
         cards_per_virtual=cards_per_virtual,
     )
+    from apps.hybrid_engine.core.hybrid_services import assign_trump_to_dealer
+
+    assign_trump_to_dealer(game)
+    room = hybrid_coordinator.get_room_state(game_id)
     trump_id = int(game.trump_card) if game.trump_card is not None else None
     hybrid_vision.begin_deal_phase(game_id, trump_id)
     _push_hybrid_state(game, room)
@@ -227,9 +231,11 @@ async def hybrid_confirm_trump_capture(data: dict = Body(default_factory=dict)):
         return error(message, 400)
 
     hybrid_vision.begin_deal_phase(game_id, int(recognized.card_id))
+    hybrid_coordinator.clear_pending_trump_side(game_id)
 
-    from apps.hybrid_engine.core.hybrid_services import after_trump_dealt
-    after_trump_dealt(game)
+    from apps.hybrid_engine.core.hybrid_services import after_trump_captured
+    after_trump_captured(game, host_player_id)
+    room = hybrid_coordinator.get_room_state(game_id)
 
     response_payload = {
         "success": True,
@@ -347,12 +353,42 @@ async def hybrid_bot_register(data: dict = Body(default_factory=dict)):
         return error("Player not found in this game", 404)
 
     room = hybrid_coordinator.register_bot(game_id, player_id)
-    if game.phase == "playing":
-        room = hybrid_coordinator.sync_bot_hands_from_game(game_id, game)
-        room = hybrid_coordinator.maybe_auto_finalize_bot_deal(game_id)
     _push_hybrid_state(game, room)
     return {
         "success": True,
+        "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
+        "game_state": game.get_state(),
+    }
+
+
+@router.post("/api/hybrid/trump/select_side")
+async def hybrid_trump_select_side(data: dict = Body(default_factory=dict)):
+    """Virtual/bot chooses top or bottom; host must capture trump with the camera."""
+    game, game_id = get_game_from_request(data)
+    if not game:
+        return error(f"Game {game_id} not found", 404)
+
+    player_id = data.get("player_id")
+    choice = data.get("choice")
+    if not player_id or not choice:
+        return error("player_id and choice are required", 400)
+
+    selector = game._get_player_by_position(game._current_dealer_position())
+    if selector is None or selector.player_id != player_id:
+        return error("Only the trump selector can choose top/bottom", 403)
+
+    if game.phase != "trump_selection":
+        return error("Not in trump selection phase", 400)
+
+    ok, message, room = hybrid_coordinator.set_pending_trump_side(game_id, player_id, choice)
+    if not ok:
+        return error(message, 400)
+
+    game._push_state("trump_side_selected")
+    _push_hybrid_state(game, room)
+    return {
+        "success": True,
+        "message": message,
         "state": hybrid_coordinator.to_payload(room, _players_meta(game)),
         "game_state": game.get_state(),
     }

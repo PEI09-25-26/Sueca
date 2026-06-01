@@ -113,24 +113,30 @@ class HybridBotAgent(GameClient):
         return bool(hybrid.get("deal_done"))
 
     def _handle_deck_cutting(self, state):
-        if state.get("north_player_id") != self.player_id and state.get("north_player") != self.player_name:
-            return
-        cut = self.decision_maker.choose_deck_cut()
-        success, message = self.cut_deck(cut)
-        if success:
-            print(f"{self.agent_name} cutting deck at {cut}")
-        else:
-            print(f"[ERROR] Cutting deck failed: {message}")
+        # Hybrid: the host cuts the physical deck with the camera; bots do not cut server-side.
+        return
 
     def _handle_trump_selection(self, state):
         if state.get("west_player_id") != self.player_id and state.get("west_player") != self.player_name:
             return
+
+        hybrid = self._get_hybrid_state() or {}
+        if hybrid.get("pending_trump_side"):
+            return
+
         choice = self.decision_maker.choose_trump_selection()
-        success, message = self.select_trump(choice)
-        if success:
-            print(f"{self.agent_name} selecting {choice} card for trump")
+        data = self._post(
+            "/api/hybrid/trump/select_side",
+            {
+                "game_id": self.game_id,
+                "player_id": self.player_id,
+                "choice": choice,
+            },
+        )
+        if data.get("success"):
+            print(f"{self.agent_name} chose trump side: {choice} (waiting for host capture)")
         else:
-            print(f"[ERROR] Selecting trump failed: {message}")
+            print(f"[ERROR] Trump side selection failed: {data.get('message')}")
 
     def _handle_playing_turn(self, state):
         if not self._is_deal_ready():

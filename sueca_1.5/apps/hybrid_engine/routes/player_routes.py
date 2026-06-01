@@ -114,9 +114,6 @@ def add_bot(data: dict = Body(default_factory=dict)):
         publish_bot_added(game_id, bot_player.player_id, bot_name, difficulty, position)
         if hybrid_coordinator is not None:
             room = hybrid_coordinator.register_bot(game_id, bot_player.player_id)
-            if game.phase == "playing":
-                room = hybrid_coordinator.sync_bot_hands_from_game(game_id, game)
-                room = hybrid_coordinator.maybe_auto_finalize_bot_deal(game_id)
             from apps.hybrid_engine.core.hybrid_services import _push_hybrid_state_fn
             if _push_hybrid_state_fn is not None:
                 _push_hybrid_state_fn(game, room)

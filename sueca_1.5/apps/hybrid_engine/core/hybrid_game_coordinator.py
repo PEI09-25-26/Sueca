@@ -23,6 +23,8 @@ class PendingVirtualPlay:
 class HybridRoomState:
     game_id: str
     host_player_id: Optional[str] = None
+    pending_trump_side: Optional[str] = None
+    trump_selector_player_id: Optional[str] = None
     player_roles: Dict[str, str] = field(default_factory=dict)
     cards_per_virtual: int = 10
     virtual_order: List[str] = field(default_factory=list)
@@ -82,23 +84,51 @@ class HybridGameCoordinator:
             return room
 
     def maybe_auto_finalize_bot_deal(self, game_id: str) -> HybridRoomState:
-        """Skip camera dealing when every virtual seat is a bot with full hands."""
+        """Hybrid deal always requires host camera; never auto-finalize."""
+        return self.get_room_state(game_id)
+
+    def set_pending_trump_side(
+        self, game_id: str, player_id: str, choice: str
+    ) -> tuple[bool, str, HybridRoomState]:
+        """Record top/bottom choice for the host to capture physically (no server deck pick)."""
+        side = (choice or "").strip().lower()
+        if side not in ("top", "bottom"):
+            return False, "Choice must be 'top' or 'bottom'", self._get_room(game_id)
+
         with self._lock:
             room = self._get_room(game_id)
-            virtual_ids = [
-                pid for pid, role in room.player_roles.items()
-                if role == "virtual"
-            ]
-            if not virtual_ids:
-                room.deal_finalized = True
+            room.pending_trump_side = side
+            room.trump_selector_player_id = player_id
+            label = "topo" if side == "top" else "fundo"
+            return True, f"Aguardando o host capturar a carta do {label}", room
+
+    def clear_pending_trump_side(self, game_id: str) -> HybridRoomState:
+        with self._lock:
+            room = self._get_room(game_id)
+            room.pending_trump_side = None
+            room.trump_selector_player_id = None
+            return room
+
+    def assign_trump_to_selector(
+        self, game_id: str, trump_card_id: int, selector_player_id: str
+    ) -> HybridRoomState:
+        """Give the captured trump to the dealer/selector virtual hand (10th card in Sueca)."""
+        with self._lock:
+            room = self._get_room(game_id)
+            if selector_player_id not in room.virtual_hands:
                 return room
-            if not all(pid in room.bot_player_ids for pid in virtual_ids):
+
+            trump_id = int(trump_card_id)
+            hand = room.virtual_hands[selector_player_id]
+            if trump_id in hand:
                 return room
-            if all(
-                len(room.virtual_hands.get(pid, [])) >= room.cards_per_virtual
-                for pid in virtual_ids
-            ):
-                room.deal_finalized = True
+
+            all_cards = [c for cards in room.virtual_hands.values() for c in cards]
+            if trump_id in all_cards:
+                return room
+
+            hand.append(trump_id)
+            hand.sort()
             return room
 
     def register_player(self, game_id: str, player_id: str, role: str, is_host: bool) -> HybridRoomState:
@@ -277,6 +307,8 @@ class HybridGameCoordinator:
             "player_roles": payload_roles,
             "virtual_players": virtual_players,
             "pending_virtual_play": pending,
+            "pending_trump_side": room.pending_trump_side,
+            "trump_selector_player_id": room.trump_selector_player_id,
             "deal_done": room.deal_finalized if virtual_players else True,
             "bot_player_ids": sorted(room.bot_player_ids),
         }

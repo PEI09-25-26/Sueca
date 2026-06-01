@@ -82,16 +82,32 @@ def select_trump(
     if not player_id or not choice:
         return error("Player and choice required", 400)
 
-    success, message = game.select_trump(player_id, choice)
-    if not success:
+    from apps.hybrid_engine.routes import hybrid_routes as hybrid_routes_module
+
+    coordinator = hybrid_routes_module.hybrid_coordinator
+    if coordinator is None:
+        return error("Hybrid coordinator unavailable", 500)
+
+    selector = game._get_player_by_position(game._current_dealer_position())
+    if selector is None or selector.player_id != player_id:
+        return error("Only the trump selector can choose top/bottom", 403)
+
+    if game.phase != "trump_selection":
+        return error("Not in trump selection phase", 400)
+
+    ok, message, room = coordinator.set_pending_trump_side(game_id, player_id, choice)
+    if not ok:
         return {"success": False, "message": message}
 
-    if success:
-        selector = game.get_player(player_id)
-        publish_trump_selected(game_id, selector.player_name, choice, str(game.trump_card))
-        from apps.hybrid_engine.core.hybrid_services import after_trump_dealt
-        after_trump_dealt(game)
-    return {"success": success, "message": message}
+    publish_trump_selected(game_id, selector.player_name, choice, "pending_capture")
+    game._push_state("trump_side_selected")
+    hybrid_routes_module._push_hybrid_state(game, room)
+    return {
+        "success": True,
+        "message": message,
+        "state": coordinator.to_payload(room, hybrid_routes_module._players_meta(game)),
+        "game_state": game.get_state(),
+    }
 
 
 
