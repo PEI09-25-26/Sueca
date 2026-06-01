@@ -6,6 +6,9 @@ from ..core import manager
 from ..session import session_manager
 from .common import error, get_game_from_request
 
+# Injected at startup by hybrid engine main — same singletons used by hybrid_routes.
+hybrid_coordinator = None
+hybrid_vision = None
 
 
 router = APIRouter()
@@ -84,7 +87,34 @@ def start_room_rematch(game_id: str):
     success, message = game.rematch()
     if not success:
         return error(message, 400)
+
+    if hybrid_coordinator is not None:
+        room = hybrid_coordinator.reset_for_rematch(game_id)
+
+        # Skip cutting phase since hybrid games do not cut.
+        from apps.hybrid_engine.routes.hybrid_routes import _maybe_skip_hybrid_cut
+        _maybe_skip_hybrid_cut(game, room)
+
+        # Push a FRESH hybrid state to MQTT so the retained message on
+        # `sueca/games/{game_id}/hybrid` is overwritten with deal_done=False
+        # and empty bot hands. Without this, Android would read the stale
+        # retained message and think the deal is already complete.
+        from apps.hybrid_engine.core.hybrid_services import _push_hybrid_state_fn
+        if _push_hybrid_state_fn is not None:
+            _push_hybrid_state_fn(game, room)
+
+    # ── CV vision service ──────────────────────────────────────────────────
+    # Fully clear the per-game CV state and restart in trump-detection mode.
+    # `clear_game` removes all consumed/dealt card memory from the previous
+    # match. `begin_trump_phase` sets the phase back to "trump" so the camera
+    # correctly looks for the new trump card instead of play cards.
+    if hybrid_vision is not None:
+        hybrid_vision.clear_game(game_id)
+        hybrid_vision.begin_trump_phase(game_id)
+
     return {"success": True, "message": message, "state": game.get_state()}
+
+
 
 
 @router.post("/api/create_room")

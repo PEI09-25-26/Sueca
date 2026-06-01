@@ -44,4 +44,6 @@
     <string name="hybrid_trick_review_title">Volta concluida</string>
     <string name="hybrid_trick_review_message">Confirma se as quatro cartas na mesa estao corretas antes de avancar para a proxima volta.</string>
     <string name="hybrid_trick_review_fix">Corrigir ultima carta</string>
+    <string name="hybrid_rematch_prep_title">Preparar Próximo Jogo</string>
+    <string name="hybrid_rematch_prep_message">Limpa a mesa de todas as cartas do jogo anterior e baralha o baralho.\n\nQuando o novo trunfo estiver na mesa e pronto para ser detetado, toca em Continuar.</string>
 </resources>

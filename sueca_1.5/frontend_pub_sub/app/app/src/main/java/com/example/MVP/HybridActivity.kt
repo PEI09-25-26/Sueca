@@ -10,7 +10,10 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
+import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.Switch
@@ -112,6 +115,7 @@ class HybridActivity : AppCompatActivity() {
     private var dealPauseShown = false
     private var lastDealDone = false
     private var cvPauseDialog: AlertDialog? = null
+    private var trickReviewOverlay: View? = null
     private var trickReviewDialogShownForKey: String? = null
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -489,6 +493,7 @@ class HybridActivity : AppCompatActivity() {
                         trickReviewDialogShownForKey = null
                         cvPauseDialog?.dismiss()
                         cvPauseDialog = null
+                        dismissTrickReviewOverlay()
                         cvRecognitionPaused = false
                     }
                 }
@@ -497,6 +502,7 @@ class HybridActivity : AppCompatActivity() {
                         trickReviewDialogShownForKey = null
                         cvPauseDialog?.dismiss()
                         cvPauseDialog = null
+                        dismissTrickReviewOverlay()
                         cvRecognitionPaused = false
                     }
                 }
@@ -542,47 +548,34 @@ class HybridActivity : AppCompatActivity() {
                 return@runOnUiThread
             }
 
+            // AFTER_TRICK uses a custom draggable overlay so that:
+            //  1. The camera/table switch button remains accessible.
+            //  2. The user can drag the panel away from cards they want to verify.
+            if (reason == CvPauseReason.AFTER_TRICK) {
+                dismissTrickReviewOverlay()
+                cvRecognitionPaused = true
+                showTrickReviewOverlay()
+                return@runOnUiThread
+            }
+
             cvPauseDialog?.dismiss()
             cvRecognitionPaused = false
 
             val titleRes = when (reason) {
                 CvPauseReason.AFTER_TRUMP -> R.string.hybrid_cv_pause_trump_title
                 CvPauseReason.AFTER_DEAL -> R.string.hybrid_cv_pause_deal_title
-                CvPauseReason.AFTER_TRICK -> R.string.hybrid_trick_review_title
+                CvPauseReason.AFTER_TRICK -> R.string.hybrid_trick_review_title // unreachable
             }
             val messageRes = when (reason) {
                 CvPauseReason.AFTER_TRUMP -> R.string.hybrid_cv_pause_trump_message
                 CvPauseReason.AFTER_DEAL -> R.string.hybrid_cv_pause_deal_message
-                CvPauseReason.AFTER_TRICK -> R.string.hybrid_trick_review_message
+                CvPauseReason.AFTER_TRICK -> R.string.hybrid_trick_review_message // unreachable
             }
 
-            val dialogBuilder = AlertDialog.Builder(this, R.style.CustomDialogTheme)
+            cvPauseDialog = AlertDialog.Builder(this, R.style.CustomDialogTheme)
                 .setTitle(titleRes)
                 .setMessage(messageRes)
                 .setCancelable(false)
-
-            if (reason == CvPauseReason.AFTER_TRICK) {
-                cvRecognitionPaused = true
-                dialogBuilder
-                    .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
-                        requestConfirmTrick()
-                        dialog.dismiss()
-                        cvPauseDialog = null
-                        cvRecognitionPaused = false
-                    }
-                    .setNegativeButton(R.string.hybrid_trick_review_fix) { dialog, _ ->
-                        trickReviewDialogShownForKey = null
-                        requestUndoMove()
-                        dialog.dismiss()
-                        cvPauseDialog = null
-                        cvRecognitionPaused = false
-                    }
-                cvPauseDialog = dialogBuilder.create()
-                cvPauseDialog?.show()
-                return@runOnUiThread
-            }
-
-            cvPauseDialog = dialogBuilder
                 .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
                     if (reason == CvPauseReason.AFTER_DEAL) {
                         lifecycleScope.launch {
@@ -610,6 +603,95 @@ class HybridActivity : AppCompatActivity() {
 
             cvPauseDialog?.show()
         }
+    }
+
+    private fun showRematchPreparationDialog() {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                return@runOnUiThread
+            }
+
+            cvPauseDialog?.dismiss()
+
+            cvPauseDialog = AlertDialog.Builder(this, R.style.CustomDialogTheme)
+                .setTitle(R.string.hybrid_rematch_prep_title)
+                .setMessage(R.string.hybrid_rematch_prep_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.hybrid_cv_pause_continue) { dialog, _ ->
+                    cvRecognitionPaused = false
+                    dialog.dismiss()
+                    cvPauseDialog = null
+                }
+                .create()
+
+            cvPauseDialog?.show()
+        }
+    }
+
+    /**
+     * Inflates and attaches the draggable "Volta concluida" overlay to the root ConstraintLayout.
+     * The panel floats freely over the content area and does NOT intercept touches to the
+     * camera/table switch button (which lives in the top bar above the content container).
+     */
+    private fun showTrickReviewOverlay() {
+        val rootView = findViewById<ViewGroup>(android.R.id.content)
+        val overlay = LayoutInflater.from(this)
+            .inflate(R.layout.dialog_trick_review_overlay, rootView, false)
+        trickReviewOverlay = overlay
+
+        // Position: centre of the content area initially
+        overlay.post {
+            val parentW = rootView.width
+            val parentH = rootView.height
+            val w = overlay.width
+            val h = overlay.height
+            overlay.x = ((parentW - w) / 2f).coerceAtLeast(0f)
+            overlay.y = ((parentH - h) / 2f).coerceAtLeast(0f)
+        }
+
+        // Dragging logic — attached only to the drag handle bar so button taps are not intercepted
+        var dX = 0f
+        var dY = 0f
+        val dragHandle = overlay.findViewById<View>(R.id.trickReviewDragHandle)
+        dragHandle.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = overlay.x - event.rawX
+                    dY = overlay.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (rootView.width - overlay.width).toFloat().coerceAtLeast(0f))
+                    val newY = (event.rawY + dY).coerceIn(0f, (rootView.height - overlay.height).toFloat().coerceAtLeast(0f))
+                    overlay.x = newX
+                    overlay.y = newY
+                    true
+                }
+                else -> false
+            }
+        }
+
+        // Button actions — consume touch so they don't trigger drag
+        overlay.findViewById<Button>(R.id.trickOverlayBtnConfirm).setOnClickListener {
+            requestConfirmTrick()
+            dismissTrickReviewOverlay()
+            cvRecognitionPaused = false
+        }
+        overlay.findViewById<Button>(R.id.trickOverlayBtnFix).setOnClickListener {
+            trickReviewDialogShownForKey = null
+            requestUndoMove()
+            dismissTrickReviewOverlay()
+            cvRecognitionPaused = false
+        }
+
+        rootView.addView(overlay)
+        overlay.bringToFront()
+    }
+
+    private fun dismissTrickReviewOverlay() {
+        val overlay = trickReviewOverlay ?: return
+        (overlay.parent as? ViewGroup)?.removeView(overlay)
+        trickReviewOverlay = null
     }
 
     private fun showRenunciaDialog(playerId: String, cardId: Int?, cardDisplay: String?) {
@@ -799,16 +881,43 @@ class HybridActivity : AppCompatActivity() {
     }
 
     private fun updateUiFromGameState(state: GameStatusResponse) {
-        updateTableFromGameState(state)
-
         val phase = state.phase
+
+        // Detect start of a new match (rematch): the phase comes back to deck_cutting
+        // or trump_selection while we still think a deal has been done. Reset all local
+        // match-state flags so the new match is treated as a fresh start.
+        if ((phase == "deck_cutting" || phase == "trump_selection") && dealResetRequested) {
+            dealResetRequested = false
+            trumpPauseShown = false
+            dealPauseShown = false
+            lastDealDone = false
+            trickReviewDialogShownForKey = null
+            cvPauseDialog?.dismiss()
+            cvPauseDialog = null
+            dismissTrickReviewOverlay()
+            if (isHost) {
+                cvRecognitionPaused = true
+                showRematchPreparationDialog()
+            } else {
+                cvRecognitionPaused = false
+            }
+            hybridState = null  // stale hands from old match; wait for fresh sync
+        }
+
+        updateTableFromGameState(state)
 
         if (phase == "finished") {
             showFinishedBanner(state)
             return
         } else {
             layoutFinishedBanner.visibility = View.GONE
-            findViewById<FrameLayout>(R.id.hybridContentContainer).visibility = View.VISIBLE
+            val hybridContainer = findViewById<FrameLayout>(R.id.hybridContentContainer)
+            hybridContainer.visibility = View.VISIBLE
+            hybridContainer.alpha = 1f
+            hybridContainer.isClickable = true
+            // Restore hand views that showFinishedBanner() hides
+            handLabel.visibility = View.VISIBLE
+            handRecyclerView.visibility = View.VISIBLE
         }
 
         if (phase == "trump_selection") {
@@ -970,6 +1079,19 @@ class HybridActivity : AppCompatActivity() {
     private fun requestRematch() {
         if (roomId.isBlank()) return
 
+        // Immediately pause camera and clear UI locally to prevent stale frame capture
+        if (isHost) {
+            cvRecognitionPaused = true
+        }
+        clearTableCards()
+        handAdapter.updateCards(emptyList())
+        dismissTrickReviewOverlay()
+        cvPauseDialog?.dismiss()
+        cvPauseDialog = null
+
+        // Make sure we will reset deal when playing starts next
+        dealResetRequested = true
+
         lifecycleScope.launch {
             try {
                 val res = GatewayClient.requestRematch(roomId)
@@ -978,8 +1100,12 @@ class HybridActivity : AppCompatActivity() {
                     res.message ?: if (res.success) "Pedido de desforra enviado" else "Erro na desforra",
                     Toast.LENGTH_SHORT
                 ).show()
+                if (!res.success) {
+                    if (isHost) cvRecognitionPaused = false
+                }
             } catch (e: Exception) {
                 Toast.makeText(this@HybridActivity, "Erro na desforra: ${e.message}", Toast.LENGTH_SHORT).show()
+                if (isHost) cvRecognitionPaused = false
             }
         }
     }
@@ -1458,6 +1584,7 @@ class HybridActivity : AppCompatActivity() {
         isRunning = false
         cvPauseDialog?.dismiss()
         cvPauseDialog = null
+        dismissTrickReviewOverlay()
         hybridWsClient?.disconnect()
         hybridMqttSubscriber?.disconnect()
         flashJob?.cancel()

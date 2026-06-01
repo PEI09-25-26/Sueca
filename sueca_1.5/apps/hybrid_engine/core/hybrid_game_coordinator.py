@@ -291,3 +291,19 @@ class HybridGameCoordinator:
             room = self._get_room(game_id)
             room.deal_finalized = True
             return room
+
+    def reset_for_rematch(self, game_id: str) -> HybridRoomState:
+        """Reset card-tracking state for a new match while keeping player/bot registrations.
+
+        Called when a rematch starts so that:
+        - Virtual hands are cleared (cards will be re-dealt / re-synced from game state)
+        - deal_finalized is cleared (deal phase must run again)
+        - pending_virtual_play is cleared
+        - player_roles and bot_player_ids are preserved (no need to re-register)
+        """
+        with self._lock:
+            room = self._get_room(game_id)
+            room.virtual_hands = {pid: [] for pid in room.virtual_order}
+            room.deal_finalized = False
+            room.pending_virtual_play = None
+            return room
