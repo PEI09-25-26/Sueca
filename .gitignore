@@ -23,6 +23,7 @@ venv/
 
 # Python cache
 __pycache__/
+**/__pycache__/
 
 # Python compiled files
 *.pyc
