@@ -45,6 +45,7 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import androidx.appcompat.app.AlertDialog
+import com.example.MVP.utils.ErrorDialogUtils
 import org.json.JSONObject
 import com.google.gson.Gson
 
@@ -923,53 +924,61 @@ class VisionActivity : AppCompatActivity() {
         val gameEnded = json.getBoolean("game_ended")
         val reason = json.optString("reason", "score")
 
-        val title = if (reason == "renuncia") "⚠️ Renúncia Detetada!" else if (gameEnded) "🏆 Jogo Terminado!" else "✅ Ronda $roundNumber Concluída"
+        val title = if (reason == "renuncia") "⚠️ Renúncia Detetada" else if (gameEnded) "🏆 Jogo Terminado" else "✅ Ronda $roundNumber Concluída"
         val message = buildString {
             if (reason == "renuncia") {
                 append("Foi detetada uma renúncia! Equipa $winnerTeam ganha +4 vitórias.\n\n")
             } else {
                 append("Equipa $winnerTeam ganhou esta ronda!\n\n")
             }
-            append("Pontos:\n")
-            append("Equipa 1: $team1Points\n")
-            append("Equipa 2: $team2Points\n\n")
-            
+            append("Equipa 1: $team1Points pts\n")
+            append("Equipa 2: $team2Points pts")
             if (gameEnded) {
-                append("🎮 O jogo completo terminou após 4 rondas!")
+                append("\n\n🎮 O jogo completo terminou!")
             }
         }
 
-        val builder = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-        builder.setTitle(title)
-        builder.setMessage(message)
-        builder.setCancelable(false)
+        // Build the premium custom dialog
+        val dialog = android.app.Dialog(this, com.example.MVP.R.style.CustomDialogTheme)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        dialog.setCancelable(false)
 
+        val inflater = android.view.LayoutInflater.from(this)
+        val view = inflater.inflate(com.example.MVP.R.layout.dialog_round_end, null)
+        dialog.setContentView(view)
+
+        view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogRoundTitle).text = title
+        view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogRoundMessage).text = message
+
+        val btnPrimary = view.findViewById<android.widget.Button>(com.example.MVP.R.id.btnDialogPrimary)
+        val btnSecondary = view.findViewById<android.widget.Button>(com.example.MVP.R.id.btnDialogSecondary)
+        val btnCorrect = view.findViewById<android.widget.Button>(com.example.MVP.R.id.btnDialogCorrect)
+
+        // Show correction button only for renúncia
         if (reason == "renuncia") {
-            builder.setNeutralButton("Corrigir Erro (Visão)") { dialog, _ ->
+            btnCorrect.visibility = android.view.View.VISIBLE
+            btnCorrect.setOnClickListener {
                 dialog.dismiss()
                 showCorrectionDialog()
             }
+        } else {
+            btnCorrect.visibility = android.view.View.GONE
         }
 
         if (gameEnded) {
-            // Jogo acabou - voltar ao menu
-            builder.setPositiveButton("Voltar ao Menu") { dialog, _ ->
-                dialog.dismiss()
-                finish()
-            }
+            btnPrimary.text = "Voltar ao Menu"
+            btnPrimary.setOnClickListener { dialog.dismiss(); finish() }
+            btnSecondary.visibility = android.view.View.GONE
         } else {
-            // Mais rondas disponíveis
-            builder.setPositiveButton("Nova Ronda") { dialog, _ ->
-                dialog.dismiss()
-                startNewRound()
-            }
-            builder.setNegativeButton("Terminar Jogo") { dialog, _ ->
-                dialog.dismiss()
-                finish()
-            }
+            btnPrimary.text = "Nova Ronda"
+            btnPrimary.setOnClickListener { dialog.dismiss(); startNewRound() }
+            btnSecondary.visibility = android.view.View.VISIBLE
+            btnSecondary.text = "Terminar Jogo"
+            btnSecondary.setOnClickListener { dialog.dismiss(); finish() }
         }
-        
-        builder.show()
+
+        dialog.show()
     }
     
     private fun startNewRound() {
@@ -1079,23 +1088,41 @@ class VisionActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Shows a physical-game instruction popup using the premium dark dialog design.
+     */
     private fun showPopupDialog(title: String, message: String) {
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
-            .show()
+        ErrorDialogUtils.showError(
+            context = this,
+            title = title,
+            message = message,
+            buttonText = "OK"
+        )
     }
 
+    /**
+     * Shows an auto-dismissing physical-game instruction popup using the premium dark dialog design.
+     * Dismisses automatically after [durationMs] milliseconds.
+     */
     private fun showTemporaryPopup(title: String, message: String, durationMs: Long) {
-        val dialog = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle(title)
-            .setMessage(message)
-            .setCancelable(false)
-            .show()
+        val dialog = android.app.Dialog(this, com.example.MVP.R.style.CustomDialogTheme)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        dialog.setCancelable(false)
 
+        val inflater = android.view.LayoutInflater.from(this)
+        val view = inflater.inflate(com.example.MVP.R.layout.dialog_info, null)
+        dialog.setContentView(view)
+
+        view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogTitle).text = title
+        view.findViewById<android.widget.TextView>(com.example.MVP.R.id.dialogMessage).text = message
+
+        // Hide the OK button — dialog auto-dismisses
+        view.findViewById<android.widget.Button>(com.example.MVP.R.id.btnDialogOk).visibility = android.view.View.GONE
+
+        dialog.show()
         handler.postDelayed({
-            if (dialog.isShowing) try { dialog.dismiss() } catch(e: Exception) {}
+            if (dialog.isShowing) try { dialog.dismiss() } catch (e: Exception) { /* ignore */ }
         }, durationMs)
     }
 
