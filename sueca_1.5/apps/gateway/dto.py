@@ -17,13 +17,13 @@ class ScanEventDTO(BaseModel):
 
 class StartGameRequest(BaseModel):
     playerName: str
-    roomId: Optional[str] = None
+    room_id: Optional[str] = None
 
 
 class StartGameResponse(BaseModel):
     success: bool
     message: str
-    gameId: str
+    game_id: str
 
 
 class RoundEndData(BaseModel):

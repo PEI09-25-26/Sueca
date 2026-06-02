@@ -55,11 +55,13 @@ async def new_round(game_id: str):
 
 @router.post("/game/start")
 async def start_game(request: StartGameRequest):
+    game_id = request.room_id or "default"
+    print(f"[Middleware] Starting physical game with room_id: {game_id}")
     try:
         response = await asyncio.to_thread(
             state.INTERNAL_HTTP.post,
             f"{state.CV_SERVICE_URL}/cv/start",
-            json={"game_id": request.roomId or "default"},
+            json={"game_id": game_id},
             timeout=5,
         )
 
@@ -67,20 +69,20 @@ async def start_game(request: StartGameRequest):
             return StartGameResponse(
                 success=True,
                 message="Game started successfully",
-                gameId=request.roomId or "default",
+                game_id=game_id,
             )
 
         return StartGameResponse(
             success=False,
             message=f"Failed to start CV service: {response.text}",
-            gameId="",
+            game_id="",
         )
     except Exception as error:
         print(f"[Middleware] Error starting CV service: {error}")
         return StartGameResponse(
             success=False,
             message=f"CV service unavailable: {str(error)}",
-            gameId="",
+            game_id="",
         )
 
 
@@ -111,40 +113,43 @@ async def game_ready(game_id: str, dealer_id: int = Query(-1), starter_id: int =
             return StartGameResponse(
                 success=True,
                 message="Game reset and ready",
-                gameId=game_id,
+                game_id=game_id,
                 gameState=response.json().get("game_state")
             )
         return StartGameResponse(
             success=False,
             message=f"Failed to reset game engine: {response.text}",
-            gameId=game_id
+            game_id=game_id
         )
     except Exception as error:
         print(f"[Middleware] Error in game_ready: {error}")
-        return StartGameResponse(success=False, message=str(error), gameId=game_id)
+        return StartGameResponse(success=False, message=str(error), game_id=game_id)
 
 
 @router.post("/game/correct/{game_id}")
 async def correct_game_card(game_id: str, request: CorrectCardRequest):
     try:
+        # Map rank names to standard abbreviations if needed
+        rank_map = {
+            "ace": "A", "king": "K", "queen": "Q", "jack": "J",
+            "1": "A", # Common misinterpretation
+            "10": "10", # Not in sueca but keep for DTO safety
+        }
+        r = rank_map.get(request.rank.lower(), request.rank.upper())
+
         # 1. Forward correction to Physical Engine
         response = await asyncio.to_thread(
             state.INTERNAL_HTTP.post,
             f"{state.GAME_SERVICE_URL}/correct",
             json={
                 "game_id": game_id,
-                "rank": request.rank,
+                "rank": r,
                 "suit": request.suit,
             },
             timeout=5,
         )
         
         if response.status_code == 200:
-            # 2. Forward correction to CV service if wrong_label is provided
-            if request.wrong_label and game_id in state.cv_connections:
-                # Note: Currently CV expects rank/suit in /cv/undo, 
-                # but we can implement a custom command or just rely on the engine sync.
-                pass
             return response.json()
         
         return {"success": False, "message": f"Engine error: {response.text}"}

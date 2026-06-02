@@ -200,6 +200,7 @@ data class GameStatusResponse(
     val scores: Map<String, Int>?,
     @SerializedName("available_slots") val availableSlots: List<LobbySlot>? = emptyList(),
     @SerializedName("match_points") val matchPoints: MatchPoints? = null,
+    @SerializedName("dealer") val dealer: Int? = null,
     @SerializedName("trick_awaiting_confirmation") val trickAwaitingConfirmation: Boolean? = false,
     @SerializedName("round_resolving") val roundResolving: Boolean? = false
 )
@@ -354,15 +355,15 @@ data class JoinRoomResponse(
 )
 
 data class StartGameRequest(
-    val playerName: String?,
-    val roomId: String?,
+    @SerializedName("playerName") val playerName: String?,
+    @SerializedName("room_id") val roomId: String?,
     val dealerId: Int? = null
 )
 
 data class StartGameResponse(
     val success: Boolean,
     val message: String?,
-    val gameId: String?,
+    @SerializedName("game_id") val gameId: String?,
     val token: String? = null,
     val gameState: GameStatusResponse? = null
 )
@@ -371,6 +372,13 @@ data class CorrectCardRequest(
     val rank: String,
     val suit: String,
     @SerializedName("wrong_label") val wrongLabel: String? = null
+)
+
+data class CorrectCardResponse(
+    val success: Boolean,
+    val message: String?,
+    @SerializedName("game_state") val gameState: GameStatusResponse? = null,
+    @SerializedName("who_played") val whoPlayed: String? = null
 )
 
 data class JoinGameRequest(

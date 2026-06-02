@@ -77,6 +77,7 @@ class Referee:
             "phase": self.phase,
             "trump_set": self.trump_set,
             "trump": CardMapper.get_card(self.trump) if self.trump else None,
+            "trump_id": self.trump,
             "trump_suit": self.trump_suit,
             "trump_owner_player": self.trump_owner_player,
             "trump_owner_label": f"player{self.trump_owner_player}" if self.trump_owner_player is not None else None,
@@ -133,6 +134,13 @@ class Referee:
             return False
         self.card_queue.pop()
         self.card_queue.append(card_id)
+        return True
+
+    def replace_trump(self, card_id: int):
+        self.trump = card_id
+        self.trump_suit = CardMapper.get_card_suit(self.trump)
+        # Recalculate starter just in case
+        self.current_player = (self.dealer + 1) % 4
         return True
 
     def set_trump(self):

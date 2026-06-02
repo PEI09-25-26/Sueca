@@ -276,6 +276,42 @@ def correct_last_card(card: CardDTO):
         ref = copy.deepcopy(PRE_ROUND_SESSIONS[game_id])
         GAME_SESSIONS[game_id] = ref
 
+    if not ref.card_queue and ref.trump_set and ref.rounds_played == 0:
+        print(f"[DEBUG] Correcting trump card to: {card.rank} {card.suit}")
+        card_id = _card_to_id(card)
+        if card_id is None:
+            return {"success": False, "message": "Invalid trump card"}
+
+        old_trump_name = CardMapper.get_card(ref.trump) if ref.trump else "Unknown"
+
+        if not ref.replace_trump(card_id):
+            return {"success": False, "message": "Failed to replace trump"}
+
+        # Sync CV for the old trump card
+        try:
+            old_rank = old_trump_name[:-1]
+            old_suit = old_trump_name[-1]
+            requests.post(
+                CV_UNDO_URL,
+                json={
+                    "game_id": game_id,
+                    "rank": old_rank,
+                    "suit": old_suit,
+                },
+                timeout=1
+            )
+        except Exception:
+            pass
+
+        _push_state(game_id)
+        res = ref.state()
+        res.update({
+            "success": True,
+            "message": "Trump corrected",
+            "who_played": str(ref.dealer),
+        })
+        return res
+
     if not ref.card_queue:
         return {"success": False, "message": "No pending card to correct"}
 
@@ -288,13 +324,69 @@ def correct_last_card(card: CardDTO):
         return {"success": False, "message": "No pending card to correct"}
 
     print(f"[DEBUG] Card corrected. Queue size: {len(ref.card_queue)}")
+    
+    # Identify who played the corrected card for UI mapping
+    # Avoid 'or' bug with player 0 (Este)
+    base_idx = ref.trick_starter if ref.trick_starter is not None else ref.current_player
+    p_idx = (base_idx + len(ref.card_queue) - 1) % 4
+    
+    # If the correction fills the trick (4th card), trigger trick resolution
+    if len(ref.card_queue) >= 4:
+        print("[DEBUG] Enough cards after correction, playing round...")
+        # Note: PRE_ROUND_SESSIONS is already set if we restored from it, 
+        # or we set it now if this is the first time the trick fills.
+        if game_id not in PRE_ROUND_SESSIONS:
+            PRE_ROUND_SESSIONS[game_id] = copy.deepcopy(ref)
+
+        round_ok = ref.play_round()
+        
+        round_ended = False
+        winner_team = None
+        winner_points = 0
+
+        if not round_ok:
+            round_ended = True
+            if ref.team1_victories > ref.team2_victories:
+                winner_team = 1
+                winner_points = ref.team1_victories
+            else:
+                winner_team = 2
+                winner_points = ref.team2_victories
+        elif ref.rounds_played >= MAX_RODADAS:
+            round_ended = True
+            ref.get_game_winner()
+            if ref.team1_points > ref.team2_points:
+                winner_team = 1
+                winner_points = ref.team1_points
+            else:
+                winner_team = 2
+                winner_points = ref.team2_points
+
+        if round_ended:
+            def _notify_round_end(data: dict):
+                try:
+                    requests.post(MIDDLEWARE_ROUND_END_URL, json=data, timeout=1.5)
+                except Exception:
+                    pass
+
+            round_data = {
+                "round_number": ref.current_match,
+                "winner_team": winner_team,
+                "winner_points": winner_points,
+                "team1_points": ref.team1_points,
+                "team2_points": ref.team2_points,
+                "game_ended": ref.rounds_played >= MAX_RODADAS,
+                "reason": "renuncia" if not round_ok else "score",
+            }
+            threading.Thread(target=_notify_round_end, args=(round_data,), daemon=True).start()
+
     _push_state(game_id)
 
     res = ref.state()
     res.update({
         "success": True,
         "message": "Card corrected",
-        "who_played": str(ref.current_player),
+        "who_played": str(p_idx),
         "queue_size": len(ref.card_queue),
     })
     return res

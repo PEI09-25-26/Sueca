@@ -1,3 +1,4 @@
+import asyncio
 import os
 import subprocess
 from pathlib import Path
@@ -38,7 +39,7 @@ FORWARD_TO_FRONTEND = SERVICES.frontend_url.rstrip("/") != SERVICES.gateway_url.
 active_connections: dict[str, Any] = {}
 cv_connections: dict[str, websockets.WebSocketClientProtocol] = {}
 hybrid_stream_connections: dict[str, list[websockets.WebSocketServerProtocol]] = {}
-import asyncio
+game_locks: dict[str, asyncio.Lock] = {}
 main_loop: asyncio.AbstractEventLoop | None = None
 
 SUIT_SYMBOLS = {

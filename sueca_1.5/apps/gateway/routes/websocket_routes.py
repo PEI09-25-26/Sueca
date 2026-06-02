@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 
+import requests
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -55,18 +56,34 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                         try:
                             suit_symbol = state.SUIT_SYMBOLS.get(detection["suit"], detection["suit"])
 
-                            game_response = await asyncio.to_thread(
-                                state.INTERNAL_HTTP.post,
-                                f"{state.GAME_SERVICE_URL}/card",
-                                json={
-                                    "game_id": game_id,
-                                    "rank": detection["rank"],
-                                    "suit": suit_symbol,
-                                    "confidence": detection.get("confidence", 1.0),
-                                },
-                                timeout=5,
-                            )
-                            if game_response.status_code == 200:
+                            # Ensure sequential processing per game to prevent race conditions/resets
+                            if game_id not in state.game_locks:
+                                state.game_locks[game_id] = asyncio.Lock()
+
+                            async with state.game_locks[game_id]:
+                                max_retries = 2
+                                game_response = None
+                                for attempt in range(max_retries):
+                                    try:
+                                        game_response = await asyncio.to_thread(
+                                            state.INTERNAL_HTTP.post,
+                                            f"{state.GAME_SERVICE_URL}/card",
+                                            json={
+                                                "game_id": game_id,
+                                                "rank": detection["rank"],
+                                                "suit": suit_symbol,
+                                                "confidence": detection.get("confidence", 1.0),
+                                            },
+                                            timeout=5,
+                                        )
+                                        break
+                                    except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
+                                        if attempt == max_retries - 1:
+                                            raise e
+                                        print(f"[Middleware] Retry {attempt+1} for {game_id} due to: {e}")
+                                        await asyncio.sleep(0.2)
+
+                            if game_response and game_response.status_code == 200:
                                 game_result = game_response.json()
                                 print(f"[Middleware] Game Service response: {game_result}")
 
@@ -83,6 +100,21 @@ async def websocket_camera(websocket: WebSocket, game_id: str):
                                         print(f"[Middleware] Reset and PAUSED CV history after trump detection for {game_id}")
                                     except Exception as e:
                                         print(f"[Middleware] Failed to send pause/reset to CV: {e}")
+
+                                # Auto-reset for normal tricks when trick ends
+                                elif game_result.get("queue_size") == 0:
+                                    try:
+                                        async def delayed_reset():
+                                            await asyncio.sleep(1.5)
+                                            try:
+                                                reset_cmd = json.dumps({"action": "reset_cards", "delay": 2, "resume": True})
+                                                await cv_ws.send(reset_cmd)
+                                                print(f"[Middleware] Auto-reset CV after trick for {game_id}")
+                                            except Exception:
+                                                pass
+                                        asyncio.create_task(delayed_reset())
+                                    except Exception as e:
+                                        print(f"[Middleware] Failed to schedule auto-reset: {e}")
 
                                 combined_data = {
                                     "success": True,

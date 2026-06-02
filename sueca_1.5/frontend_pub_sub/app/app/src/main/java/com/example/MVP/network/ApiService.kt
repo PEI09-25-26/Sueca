@@ -268,7 +268,7 @@ interface ApiService {
         @Path("gameId") gameId: String,
         @Body request: CorrectCardRequest,
         @Header("Authorization") token: String? = null
-    ): GenericResponse
+    ): CorrectCardResponse
 
     // =========== Hybrid Endpoints ============
 
