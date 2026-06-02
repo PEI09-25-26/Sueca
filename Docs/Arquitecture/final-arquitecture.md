@@ -3,12 +3,12 @@ flowchart LR
 
 %% ==================== CLIENTS ====================
 subgraph Clients
-    ClientMobile["Mobile"]
+    ClientMobile["ClientMobile"]
 end
 
 %% ==================== EDGE ====================
 subgraph Edge
-    Gateway["API Gateway<br/>REST + WS Bridge"]
+    Gateway["Gateway"]
 end
 
 %% ==================== SERVICES ====================
@@ -20,28 +20,28 @@ end
 
 %% ==================== ENGINES ====================
 subgraph Engines
-    VE["Virtual"]
-    HE["Hybrid"]
-    PE["Physical"]
+    VE["VE"]
+    HE["HE"]
+    PE["PE"]
 end
 
 %% ==================== ML ====================
 subgraph ML
-    CV_H["CV Hybrid"]
-    CV_P["CV Physical"]
+    CV_H["CV_H"]
+    CV_P["CV_P"]
 end
 
 %% ==================== INFRA ====================
 subgraph Infra
-    Redis[("Redis")]
-    EMQX{{"MQTT Broker"}}
+    Redis["Redis"]
+    EMQX["EMQX"]
 end
 
 %% ==================== EXTERNAL ====================
 subgraph External
     Cloudflare["Cloudflare"]
-    Firebase["Firebase (Firestore)"]
-    SendGrid["Sendgrid Email "]
+    Firebase["Firebase"]
+    SendGrid["SendGrid"]
 end
 
 %% ==================== FLOWS ====================
