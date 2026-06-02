@@ -27,8 +27,8 @@ end
 
 %% ==================== ML ====================
 subgraph ML
-    YOLO_H["YOLO Hybrid"]
-    YOLO_P["YOLO Physical"]
+    CV_H["CV Hybrid"]
+    CV_P["CV Physical"]
 end
 
 %% ==================== INFRA ====================
@@ -80,11 +80,8 @@ EMQX -->|state| Agents
 
 Gateway -->|presence| EMQX
 
-HE --> YOLO_H
-PE --> YOLO_P
-
-ClientMobile -->|stream| HE
-ClientMobile -->|stream| PE
+HE --> CV_H
+PE --> CV_P
 
 %% ==================== NODE STYLES ====================
 classDef client fill:#63e6be,stroke:#20c997,color:#000
@@ -101,7 +98,7 @@ class Auth,Friends,Agents service
 class VE,HE,PE engine
 class Redis,EMQX infra
 class Firebase,SendGrid,Cloudflare external
-class YOLO_H,YOLO_P ml
+class CV_H,CV_P ml
 
 %% ==================== SUBGRAPH BACKGROUNDS ====================
 style Clients fill:#e6fcf5,stroke:#20c997,stroke-width:2px
