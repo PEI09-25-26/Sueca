@@ -2,14 +2,18 @@ import os
 import subprocess
 import threading
 import queue
+import asyncio
 from pathlib import Path
 from typing import Optional
 
 import requests
+import jwt
+from fastapi import Header, HTTPException
 
 from shared.contracts import normalize_event, normalize_room_state, to_dict
 
 from . import state
+from apps.virtual_engine.session import session_manager
 
 
 class _ForwardDispatcher:
@@ -39,11 +43,31 @@ class _ForwardDispatcher:
 
             try:
                 if kind == "state":
-                    state.frontend.send_state(payload)
+                    # Only forward to web frontend if it's a separate service
+                    if state.FORWARD_TO_FRONTEND:
+                        try:
+                            state.frontend.send_state(payload)
+                        except Exception as e:
+                            print(f"[Middleware] Failed to push state to web frontend: {e}")
+
+                    # Always attempt to broadcast to active mobile WebSockets
+                    game_id = payload.get("game_id")
+                    if game_id and game_id in state.active_connections:
+                        ws = state.active_connections[game_id]
+                        # Use main loop to send as this is a separate thread
+                        if state.main_loop:
+                            asyncio.run_coroutine_threadsafe(
+                                ws.send_json({"success": True, "game_state": payload}),
+                                state.main_loop
+                            )
                 else:
-                    state.frontend.send_event(payload)
+                    if state.FORWARD_TO_FRONTEND:
+                        try:
+                            state.frontend.send_event(payload)
+                        except Exception as e:
+                            print(f"[Middleware] Failed to push event to web frontend: {e}")
             except Exception as error:
-                print(f"[Middleware] Failed to push {kind} to frontend: {error}")
+                print(f"[Middleware] Error in forward dispatcher: {error}")
             finally:
                 self._queue.task_done()
 
@@ -86,8 +110,8 @@ def ingest_state(payload: dict, source: str, default_mode: str):
         state.latest_room_state_by_game[game_id] = canonical_state
     remember_room_mode(game_id, mode)
 
-    if state.FORWARD_TO_FRONTEND:
-        FORWARD_DISPATCHER.submit("state", payload)
+    # Always submit to dispatcher for mobile WebSocket broadcasting
+    FORWARD_DISPATCHER.submit("state", payload)
     return canonical_state
 
 
@@ -97,8 +121,8 @@ def ingest_event(payload: dict, source: str, default_mode: str):
     event_payload = to_dict(envelope)
     remember_room_mode(event_payload.get("game_id"), mode)
 
-    if state.FORWARD_TO_FRONTEND:
-        FORWARD_DISPATCHER.submit("event", event_payload)
+    # Always submit to dispatcher for mobile WebSocket broadcasting
+    FORWARD_DISPATCHER.submit("event", event_payload)
 
     return envelope, event_payload
 
@@ -156,3 +180,46 @@ def stop_managed_services():
                 pass
         finally:
             state.service_processes.pop(name, None)
+
+
+def require_any_token(authorization: str | None = Header(default=None)):
+    """
+    FastAPI dependency that validates either a local session token or a global JWT.
+    Returns the decoded payload if valid.
+    """
+    if not authorization:
+        # For physical game camera stream, we might want to allow
+        # local container-to-container calls without tokens if needed,
+        # but for mobile we always expect one.
+        raise HTTPException(status_code=401, detail="missing authorization header")
+
+    if authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    else:
+        token = authorization.strip()
+
+    if not token:
+        raise HTTPException(status_code=401, detail="empty authorization token")
+
+    # 1. Try local session manager (guest or virtual engine sessions)
+    try:
+        session_data = session_manager.validate_token(token)
+        if session_data:
+            return session_data
+    except Exception:
+        pass
+
+    # 2. Try global secrets (Firebase or main auth service)
+    # We try both standard SECRET_KEY and SUECA_JWT_SECRET
+    secrets = [os.getenv("SECRET_KEY"), os.getenv("SUECA_JWT_SECRET"), os.getenv("SUECA_SERVICE_JWT_SECRET")]
+    for secret in filter(None, secrets):
+        try:
+            payload = jwt.decode(token, secret, algorithms=["HS256"])
+            return payload
+        except jwt.PyJWTError:
+            continue
+
+    # 3. Fallback: For physical mode development, if we are in a trusted network
+    # we could allow it, but better to fix the 401 on the phone.
+
+    raise HTTPException(status_code=401, detail="invalid or expired authorization token")

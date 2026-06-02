@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ServiceConfig:
-    gateway_url: str = "http://10.225.61.214:8080"
-    frontend_url: str = "http://10.225.61.214:8000"
+    gateway_url: str = "http://gateway:8080"
+    frontend_url: str = "http://gateway:8080"
     # Internal service targets use Docker service names (container-to-container).
     virtual_engine_url: str = "http://virtual_engine:5000"
     physical_engine_url: str = "http://physical_engine:8001"

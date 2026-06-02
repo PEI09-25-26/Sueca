@@ -1,10 +1,10 @@
 import json
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from .. import state
-from ..dto import RoundEndData, ScanEventDTO, StartGameRequest, StartGameResponse
+from ..dto import RoundEndData, ScanEventDTO, StartGameRequest, StartGameResponse, CorrectCardRequest
 
 
 router = APIRouter()
@@ -55,11 +55,13 @@ async def new_round(game_id: str):
 
 @router.post("/game/start")
 async def start_game(request: StartGameRequest):
+    game_id = request.room_id or "default"
+    print(f"[Middleware] Starting physical game with room_id: {game_id}")
     try:
         response = await asyncio.to_thread(
             state.INTERNAL_HTTP.post,
             f"{state.CV_SERVICE_URL}/cv/start",
-            json={"game_id": request.roomId or "default"},
+            json={"game_id": game_id},
             timeout=5,
         )
 
@@ -67,36 +69,93 @@ async def start_game(request: StartGameRequest):
             return StartGameResponse(
                 success=True,
                 message="Game started successfully",
-                gameId=request.roomId or "default",
+                game_id=game_id,
             )
 
         return StartGameResponse(
             success=False,
             message=f"Failed to start CV service: {response.text}",
-            gameId="",
+            game_id="",
         )
     except Exception as error:
         print(f"[Middleware] Error starting CV service: {error}")
         return StartGameResponse(
             success=False,
             message=f"CV service unavailable: {str(error)}",
-            gameId="",
+            game_id="",
         )
 
 
 @router.post("/game/ready/{game_id}")
-async def game_ready(game_id: str):
-    if game_id in state.cv_connections:
-        cv_ws = state.cv_connections[game_id]
-        try:
-            reset_command = json.dumps({"action": "reset_cards"})
+async def game_ready(game_id: str, dealer_id: int = Query(-1), starter_id: int = Query(-1)):
+    try:
+        # Reset CV history for this game and RESUME in TRICK mode
+        if game_id in state.cv_connections:
+            cv_ws = state.cv_connections[game_id]
+
+            # Switch mode to trick and resume
+            await cv_ws.send(json.dumps({"action": "set_mode", "mode": "trick"}))
+
+            # action=resume or reset with resume=True
+            reset_command = json.dumps({"action": "reset_cards", "full": True, "resume": True})
             await cv_ws.send(reset_command)
-            print(f"[Middleware] Game started for {game_id} - CV history reset")
-            return {"success": True, "message": "Game started, ready for cards"}
-        except Exception as error:
-            print(f"[Middleware] Error resetting CV: {error}")
-            return {"success": False, "message": str(error)}
-    return {"success": False, "message": "Game not found"}
+            print(f"[Middleware] CV history reset and RESUMED in TRICK mode for {game_id}")
+
+        # Ensure Physical Engine is ready for this game
+        response = await asyncio.to_thread(
+            state.INTERNAL_HTTP.post,
+            f"{state.GAME_SERVICE_URL}/ready",
+            params={"game_id": game_id, "dealer_id": dealer_id, "starter_id": starter_id},
+            timeout=5,
+        )
+        
+        if response.status_code == 200:
+            return StartGameResponse(
+                success=True,
+                message="Game reset and ready",
+                game_id=game_id,
+                gameState=response.json().get("game_state")
+            )
+        return StartGameResponse(
+            success=False,
+            message=f"Failed to reset game engine: {response.text}",
+            game_id=game_id
+        )
+    except Exception as error:
+        print(f"[Middleware] Error in game_ready: {error}")
+        return StartGameResponse(success=False, message=str(error), game_id=game_id)
+
+
+@router.post("/game/correct/{game_id}")
+async def correct_game_card(game_id: str, request: CorrectCardRequest):
+    try:
+        # Map rank names to standard abbreviations if needed
+        rank_map = {
+            "ace": "A", "king": "K", "queen": "Q", "jack": "J",
+            "1": "A", # Common misinterpretation
+            "10": "10", # Not in sueca but keep for DTO safety
+        }
+        r = rank_map.get(request.rank.lower(), request.rank.upper())
+
+        # 1. Forward correction to Physical Engine
+        response = await asyncio.to_thread(
+            state.INTERNAL_HTTP.post,
+            f"{state.GAME_SERVICE_URL}/correct",
+            json={
+                "game_id": game_id,
+                "rank": r,
+                "suit": request.suit,
+            },
+            timeout=5,
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        
+        return {"success": False, "message": f"Engine error: {response.text}"}
+    except Exception as error:
+        print(f"[Middleware] Error correcting card: {error}")
+        return {"success": False, "message": str(error)}
 
 
 @router.post("/scan")

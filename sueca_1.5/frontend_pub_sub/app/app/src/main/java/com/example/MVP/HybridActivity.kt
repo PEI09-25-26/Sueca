@@ -122,6 +122,7 @@ class HybridActivity : AppCompatActivity() {
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
+    private var imageAnalysis: ImageAnalysis? = null
     private var frameExecutor: ExecutorService? = null
 
     private val cardsPerVirtual = 10
@@ -206,12 +207,18 @@ class HybridActivity : AppCompatActivity() {
         if (isRunning) {
             startHybridMqtt()
             requestSyncState()
+            if (isHost) {
+                ensureCameraPermissionsAndStart()
+            }
         }
     }
 
     override fun onPause() {
         super.onPause()
         hybridMqttSubscriber?.disconnect()
+        if (isHost) {
+            stopCamera()
+        }
     }
 
     private fun setupTrumpControls() {
@@ -1360,32 +1367,49 @@ class HybridActivity : AppCompatActivity() {
         frameExecutor = Executors.newSingleThreadExecutor()
 
         providerFuture.addListener({
-            cameraProvider = providerFuture.get()
-
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
-
-            val analyzer = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-
-            analyzer.setAnalyzer(frameExecutor!!) { imageProxy ->
-                analyzeFrameForHybrid(imageProxy)
-            }
-
             try {
+                cameraProvider = providerFuture.get()
+
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+
+                imageAnalysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+
+                imageAnalysis?.setAnalyzer(frameExecutor!!) { imageProxy ->
+                    analyzeFrameForHybrid(imageProxy)
+                }
+
                 cameraProvider?.unbindAll()
                 camera = cameraProvider?.bindToLifecycle(
                     this,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     preview,
-                    analyzer
+                    imageAnalysis
                 )
+                Log.d("HybridActivity", "Camera pipeline started and bound to lifecycle")
             } catch (e: Exception) {
                 Log.e("HybridActivity", "Failed to bind camera pipeline", e)
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun stopCamera() {
+        try {
+            Log.d("HybridActivity", "Stopping camera pipeline...")
+            imageAnalysis?.clearAnalyzer()
+            cameraProvider?.unbindAll()
+            cameraProvider = null
+            imageAnalysis = null
+            camera = null
+            frameExecutor?.shutdown()
+            frameExecutor = null
+            Log.d("HybridActivity", "Camera pipeline stopped and unbound")
+        } catch (e: Exception) {
+            Log.e("HybridActivity", "Error stopping camera pipeline", e)
+        }
     }
 
     /**

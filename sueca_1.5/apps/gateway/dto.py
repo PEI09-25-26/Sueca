@@ -17,13 +17,13 @@ class ScanEventDTO(BaseModel):
 
 class StartGameRequest(BaseModel):
     playerName: str
-    roomId: Optional[str] = None
+    room_id: Optional[str] = None
 
 
 class StartGameResponse(BaseModel):
     success: bool
     message: str
-    gameId: str
+    game_id: str
 
 
 class RoundEndData(BaseModel):
@@ -43,3 +43,9 @@ class CommandRequestDTO(BaseModel):
     game_id: Optional[str] = None
     mode: Optional[str] = None
     payload: dict[str, Any] = {}
+
+
+class CorrectCardRequest(BaseModel):
+    rank: str
+    suit: str
+    wrong_label: Optional[str] = None

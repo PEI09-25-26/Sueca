@@ -8,7 +8,7 @@ from fastapi import FastAPI
 import requests
 
 from .lifecycle import shutdown_services, startup_services
-from .routes import game_router, proxy_router, state_router, websocket_router
+from .routes import game_router, proxy_router, state_router, websocket_router, auth_router
 from . import state
 from apps.emqx.mqtt_client import connect_mqtt, disconnect_mqtt, client as mqtt_client
 
@@ -128,3 +128,4 @@ app.include_router(state_router)
 app.include_router(proxy_router)
 app.include_router(game_router)
 app.include_router(websocket_router)
+app.include_router(auth_router)

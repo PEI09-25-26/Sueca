@@ -271,7 +271,7 @@ class MainMenuActivity : AppCompatActivity() {
 
     private fun launchPresentialVisionGame() {
         val name = AuthManager.getPlayerDisplayName() ?: randomName()
-        val roomId: String? = null
+        val roomId = "Phys_${(1000..9999).random()}"
         val authHeader = AuthManager.getAuthHeader()
 
         lifecycleScope.launch {

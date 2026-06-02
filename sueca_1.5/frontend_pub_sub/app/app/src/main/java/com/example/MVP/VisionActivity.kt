@@ -41,6 +41,7 @@ import androidx.core.content.ContextCompat
 import okhttp3.*
 import com.example.MVP.network.RetrofitClient
 import com.example.MVP.models.*
+import com.example.MVP.utils.CardMapper
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -80,10 +81,10 @@ class VisionActivity : AppCompatActivity() {
     private var lastDetectedPlayer: String? = null
     private var lastDetectedIsTrump: Boolean = false
     private val seatNames = linkedMapOf(
+        "0" to "Este",
         "1" to "Norte",
         "2" to "Oeste",
-        "3" to "Sul",
-        "0" to "Este"
+        "3" to "Sul"
     )
 
     // Views for the cards on the table
@@ -138,6 +139,13 @@ class VisionActivity : AppCompatActivity() {
     private var resetRunnable: Runnable? = null
     private var lastWebSocketMessage: String? = null
 
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var imageAnalyzer: ImageAnalysis? = null
+    
+    private var lastFrameSentAt = 0L
+    private val minFrameIntervalMs = 500L
+    private var reconnectCount = 0
+    private val maxReconnectAttempts = 3
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -180,39 +188,65 @@ class VisionActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (setupComplete && !cvEnabled) {
+            startCameraSession()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopCamera()
+    }
+
     // ------------------ CAMERA X ---------------------
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(findViewById<PreviewView>(R.id.previewView).surfaceProvider)
-            }
-
-            val imageAnalyzer = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-
-            imageAnalyzer.setAnalyzer(executor) { imageProxy ->
-                sendFrameToBackend(imageProxy)
-            }
-
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
             try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
+                cameraProvider = cameraProviderFuture.get()
+
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(findViewById<PreviewView>(R.id.previewView).surfaceProvider)
+                }
+
+                imageAnalyzer = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+
+                imageAnalyzer?.setAnalyzer(executor) { imageProxy ->
+                    sendFrameToBackend(imageProxy)
+                }
+
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                cameraProvider?.unbindAll()
+                cameraProvider?.bindToLifecycle(
                     this,
                     cameraSelector,
                     preview,
                     imageAnalyzer
                 )
+                Log.d("VisionActivity", "Camera started and bound to lifecycle")
             } catch (e: Exception) {
                 Log.e("VisionActivity", "Use case binding failed", e)
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun stopCamera() {
+        try {
+            Log.d("VisionActivity", "Stopping camera...")
+            imageAnalyzer?.clearAnalyzer()
+            cameraProvider?.unbindAll()
+            cameraProvider = null
+            imageAnalyzer = null
+            Log.d("VisionActivity", "Camera stopped and unbound")
+        } catch (e: Exception) {
+            Log.e("VisionActivity", "Error stopping camera", e)
+        }
     }
 
     // ------- CONVERTER FRAME -> JPEG -> BASE64 -------
@@ -222,7 +256,15 @@ class VisionActivity : AppCompatActivity() {
                 imageProxy.close()
                 return
             }
+
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastFrameSentAt < minFrameIntervalMs) {
+                imageProxy.close()
+                return
+            }
+
             val bitmap = imageProxy.toBitmap() ?: return
+            lastFrameSentAt = now
 
             val output = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 70, output)
@@ -561,10 +603,10 @@ class VisionActivity : AppCompatActivity() {
 
     private fun cardViewForPlayer(player: String): ImageView? {
         return when (player) {
+            "0" -> cardEast
             "1" -> cardNorth
             "2" -> cardWest
             "3" -> cardSouth
-            "0" -> cardEast
             else -> null
         }
     }
@@ -698,26 +740,9 @@ class VisionActivity : AppCompatActivity() {
                         )
 
                         if (response.success) {
-                            val displayRank = when (correctRank.lowercase()) {
-                                "q" -> "queen"
-                                "j" -> "jack"
-                                "k" -> "king"
-                                else -> correctRank.lowercase()
-                            }
-                            val displaySuit = when (correctSuit) {
-                                "♣" -> "clubs"
-                                "♦" -> "diamonds"
-                                "♥" -> "hearts"
-                                "♠" -> "spades"
-                                else -> correctSuit.lowercase()
-                            }
-                            val correctedCardIdentifier = "${displaySuit}_$displayRank"
-                            if (lastDetectedIsTrump) {
-                                updateCardView(correctedCardIdentifier, trumpCard)
-                            } else {
-                                cardViewForPlayer(detectedPlayer ?: "")?.let {
-                                    updateCardView(correctedCardIdentifier, it)
-                                }
+                            response.gameState?.let {
+                                val stateJson = JSONObject(Gson().toJson(it))
+                                refreshTable(stateJson)
                             }
 
                             statusBanner.text = "Carta corrigida para ${correctRank} de ${correctSuit}."
@@ -787,10 +812,10 @@ class VisionActivity : AppCompatActivity() {
                 // Use the configured OkHttpClient from RetrofitClient for consistent security/logging
                 // We create a new one based on it to set specific WS timeouts if needed
                 val client = OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .connectTimeout(15, TimeUnit.SECONDS)
                     .readTimeout(0, TimeUnit.SECONDS) // WS needs no read timeout
                     .writeTimeout(0, TimeUnit.SECONDS)
-                    .pingInterval(30, TimeUnit.SECONDS) // Keep-alive
+                    .pingInterval(15, TimeUnit.SECONDS) // Keep-alive to prevent Cloudflare timeout
                     .build()
 
                 wsEndpoint = "$wsBase$gameId"
@@ -804,15 +829,17 @@ class VisionActivity : AppCompatActivity() {
                 webSocket = client.newWebSocket(request, object : WebSocketListener() {
                     override fun onOpen(ws: WebSocket, response: Response) {
                         isWebSocketOpen = true
+                        reconnectCount = 0
                         Log.d("WS", "WebSocket connected successfully to $wsEndpoint. Status: ${response.code}")
                     }
 
                     override fun onMessage(ws: WebSocket, text: String) {
-                        Log.d("WS", "Message received: $text")
+                        Log.d("WS", "Message received from $gameId: $text")
                         runOnUiThread {
                             try {
                                 val json = JSONObject(text)
                                 if (json.has("type") && json.getString("type") == "round_end") {
+                                    Log.d("VisionActivity", "Round ended, showing dialog.")
                                     handleRoundEnd(json)
                                     return@runOnUiThread
                                 }
@@ -821,31 +848,39 @@ class VisionActivity : AppCompatActivity() {
                                 
                                 val stateObj = if (json.has("game_state")) json.optJSONObject("game_state") else null
                                 if (stateObj != null) {
+                                    Log.d("VisionActivity", "Received state update. Queue: ${stateObj.optString("queue_size")}")
                                     statusBanner.text = buildStatusText(stateObj, "")
+                                    refreshTable(stateObj)
                                 }
 
                                 val detectionjson = json.optString("detection", "{}")
                                 if (detectionjson == "{}") return@runOnUiThread // No detection in this message
 
                                 val detection = JSONObject(detectionjson)
+                                val cardId = detection.optInt("card_id", -1)
                                 val rawRank = detection.optString("rank", "")
                                 val rawSuit = detection.optString("suit", "")
-                                val rankjson = rawRank.lowercase()
-                                val suit = rawSuit.lowercase()
+                                Log.d("VisionActivity", "Card detected: $rawRank $rawSuit (ID: $cardId)")
 
-                                if (rankjson.isEmpty() || suit.isEmpty()) {
-                                    Log.w("VisionActivity", "Incomplete card detection data: $text")
-                                    return@runOnUiThread
+                                val cardIdentifier = if (cardId != -1) {
+                                    CardMapper.getDrawableName(cardId)
+                                } else {
+                                    val rankjson = rawRank.lowercase()
+                                    val suit = rawSuit.lowercase()
+
+                                    if (rankjson.isEmpty() || suit.isEmpty()) {
+                                        Log.w("VisionActivity", "Incomplete card detection data: $text")
+                                        return@runOnUiThread
+                                    }
+
+                                    val rank = when (rankjson) {
+                                        "k" -> "king"
+                                        "q" -> "queen"
+                                        "j" -> "jack"
+                                        else -> rankjson
+                                    }
+                                    "${suit}_$rank"
                                 }
-
-                                val rank = when (rankjson) {
-                                    "k" -> "king"
-                                    "q" -> "queen"
-                                    "j" -> "jack"
-                                    else -> rankjson
-                                }
-
-                                val cardIdentifier = "${suit}_$rank"
                                 val state = json.optString("game_state", "{}")
                                 val gameState = JSONObject(state)
                                 val message = gameState.optString("message", "")
@@ -854,7 +889,8 @@ class VisionActivity : AppCompatActivity() {
                                 val whoPlayed = gameState.optString("who_played", "")
                                 val nextPlayer = gameState.optString("next_player", "")
 
-                                val isTrumpMsg = message.contains("Trump card set", ignoreCase = true)
+                                val isTrumpMsg = message.contains("Trump card set", ignoreCase = true) || 
+                                                 message.contains("Trump corrected", ignoreCase = true)
                                 lastDetectedIsTrump = isTrumpMsg
 
                                 val queueSizeStr = gameState.optString("queue_size", "0")
@@ -862,13 +898,15 @@ class VisionActivity : AppCompatActivity() {
 
                                 // Reset table only when starting a new trick (queue size 1) 
                                 // but NOT for the trump card detection
-                                if (queueSize == 1 && !isTrumpMsg) {
+                                val isTrumpSet = gameState.optBoolean("trump_set", false)
+                                if (queueSize == 1 && isTrumpSet && !isTrumpMsg) {
                                     resetCardsToBack()
                                 }
 
                                 if (isTrumpMsg) {
                                     // STOP CV detection until "Iniciar Jogo" is clicked
                                     cvEnabled = false
+                                    editTrump.visibility = View.VISIBLE
                                     updateTrumpView(cardIdentifier, whoPlayed)
                                 } else {
                                     cardViewForPlayer(whoPlayed)?.let {
@@ -895,14 +933,32 @@ class VisionActivity : AppCompatActivity() {
                         val errorMsg = t.message ?: "Unknown error"
                         val code = response?.code ?: -1
                         Log.e("WS", "WebSocket connection failure. Code: $code, Message: $errorMsg", t)
-                        runOnUiThread {
-                            Toast.makeText(this@VisionActivity, "Erro de ligação Vision: $errorMsg", Toast.LENGTH_LONG).show()
+                        
+                        if (reconnectCount < maxReconnectAttempts) {
+                            reconnectCount++
+                            Log.i("WS", "Attempting reconnect $reconnectCount/$maxReconnectAttempts in 2s...")
+                            handler.postDelayed({
+                                connectWebSocketWithToken()
+                            }, 2000)
+                        } else {
+                            runOnUiThread {
+                                Toast.makeText(this@VisionActivity, "Ligação Vision perdida. Tente reiniciar.", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
 
                     override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                         isWebSocketOpen = false
                         Log.d("WS", "WebSocket closed. Code: $code, Reason: $reason")
+                        
+                        // If closed unexpectedly (not by activity destruction)
+                        if (code != 1000 && reconnectCount < maxReconnectAttempts) {
+                            reconnectCount++
+                            Log.i("WS", "WebSocket closed unexpectedly. Reconnecting $reconnectCount...")
+                            handler.postDelayed({
+                                connectWebSocketWithToken()
+                            }, 2000)
+                        }
                     }
                 })
             } catch (e: Exception) {
@@ -1131,22 +1187,25 @@ class VisionActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 // Inform the backend about the actual dealer/starter
-                // The backend reset expects the dealer_id.
-                // We've already advanced SetupState through IDLE -> SHUFFLE -> CUT -> TRUMP
-                // and currentPlayerStep has been used to identify those people.
                 val dealerId = currentPlayerStep
-                val starterId = (dealerId + 3) % 4 // Right of dealer
+                val starterId = (dealerId + 1) % 4 // Left of dealer
                 
+                Log.d("VisionActivity", "Starting game: dealer=$dealerId, starter=$starterId")
                 val response = RetrofitClient.api.startGameReady(gameId, dealerId, starterId, authHeader)
                 if (response.success) {
                     Toast.makeText(this@VisionActivity, "✅ Jogo iniciado! Podem jogar.", Toast.LENGTH_LONG).show()
                     currentSetupState = SetupState.GAME_RUNNING
                     trumpSelectionArea.visibility = View.GONE
+                    editTrump.visibility = View.GONE
+                    
+                    // Reset trump tracking so next card is a play
+                    lastDetectedIsTrump = false
 
                     // Update turn indicator with initial state from response
                     response.gameState?.let {
                         val stateJson = JSONObject(Gson().toJson(it))
                         statusBanner.text = buildStatusText(stateJson, "")
+                        refreshTable(stateJson)
                     }
 
                     updateSetupUI()
@@ -1171,10 +1230,10 @@ class VisionActivity : AppCompatActivity() {
 
     private fun updateTrumpView(cardId: String, owner: String) {
         val trumpView = when (owner) {
+            "0" -> trumpEast
             "1" -> trumpNorth
             "2" -> trumpWest
             "3" -> trumpSouth
-            "0" -> trumpEast
             else -> null
         }
 
@@ -1186,6 +1245,53 @@ class VisionActivity : AppCompatActivity() {
             }
             // Also update the big central trump card during selection
             trumpCard.setImageResource(resId)
+        }
+    }
+
+    private fun refreshTable(gameState: JSONObject) {
+        runOnUiThread {
+            try {
+                // 1. Clear all player cards on the table
+                resetCardsToBack()
+                
+                // 2. Refresh trump views if trump is set
+                val trumpSet = gameState.optBoolean("trump_set", false)
+                if (trumpSet) {
+                    val trumpId = gameState.optInt("trump_id", -1)
+                    if (trumpId != -1) {
+                        val cardName = CardMapper.getDrawableName(trumpId)
+                        val owner = gameState.optString("dealer", "")
+                        updateTrumpView(cardName, owner)
+                    }
+                } else {
+                    // Hide all side trumps if not set
+                    trumpNorth.visibility = View.INVISIBLE
+                    trumpSouth.visibility = View.INVISIBLE
+                    trumpEast.visibility = View.INVISIBLE
+                    trumpWest.visibility = View.INVISIBLE
+                    trumpCard.setImageResource(R.drawable.card_back)
+                }
+
+                // 3. Redraw current trick cards
+                val roundPlays = gameState.optJSONArray("round_plays")
+                if (roundPlays != null) {
+                    for (i in 0 until roundPlays.length()) {
+                        val play = roundPlays.getJSONObject(i)
+                        val cardIdStr = play.optString("card", "")
+                        val pos = play.optString("player_id", "").removePrefix("player")
+                        
+                        val cardId = cardIdStr.toIntOrNull()
+                        if (cardId != null && pos.isNotBlank()) {
+                            val cardName = CardMapper.getDrawableName(cardId)
+                            cardViewForPlayer(pos)?.let { 
+                                updateCardView(cardName, it)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("VisionActivity", "Error refreshing table: ${e.message}")
+            }
         }
     }
 

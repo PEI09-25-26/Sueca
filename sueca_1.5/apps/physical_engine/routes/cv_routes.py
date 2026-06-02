@@ -1,9 +1,9 @@
 from fastapi import APIRouter, WebSocket
 
 try:
-    from ..core.cv_core import StartCVRequest, health_status, start_cv, stop_cv, stream_cv
+    from ..core.cv_core import StartCVRequest, UndoCardRequest, health_status, start_cv, stop_cv, stream_cv, undo_card
 except ImportError:
-    from apps.physical_engine.core.cv_core import StartCVRequest, health_status, start_cv, stop_cv, stream_cv
+    from apps.physical_engine.core.cv_core import StartCVRequest, UndoCardRequest, health_status, start_cv, stop_cv, stream_cv, undo_card
 
 
 router = APIRouter()
@@ -22,6 +22,11 @@ async def cv_stream(websocket: WebSocket, game_id: str):
 @router.post("/cv/stop")
 async def stop_cv_service(game_id: str):
     return await stop_cv(game_id)
+
+
+@router.post("/cv/undo")
+async def undo_cv_card(request: UndoCardRequest):
+    return await undo_card(request)
 
 
 @router.get("/health")
